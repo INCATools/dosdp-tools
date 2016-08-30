@@ -4,16 +4,15 @@ import java.util.UUID
 
 import scala.collection.JavaConversions._
 
+import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.model.OWLAxiom
-import org.semanticweb.owlapi.model.OWLEntity
 import org.semanticweb.owlapi.model.OWLClass
 import org.semanticweb.owlapi.model.OWLClassExpression
+import org.semanticweb.owlapi.model.OWLEntity
+import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom
 import org.semanticweb.owlapi.model.OWLObjectIntersectionOf
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom
-
-import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
-import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom
 
 object SPARQL {
 
