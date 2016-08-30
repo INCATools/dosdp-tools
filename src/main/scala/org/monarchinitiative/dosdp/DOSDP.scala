@@ -11,6 +11,8 @@ import org.semanticweb.owlapi.model.OWLDataProperty
 import org.semanticweb.owlapi.model.OWLDatatype
 import org.semanticweb.owlapi.model.OWLNamedIndividual
 import org.semanticweb.owlapi.model.OWLObjectProperty
+import org.semanticweb.owlapi.model.OWLAxiom
+import org.phenoscape.scowl._
 
 final case class DOSDP(
     pattern_name: String,
@@ -19,24 +21,38 @@ final case class DOSDP(
     vars: Map[String, String],
     name: PrintfText,
     `def`: PrintfText,
-    equivalentTo: PrintfText
-    ) {
-  
+    equivalentTo: Option[PrintfText],
+    subClassOf: Option[PrintfText],
+    disjointWith: Option[PrintfText]) {
+
   private lazy val parser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, new DOSDPEntityChecker(this))
 
-  def equivalentToExpression: OWLClassExpression = parser.parse(this.equivalentTo.replaced)
-  
-  //def subClassOfExpression: OWLClassExpression = parser.parse(this.subClassOf.replaced)
+  def equivalentToExpression: Option[OWLClassExpression] = expressionFor(this.equivalentTo)
 
-  private def replacedExpression: String = this.equivalentTo.replaced
+  def subClassOfExpression: Option[OWLClassExpression] = expressionFor(this.subClassOf)
+
+  def disjointWithExpression: Option[OWLClassExpression] = expressionFor(this.disjointWith)
+
+  def axiomTemplates: Set[OWLAxiom] = {
+    val term = Class(DOSDP.variableToIRI(pattern_name))
+    equivalentToExpression.map(e => (term EquivalentTo e)).toSet ++
+      subClassOfExpression.map(e => (term SubClassOf e)).toSet ++
+      disjointWithExpression.map(e => (term DisjointWith e)).toSet
+  }
+
+  def varExpressions: Map[String, OWLClassExpression] = vars.mapValues(parser.parse)
+
+  private def expressionFor(template: Option[PrintfText]): Option[OWLClassExpression] = template.map(t => parser.parse(t.replaced))
 
 }
 
 object DOSDP {
 
-  val variablePrefix = "urn:dosdp#"
+  val variablePrefix = "urn:dosdp:"
 
-  def variableToIRI(name: String) = IRI.create(variablePrefix + name.replaceAllLiterally(" ", "_"))
+  def processedVariable(name: String): String = name.replaceAllLiterally(" ", "_")
+
+  def variableToIRI(name: String) = IRI.create(variablePrefix + processedVariable(name))
 
 }
 
