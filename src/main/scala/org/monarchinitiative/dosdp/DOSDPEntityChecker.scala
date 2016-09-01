@@ -16,21 +16,21 @@ class DOSDPEntityChecker(dosdp: DOSDP) extends OWLEntityChecker {
 
   private val factory = OWLManager.getOWLDataFactory
 
-  def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = nameOrVariableToIRI(name, dosdp.relations).map(factory.getOWLAnnotationProperty).getOrElse(null)
+  def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLAnnotationProperty).getOrElse(null)
 
   def getOWLClass(name: String): OWLClass = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLClass).getOrElse(null)
 
-  def getOWLDataProperty(name: String): OWLDataProperty = nameOrVariableToIRI(name, dosdp.relations).map(factory.getOWLDataProperty).getOrElse(null)
+  def getOWLDataProperty(name: String): OWLDataProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLDataProperty).getOrElse(null)
 
   def getOWLDatatype(name: String): OWLDatatype = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLDatatype).getOrElse(null)
 
   def getOWLIndividual(name: String): OWLNamedIndividual = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLNamedIndividual).getOrElse(null)
 
-  def getOWLObjectProperty(name: String): OWLObjectProperty = nameOrVariableToIRI(name, dosdp.relations).map(factory.getOWLObjectProperty).getOrElse(null)
+  def getOWLObjectProperty(name: String): OWLObjectProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLObjectProperty).getOrElse(null)
 
   private val HTTPURI = "^http.+".r
   private val DOSDPVariable = "^'\\$(.+)'$".r
-  val Quoted = "^'(.*)'$".r
+  private val Quoted = "^'(.*)'$".r
 
   private def idToIRI(id: String): IRI = id match {
     case HTTPURI(_*) => IRI.create(id)
@@ -41,6 +41,12 @@ class DOSDPEntityChecker(dosdp: DOSDP) extends OWLEntityChecker {
     case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
     case Quoted(unquoted)       => mapper.get(unquoted).map(idToIRI)
     case _                      => mapper.get(name).map(idToIRI)
+  }
+
+  // Added this to avoid allowing variables to possibly be properties. OWL API parser jumps to conclusions.
+  private def nameToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
+    case Quoted(unquoted) => mapper.get(unquoted).map(idToIRI)
+    case _                => mapper.get(name).map(idToIRI)
   }
 
 }

@@ -13,6 +13,8 @@ import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom
 import org.semanticweb.owlapi.model.OWLObjectIntersectionOf
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom
+import org.semanticweb.owlapi.model.IRI
+import org.semanticweb.owlapi.apibinding.OWLManager
 
 object SPARQL {
 
@@ -20,7 +22,7 @@ object SPARQL {
     s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-PREFIX owl: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
 SELECT DISTINCT ${selectFor(dosdp)}
 WHERE {
@@ -37,15 +39,18 @@ ${triplesFor(dosdp).mkString("\n")}
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
   def selectVariables(axiom: OWLAxiom): Set[String] =
-    axiom.getSignature.toSet[OWLEntity].map(_.getIRI).collect {
+    axiom.getSignature.toSet[OWLEntity].map(_.getIRI.toString).collect {
       case DOSDPVariable(variable) => s"?$variable"
     }
 
+  private val Thing = OWLManager.getOWLDataFactory.getOWLThing
+
   def triplesFor(dosdp: DOSDP): Seq[String] = {
     val axiomTriples = dosdp.axiomTemplates.toSeq.flatMap(triples)
-    val variableTriples = dosdp.varExpressions.toSeq.map {
-      case (variable, named: OWLClass) => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> ."
-      case (variable, expression)      => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf ${expression.asOMN} ."
+    val variableTriples = dosdp.varExpressions.toSeq.flatMap {
+      case (variable, Thing)           => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
+      case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
+      case (variable, expression)      => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf ${expression.asOMN} .")
     }
     axiomTriples ++ variableTriples
   }
@@ -54,7 +59,7 @@ ${triplesFor(dosdp).mkString("\n")}
     case subClassOf: OWLSubClassOfAxiom => {
       val (subClass, subClassTriples) = triples(subClassOf.getSubClass)
       val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
-      Seq(s"$subClass rdfs:subClassOf $superClass") ++ subClassTriples ++ superClassTriples
+      Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples
     }
     //TODO improve warning if there are more than 2 operands in equiv class axiom
     case equivalentTo: OWLEquivalentClassesAxiom => {
@@ -65,7 +70,7 @@ ${triplesFor(dosdp).mkString("\n")}
       } yield {
         val (namedClass, namedClassTriples) = triples(named)
         val (equivClass, equivClassTriples) = triples(expression)
-        Seq(s"$namedClass owl:equivalentClass $equivClass") ++ namedClassTriples ++ equivClassTriples
+        Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
       }).toSeq.flatten
     }
   }
