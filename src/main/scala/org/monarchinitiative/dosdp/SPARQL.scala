@@ -5,18 +5,20 @@ import java.util.UUID
 import scala.collection.JavaConversions._
 
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
+import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLAxiom
 import org.semanticweb.owlapi.model.OWLClass
 import org.semanticweb.owlapi.model.OWLClassExpression
+import org.semanticweb.owlapi.model.OWLDisjointClassesAxiom
 import org.semanticweb.owlapi.model.OWLEntity
 import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom
 import org.semanticweb.owlapi.model.OWLObjectIntersectionOf
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom
-import org.semanticweb.owlapi.model.IRI
-import org.semanticweb.owlapi.apibinding.OWLManager
 
-object SPARQL {
+import com.typesafe.scalalogging.LazyLogging
+
+object SPARQL extends LazyLogging {
 
   def queryFor(dosdp: DOSDP): String = {
     s"""
@@ -61,9 +63,8 @@ ${triplesFor(dosdp).mkString("\n")}
       val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
       Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples
     }
-    //TODO improve warning if there are more than 2 operands in equiv class axiom
     case equivalentTo: OWLEquivalentClassesAxiom => {
-      if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) println("Bad equivalent class")
+      if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
       (for {
         named <- equivalentTo.getNamedClasses.headOption
         expression <- equivalentTo.getClassExpressionsMinus(named).headOption
@@ -71,6 +72,17 @@ ${triplesFor(dosdp).mkString("\n")}
         val (namedClass, namedClassTriples) = triples(named)
         val (equivClass, equivClassTriples) = triples(expression)
         Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
+      }).toSeq.flatten
+    }
+    case disjointWith: OWLDisjointClassesAxiom => {
+      if (!disjointWith.getClassExpressions.exists(!_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      (for {
+        named <- disjointWith.getClassExpressions.find(!_.isAnonymous)
+        expression <- disjointWith.getClassExpressionsMinus(named).headOption
+      } yield {
+        val (namedClass, namedClassTriples) = triples(named)
+        val (equivClass, equivClassTriples) = triples(expression)
+        Seq(s"$namedClass owl:disjointWith $equivClass .") ++ namedClassTriples ++ equivClassTriples
       }).toSeq.flatten
     }
   }
