@@ -1,9 +1,9 @@
 package org.monarchinitiative.dosdp
 
 import org.phenoscape.scowl._
-
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
+import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxInlineAxiomParser
 import org.semanticweb.owlapi.model.IRI
 import org.semanticweb.owlapi.model.OWLAxiom
 import org.semanticweb.owlapi.model.OWLClassExpression
@@ -17,9 +17,12 @@ final case class DOSDP(
     `def`: PrintfText,
     equivalentTo: Option[PrintfText],
     subClassOf: Option[PrintfText],
-    disjointWith: Option[PrintfText]) {
+    disjointWith: Option[PrintfText],
+    GCI: Option[PrintfText]) {
 
-  private lazy val parser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, new DOSDPEntityChecker(this))
+  private lazy val checker = new DOSDPEntityChecker(this)
+  private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
+  private lazy val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(OWLManager.getOWLDataFactory, checker)
 
   def equivalentToExpression: Option[OWLClassExpression] = expressionFor(this.equivalentTo)
 
@@ -27,16 +30,21 @@ final case class DOSDP(
 
   def disjointWithExpression: Option[OWLClassExpression] = expressionFor(this.disjointWith)
 
+  def gciAxiom: Option[OWLAxiom] = {
+    GCI.map(gci => axiomParser.parse(gci.replaced))
+  }
+
   def axiomTemplates: Set[OWLAxiom] = {
     val term = Class(DOSDP.variableToIRI(pattern_name))
     equivalentToExpression.map(e => (term EquivalentTo e)).toSet ++
       subClassOfExpression.map(e => (term SubClassOf e)).toSet ++
-      disjointWithExpression.map(e => (term DisjointWith e)).toSet
+      disjointWithExpression.map(e => (term DisjointWith e)).toSet ++
+      gciAxiom.toSet
   }
 
-  def varExpressions: Map[String, OWLClassExpression] = vars.mapValues(parser.parse)
+  def varExpressions: Map[String, OWLClassExpression] = vars.mapValues(expressionParser.parse)
 
-  private def expressionFor(template: Option[PrintfText]): Option[OWLClassExpression] = template.map(t => parser.parse(t.replaced))
+  private def expressionFor(template: Option[PrintfText]): Option[OWLClassExpression] = template.map(t => expressionParser.parse(t.replaced))
 
 }
 
