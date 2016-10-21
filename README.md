@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/balhoff/dosdp-scala.svg?branch=master)](https://travis-ci.org/balhoff/dosdp-scala)
+
 # dosdp-scala
 
 Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), generate a SPARQL query that will return all slot fillers for that pattern
