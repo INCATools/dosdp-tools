@@ -17,6 +17,8 @@ import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom
 
 import com.typesafe.scalalogging.LazyLogging
+import org.semanticweb.owlapi.model.OWLObjectUnionOf
+import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom
 
 object SPARQL extends LazyLogging {
 
@@ -115,6 +117,8 @@ ${triplesFor(dosdp).mkString("\n")}
       val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
       (node, (intersectionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
     }
+    case or: OWLObjectUnionOf => ???
+    case only: OWLObjectAllValuesFrom => ???
   }
 
   private def genVar: String = "?" + UUID.randomUUID.toString.replaceAllLiterally("-", "")

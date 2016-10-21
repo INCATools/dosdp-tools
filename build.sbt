@@ -12,6 +12,8 @@ scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
 scalacOptions in Test ++= Seq("-Yrangepos")
 
+mainClass in Compile := Some("org.monarchinitiative.dosdp.Main")
+
 resolvers += Resolver.bintrayRepo("jeremyrsmith", "maven")
 
 resolvers += "Phenoscape Maven repository" at "http://phenoscape.svn.sourceforge.net/svnroot/phenoscape/trunk/maven/repository"

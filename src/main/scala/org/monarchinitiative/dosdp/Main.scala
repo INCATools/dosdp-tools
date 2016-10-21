@@ -20,12 +20,12 @@ import com.hp.hpl.jena.query.QueryExecutionFactory
 import com.hp.hpl.jena.query.ResultSetFormatter
 
 object Main extends CliMain[Unit](
-  name = "dosdp-query",
+  name = "dosdp-scala",
   description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") {
 
   var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology to query")
   var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
-  var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently any reasoner as long as it is `elk`")
+  var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently only valid option is `elk`)")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
   def run: Unit = {
