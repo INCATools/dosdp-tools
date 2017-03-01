@@ -18,6 +18,7 @@ import org.apache.jena.riot.RDFDataMgr
 import com.hp.hpl.jena.query.QueryFactory
 import com.hp.hpl.jena.query.QueryExecutionFactory
 import com.hp.hpl.jena.query.ResultSetFormatter
+import java.io.FileOutputStream
 
 object Main extends CliMain[Unit](
   name = "dosdp-scala",
@@ -27,6 +28,7 @@ object Main extends CliMain[Unit](
   var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
   var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently only valid option is `elk`)")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
+  var outfile = opt[File](name = "outfile", default = new File("dosdp.tsv"), description = "Output file (TSV)")
 
   def run: Unit = {
     val ontIRIOpt = ontOpt.map(ontPath => if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath)))
@@ -56,7 +58,7 @@ object Main extends CliMain[Unit](
         val model = ontOpt.map(ontPath => RDFDataMgr.loadModel(ontPath)).getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
         val query = QueryFactory.create(processedQuery)
         val results = QueryExecutionFactory.create(query, model).execSelect()
-        ResultSetFormatter.outputAsTSV(System.out, results)
+        ResultSetFormatter.outputAsTSV(new FileOutputStream(outfile), results)
       }
     }
   }
