@@ -36,9 +36,12 @@ ${triplesFor(dosdp).mkString("\n")}
   }
 
   def selectFor(dosdp: DOSDP): String = {
-    val variables = dosdp.axiomTemplates.flatMap(selectVariables)
+    val axVariables = axiomVariables(dosdp)
+    val variables = axVariables ++ axVariables.map(_ + "__label")
     if (variables.isEmpty) "*" else variables.toSeq.sorted.mkString(" ")
   }
+
+  private def axiomVariables(dosdp: DOSDP): Set[String] = dosdp.axiomTemplates.flatMap(selectVariables)
 
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
@@ -56,7 +59,8 @@ ${triplesFor(dosdp).mkString("\n")}
       case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
       case (variable, expression)      => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf ${expression.asOMN} .")
     }
-    axiomTriples ++ variableTriples
+    val labelTriples = axiomVariables(dosdp).map(v => s"OPTIONAL { ?$v rdfs:label ${v}__label . }")
+    axiomTriples ++ variableTriples ++ labelTriples
   }
 
   def triples(axiom: OWLAxiom): Seq[String] = axiom match {
@@ -117,7 +121,7 @@ ${triplesFor(dosdp).mkString("\n")}
       val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
       (node, (intersectionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
     }
-    case or: OWLObjectUnionOf => ???
+    case or: OWLObjectUnionOf         => ???
     case only: OWLObjectAllValuesFrom => ???
   }
 
