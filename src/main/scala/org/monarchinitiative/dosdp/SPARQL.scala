@@ -59,7 +59,7 @@ ${triplesFor(dosdp).mkString("\n")}
       case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
       case (variable, expression)      => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf ${expression.asOMN} .")
     }
-    val labelTriples = axiomVariables(dosdp).map(v => s"OPTIONAL { ?$v rdfs:label ${v}__label . }")
+    val labelTriples = axiomVariables(dosdp).map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
     axiomTriples ++ variableTriples ++ labelTriples
   }
 
