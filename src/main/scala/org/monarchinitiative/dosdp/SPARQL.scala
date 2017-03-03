@@ -37,8 +37,8 @@ ${triplesFor(dosdp).mkString("\n")}
 
   def selectFor(dosdp: DOSDP): String = {
     val axVariables = axiomVariables(dosdp)
-    val variables = axVariables ++ axVariables.map(_ + "__label")
-    if (variables.isEmpty) "*" else variables.toSeq.sorted.mkString(" ")
+    val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}___label)")
+    if (variables.isEmpty) "*" else variables.toSeq.sortBy(_.replaceFirst("\\(STR\\(", "")).mkString(" ")
   }
 
   private def axiomVariables(dosdp: DOSDP): Set[String] = dosdp.axiomTemplates.flatMap(selectVariables)
