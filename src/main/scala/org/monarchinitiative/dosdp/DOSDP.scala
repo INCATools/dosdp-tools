@@ -35,7 +35,7 @@ final case class DOSDP(
   }
 
   def axiomTemplates: Set[OWLAxiom] = {
-    val term = Class(DOSDP.variableToIRI(pattern_name))
+    val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
     equivalentToExpression.map(e => (term EquivalentTo e)).toSet ++
       subClassOfExpression.map(e => (term SubClassOf e)).toSet ++
       disjointWithExpression.map(e => (term DisjointWith e)).toSet ++
@@ -51,6 +51,8 @@ final case class DOSDP(
 object DOSDP {
 
   val variablePrefix = "urn:dosdp:"
+
+  val DefinedClassVariable = "defined_class"
 
   def processedVariable(name: String): String = name.replaceAllLiterally(" ", "_")
 
