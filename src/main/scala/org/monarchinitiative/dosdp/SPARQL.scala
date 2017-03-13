@@ -22,7 +22,7 @@ import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom
 
 object SPARQL extends LazyLogging {
 
-  def queryFor(dosdp: DOSDP): String = {
+  def queryFor(dosdp: ExpandedDOSDP): String = {
     s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -35,7 +35,7 @@ ${triplesFor(dosdp).mkString("\n")}
 """
   }
 
-  def selectFor(dosdp: DOSDP): String = {
+  def selectFor(dosdp: ExpandedDOSDP): String = {
     val axVariables = axiomVariables(dosdp)
     val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)")
     if (variables.isEmpty) "*" else variables.toSeq
@@ -43,7 +43,7 @@ ${triplesFor(dosdp).mkString("\n")}
       .mkString(" ")
   }
 
-  private def axiomVariables(dosdp: DOSDP): Set[String] = dosdp.axiomTemplates.flatMap(selectVariables)
+  private def axiomVariables(dosdp: ExpandedDOSDP): Set[String] = dosdp.axiomTemplates.flatMap(selectVariables)
 
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
@@ -54,7 +54,7 @@ ${triplesFor(dosdp).mkString("\n")}
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(dosdp: DOSDP): Seq[String] = {
+  def triplesFor(dosdp: ExpandedDOSDP): Seq[String] = {
     val axiomTriples = dosdp.axiomTemplates.toSeq.flatMap(triples)
     val variableTriples = dosdp.varExpressions.toSeq.flatMap {
       case (variable, Thing)           => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology

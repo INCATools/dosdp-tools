@@ -12,7 +12,7 @@ import org.semanticweb.owlapi.model.OWLDatatype
 import org.semanticweb.owlapi.model.OWLNamedIndividual
 import org.semanticweb.owlapi.model.OWLObjectProperty
 
-class DOSDPEntityChecker(dosdp: DOSDP) extends OWLEntityChecker {
+class DOSDPEntityChecker(dosdp: DOSDP, prefixes: Map[String, String]) extends OWLEntityChecker {
 
   private val factory = OWLManager.getOWLDataFactory
 
@@ -31,22 +31,25 @@ class DOSDPEntityChecker(dosdp: DOSDP) extends OWLEntityChecker {
   private val HTTPURI = "^http.+".r
   private val DOSDPVariable = "^'\\$(.+)'$".r
   private val Quoted = "^'(.*)'$".r
+  private val CURIE = "^([^:]*):(.*)$".r
 
-  private def idToIRI(id: String): IRI = id match {
-    case HTTPURI(_*) => IRI.create(id)
-    case _           => IRI.create(s"http://purl.obolibrary.org/obo/$id")
+  private def idToIRI(id: String): Option[IRI] = id match {
+    case HTTPURI(_*)          => Option(IRI.create(id))
+    case CURIE(prefix, local) => prefixes.get(prefix).map(uri => IRI.create(s"$uri$local"))
+    case _                    => None
+    //IRI.create(s"http://purl.obolibrary.org/obo/$id")
   }
 
   private def nameOrVariableToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
     case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
-    case Quoted(unquoted)       => mapper.get(unquoted).map(idToIRI)
-    case _                      => mapper.get(name).map(idToIRI)
+    case Quoted(unquoted)       => mapper.get(unquoted).flatMap(idToIRI)
+    case _                      => mapper.get(name).flatMap(idToIRI)
   }
 
   // Added this to avoid allowing variables to possibly be properties. OWL API parser jumps to conclusions.
   private def nameToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
-    case Quoted(unquoted) => mapper.get(unquoted).map(idToIRI)
-    case _                => mapper.get(name).map(idToIRI)
+    case Quoted(unquoted) => mapper.get(unquoted).flatMap(idToIRI)
+    case _                => mapper.get(name).flatMap(idToIRI)
   }
 
 }
