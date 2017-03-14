@@ -33,6 +33,7 @@ Options
    --print-query : Print generated query without running against ontology
    --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
    --template    : DOSDP file (YAML)
+   --prefixes    : CURIE prefixes (YAML)
 ```
 
 Example: `dosdp-scala --template=entity_attribute_location.yaml --print-query`
@@ -43,20 +44,24 @@ PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 
-SELECT DISTINCT ?attribute ?entity ?entity_attribute_location ?location
+SELECT DISTINCT ?defined_class (STR(?defined_class__label) AS ?defined_class_label) ?attribute (STR(?attribute__label) AS ?attribute_label) ?entity (STR(?entity__label) AS ?entity_label) ?location (STR(?location__label) AS ?location_label)
 WHERE {
-?entity_attribute_location owl:equivalentClass ?935f1722f77e4a5d83a952bd05468061 .
-?935f1722f77e4a5d83a952bd05468061 owl:intersectionOf/rdf:rest*/rdf:first ?589c79cc99244f42aca7ca788c4c5de7 .
-?935f1722f77e4a5d83a952bd05468061 owl:intersectionOf/rdf:rest*/rdf:first ?attribute .
-?935f1722f77e4a5d83a952bd05468061 owl:intersectionOf/rdf:rest/rdf:rest rdf:nil .
-?589c79cc99244f42aca7ca788c4c5de7 owl:onProperty <http://purl.obolibrary.org/obo/RO_0000052> .
-?589c79cc99244f42aca7ca788c4c5de7 owl:someValuesFrom ?c3ce064ef0e54bb580fd6e78c53646b2 .
-?c3ce064ef0e54bb580fd6e78c53646b2 owl:intersectionOf/rdf:rest*/rdf:first ?entity .
-?c3ce064ef0e54bb580fd6e78c53646b2 owl:intersectionOf/rdf:rest*/rdf:first ?1336ea47488043ecb3149ada5d1102ae .
-?c3ce064ef0e54bb580fd6e78c53646b2 owl:intersectionOf/rdf:rest/rdf:rest rdf:nil .
-?1336ea47488043ecb3149ada5d1102ae owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
-?1336ea47488043ecb3149ada5d1102ae owl:someValuesFrom ?location .
-FILTER(?entity != ?1336ea47488043ecb3149ada5d1102ae)
-FILTER(?attribute != ?589c79cc99244f42aca7ca788c4c5de7)
+?defined_class owl:equivalentClass ?ba95b4a7b13f4a86af50c3e0e1182838 .
+?ba95b4a7b13f4a86af50c3e0e1182838 owl:intersectionOf/rdf:rest*/rdf:first ?c90d72646ac64cc19318ca3273f11cd6 .
+?ba95b4a7b13f4a86af50c3e0e1182838 owl:intersectionOf/rdf:rest*/rdf:first ?attribute .
+?ba95b4a7b13f4a86af50c3e0e1182838 owl:intersectionOf/rdf:rest/rdf:rest rdf:nil .
+?c90d72646ac64cc19318ca3273f11cd6 owl:onProperty <http://purl.obolibrary.org/obo/RO_0000052> .
+?c90d72646ac64cc19318ca3273f11cd6 owl:someValuesFrom ?7f7e348c174d42f0a76663cc59f21e37 .
+?7f7e348c174d42f0a76663cc59f21e37 owl:intersectionOf/rdf:rest*/rdf:first ?75f4eb2eae374a77878c36acda870206 .
+?7f7e348c174d42f0a76663cc59f21e37 owl:intersectionOf/rdf:rest*/rdf:first ?entity .
+?7f7e348c174d42f0a76663cc59f21e37 owl:intersectionOf/rdf:rest/rdf:rest rdf:nil .
+?75f4eb2eae374a77878c36acda870206 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?75f4eb2eae374a77878c36acda870206 owl:someValuesFrom ?location .
+FILTER(?entity != ?75f4eb2eae374a77878c36acda870206)
+FILTER(?c90d72646ac64cc19318ca3273f11cd6 != ?attribute)
+OPTIONAL { ?defined_class rdfs:label ?defined_class__label . }
+OPTIONAL { ?attribute rdfs:label ?attribute__label . }
+OPTIONAL { ?entity rdfs:label ?entity__label . }
+OPTIONAL { ?location rdfs:label ?location__label . }
 }
 ```
