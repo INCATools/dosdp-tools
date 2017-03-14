@@ -8,7 +8,7 @@ import org.semanticweb.owlapi.model.IRI
 import org.semanticweb.owlapi.model.OWLAxiom
 import org.semanticweb.owlapi.model.OWLClassExpression
 
-final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: Map[String, String]) {
+final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) {
 
   private lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)

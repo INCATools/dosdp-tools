@@ -12,7 +12,7 @@ import org.semanticweb.owlapi.model.OWLDatatype
 import org.semanticweb.owlapi.model.OWLNamedIndividual
 import org.semanticweb.owlapi.model.OWLObjectProperty
 
-class DOSDPEntityChecker(dosdp: DOSDP, prefixes: Map[String, String]) extends OWLEntityChecker {
+class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]) extends OWLEntityChecker {
 
   private val factory = OWLManager.getOWLDataFactory
 
@@ -35,7 +35,7 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: Map[String, String]) extends OW
 
   private def idToIRI(id: String): Option[IRI] = id match {
     case HTTPURI(_*)          => Option(IRI.create(id))
-    case CURIE(prefix, local) => prefixes.get(prefix).map(uri => IRI.create(s"$uri$local"))
+    case CURIE(prefix, local) => prefixes.lift(prefix).map(uri => IRI.create(s"$uri$local"))
     case _                    => None
     //IRI.create(s"http://purl.obolibrary.org/obo/$id")
   }
