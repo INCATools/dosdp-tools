@@ -40,12 +40,12 @@ object Main extends CliMain[Unit](
     }
     for {
       json <- Parser.parse(new FileReader(templateFile))
-      dosdp <- decode[DOSDP](json.spaces4)
+      dosdp <- json.as[DOSDP]
     } yield {
       val specifiedPrefixes = (for {
         prefixesFile <- prefixesFileOpt
         prefixesJson <- Parser.parse(new FileReader(prefixesFile)).toOption
-        prefixMap <- decode[Map[String, String]](prefixesJson.spaces4).toOption
+        prefixMap <- prefixesJson.as[Map[String, String]].toOption
       } yield prefixMap).getOrElse(Map.empty)
       val prefixes = if (oboPrefixes) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
       val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))

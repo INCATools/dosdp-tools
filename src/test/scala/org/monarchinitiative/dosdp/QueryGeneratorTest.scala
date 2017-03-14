@@ -15,11 +15,11 @@ class QueryGeneratorTest extends UnitSpec {
     var processed = false
     for {
       json <- Parser.parse(new InputStreamReader(getClass.getResourceAsStream("QueryGeneratorTest.yaml")))
-      dosdp <- decode[DOSDP](json.spaces4)
+      dosdp <- json.as[DOSDP]
     } {
       val prefixes = (for {
         prefixesJson <- Parser.parse(new InputStreamReader(getClass.getResourceAsStream("StandardPrefixes.yaml"))).toOption
-        prefixMap <- decode[Map[String, String]](prefixesJson.spaces4).toOption
+        prefixMap <- prefixesJson.as[Map[String, String]].toOption
       } yield prefixMap).getOrElse(Map.empty)
       val variables = QueryFactory.create(SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))).getProjectVars.asScala
       variables(0).getVarName shouldEqual "defined_class"
