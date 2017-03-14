@@ -36,7 +36,7 @@ Options
    --prefixes    : CURIE prefixes (YAML)
 ```
 
-Example: `dosdp-scala --template=entity_attribute_location.yaml --print-query`
+Example: `dosdp-scala --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query`
 
 Output:
 ```sparql
