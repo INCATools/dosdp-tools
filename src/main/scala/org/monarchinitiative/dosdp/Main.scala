@@ -26,6 +26,7 @@ object Main extends CliMain[Unit](
 
   var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology to query")
   var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
+  var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently only valid option is `elk`)")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.tsv"), description = "Output file (TSV)")
@@ -40,7 +41,12 @@ object Main extends CliMain[Unit](
       json <- Parser.parse(new FileReader(templateFile))
       dosdp <- decode[DOSDP](json.spaces4)
     } yield {
-      val sparqlQuery = SPARQL.queryFor(dosdp)
+      val prefixes = (for {
+        prefixesFile <- prefixesFileOpt
+        prefixesJson <- Parser.parse(new FileReader(prefixesFile)).toOption
+        prefixMap <- decode[Map[String, String]](prefixesJson.spaces4).toOption
+      } yield prefixMap).getOrElse(Map.empty)
+      val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
       val processedQuery = (ontologyOpt, reasonerNameOpt) match {
         case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
         case (Some(ontology), Some("elk")) => {
