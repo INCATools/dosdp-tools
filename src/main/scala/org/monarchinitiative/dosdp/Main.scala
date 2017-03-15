@@ -13,7 +13,7 @@ import io.circe._
 import io.circe.generic.auto._
 import io.circe.parser._
 import io.circe.syntax._
-import io.circe.yaml.parser.Parser
+import io.circe.yaml.parser
 import org.apache.jena.riot.RDFDataMgr
 
 import java.io.FileOutputStream
@@ -44,13 +44,13 @@ object Main extends CliMain[Unit](
       manager.loadOntology(ontIRI)
     }
     for {
-      json <- Parser.parse(new FileReader(templateFile))
-      dosdp <- json.as[DOSDP]
-    } yield {
+      json <- parser.parse(new FileReader(templateFile)).right
+      dosdp <- json.as[DOSDP].right
+    } {
       val specifiedPrefixes = (for {
         prefixesFile <- prefixesFileOpt
-        prefixesJson <- Parser.parse(new FileReader(prefixesFile)).toOption
-        prefixMap <- prefixesJson.as[Map[String, String]].toOption
+        prefixesJson <- parser.parse(new FileReader(prefixesFile)).right.toOption
+        prefixMap <- prefixesJson.as[Map[String, String]].right.toOption
       } yield prefixMap).getOrElse(Map.empty)
       val prefixes = if (oboPrefixes) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
       val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
