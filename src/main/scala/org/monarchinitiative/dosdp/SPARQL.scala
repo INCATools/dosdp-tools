@@ -32,6 +32,7 @@ SELECT DISTINCT ${selectFor(dosdp)}
 WHERE {
 ${triplesFor(dosdp).mkString("\n")}
 }
+ORDER BY ?defined_class_label
 """
   }
 
