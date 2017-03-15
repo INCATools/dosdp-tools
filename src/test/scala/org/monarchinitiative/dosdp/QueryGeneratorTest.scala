@@ -6,8 +6,8 @@ import io.circe.parser._
 import io.circe.syntax._
 import io.circe.yaml.parser.Parser
 import java.io.InputStreamReader
-import com.hp.hpl.jena.query.QueryFactory
 import scala.collection.JavaConverters._
+import org.apache.jena.query.QueryFactory
 
 class QueryGeneratorTest extends UnitSpec {
 

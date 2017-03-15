@@ -15,10 +15,15 @@ import io.circe.parser._
 import io.circe.syntax._
 import io.circe.yaml.parser.Parser
 import org.apache.jena.riot.RDFDataMgr
-import com.hp.hpl.jena.query.QueryFactory
-import com.hp.hpl.jena.query.QueryExecutionFactory
-import com.hp.hpl.jena.query.ResultSetFormatter
+
 import java.io.FileOutputStream
+import org.apache.jena.query.QueryFactory
+import org.apache.jena.query.QueryExecutionFactory
+import org.apache.jena.query.ResultSetFormatter
+
+import scala.collection.JavaConverters._
+import org.semanticweb.owlapi.model.OWLOntology
+import org.apache.jena.rdf.model.ModelFactory
 
 object Main extends CliMain[Unit](
   name = "dosdp-scala",
@@ -62,8 +67,14 @@ object Main extends CliMain[Unit](
       if (printQuery) {
         println(processedQuery)
       } else {
-        //TODO Currently this is loading (or downloading) the ontology again. Maybe it can load from the OWL
-        val model = ontOpt.map(ontPath => RDFDataMgr.loadModel(ontPath)).getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
+        if (ontOpt.isEmpty) throw new RuntimeException("Can't run query; no ontology provided.")
+        val triples = for {
+          mainOnt <- ontologyOpt.toSet[OWLOntology]
+          ont <- mainOnt.getImportsClosure.asScala
+          triple <- SesameJena.ontologyAsTriples(ont)
+        } yield triple
+        val model = ModelFactory.createDefaultModel()
+        model.add(triples.toList.asJava)
         val query = QueryFactory.create(processedQuery)
         val results = QueryExecutionFactory.create(query, model).execSelect()
         ResultSetFormatter.outputAsTSV(new FileOutputStream(outfile), results)
