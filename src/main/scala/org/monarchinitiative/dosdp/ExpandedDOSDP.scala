@@ -14,6 +14,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
   private lazy val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(OWLManager.getOWLDataFactory, checker)
 
+  def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
+
   def equivalentToExpression: Option[OWLClassExpression] = expressionFor(dosdp.equivalentTo)
 
   def subClassOfExpression: Option[OWLClassExpression] = expressionFor(dosdp.subClassOf)
@@ -32,7 +34,10 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       gciAxiom.toSet
   }
 
-  def varExpressions: Map[String, OWLClassExpression] = dosdp.vars.mapValues(expressionParser.parse)
+  def varExpressions: Map[String, OWLClassExpression] = {
+    val vars = dosdp.vars.getOrElse(Map.empty)
+    vars.mapValues(expressionParser.parse)
+  }
 
   private def expressionFor(template: Option[PrintfText]): Option[OWLClassExpression] = template.map(t => expressionParser.parse(t.replaced))
 

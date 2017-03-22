@@ -16,17 +16,29 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
 
   private val factory = OWLManager.getOWLDataFactory
 
-  def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLAnnotationProperty).getOrElse(null)
+  def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = {
+    val properties = dosdp.annotationProperties.getOrElse(Map.empty)
+    nameToIRI(name, properties).map(factory.getOWLAnnotationProperty).getOrElse(null)
+  }
 
-  def getOWLClass(name: String): OWLClass = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLClass).getOrElse(null)
+  def getOWLClass(name: String): OWLClass = {
+    val classes = dosdp.classes.getOrElse(Map.empty)
+    nameOrVariableToIRI(name, classes).map(factory.getOWLClass).getOrElse(null)
+  }
 
-  def getOWLDataProperty(name: String): OWLDataProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLDataProperty).getOrElse(null)
+  def getOWLDataProperty(name: String): OWLDataProperty = {
+    val properties = dosdp.dataProperties.getOrElse(Map.empty)
+    nameToIRI(name, properties).map(factory.getOWLDataProperty).getOrElse(null)
+  }
 
-  def getOWLDatatype(name: String): OWLDatatype = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLDatatype).getOrElse(null)
+  def getOWLDatatype(name: String): OWLDatatype = null
 
-  def getOWLIndividual(name: String): OWLNamedIndividual = nameOrVariableToIRI(name, dosdp.classes).map(factory.getOWLNamedIndividual).getOrElse(null)
+  def getOWLIndividual(name: String): OWLNamedIndividual = null
 
-  def getOWLObjectProperty(name: String): OWLObjectProperty = nameToIRI(name, dosdp.relations).map(factory.getOWLObjectProperty).getOrElse(null)
+  def getOWLObjectProperty(name: String): OWLObjectProperty = {
+    val properties = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
+    nameToIRI(name, properties).map(factory.getOWLObjectProperty).getOrElse(null)
+  }
 
   private val HTTPURI = "^http.+".r
   private val DOSDPVariable = "^'\\$(.+)'$".r
@@ -37,7 +49,6 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
     case HTTPURI(_*)          => Option(IRI.create(id))
     case CURIE(prefix, local) => prefixes.lift(prefix).map(uri => IRI.create(s"$uri$local"))
     case _                    => None
-    //IRI.create(s"http://purl.obolibrary.org/obo/$id")
   }
 
   private def nameOrVariableToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
