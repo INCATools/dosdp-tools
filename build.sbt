@@ -21,7 +21,7 @@ javaOptions += "-Xmx8G"
 libraryDependencies ++= {
     Seq(
       "net.sourceforge.owlapi"     %  "owlapi-distribution" % "4.2.1",
-      "org.phenoscape"             %% "scowl"               % "1.2.1",
+      "org.phenoscape"             %% "scowl"               % "1.3",
       "org.phenoscape"             %% "owlet"               % "1.5" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"          % "0.4.3",
       "io.circe"                   %% "circe-core"          % "0.7.0",

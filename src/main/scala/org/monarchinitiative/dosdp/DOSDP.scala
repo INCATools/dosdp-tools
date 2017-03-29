@@ -11,7 +11,13 @@ import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import scala.util.Either
+import org.semanticweb.owlapi.model.OWLAnnotationProperty
+import cats.data.Validated
+import cats.data.NonEmptyList
 
+/**
+ * Basic data model for DOSDP schema, for serializing to/from JSON.
+ */
 final case class DOSDP(
   pattern_name: Option[String],
   base_IRI: Option[String],
@@ -23,9 +29,9 @@ final case class DOSDP(
   dataProperties: Option[Map[String, String]],
   annotationProperties: Option[Map[String, String]],
   vars: Option[Map[String, String]],
-  list_vars: Option[Map[String, String]], //TODO
-  data_vars: Option[Map[String, String]], //TODO
-  data_list_vars: Option[Map[String, String]], //TODO
+  list_vars: Option[Map[String, String]],
+  data_vars: Option[Map[String, String]],
+  data_list_vars: Option[Map[String, String]],
   annotations: Option[List[PrintfAnnotation]],
   logical_axioms: Option[List[PrintfOWL]],
   equivalentTo: Option[PrintfOWLConvenience],
@@ -60,7 +66,13 @@ trait PrintfText {
 
   def vars: List[String]
 
-  def replaced: String = this.text.format(this.vars.map(name => "'$" + name + "'"): _*)
+  def replaced(bindings: Option[Map[String, SingleValue]]): String = {
+    val fillers = bindings match {
+      case None        => this.vars.map(name => "'$" + name + "'")
+      case Some(bound) => vars.map(bound.mapValues(_.value))
+    }
+    this.text.format(fillers: _*)
+  }
 
 }
 
@@ -75,7 +87,7 @@ final case class PrintfOWLConvenience(
   text: String,
   vars: List[String]) extends PrintfText
 
-sealed class AxiomType(val property: String)
+abstract sealed class AxiomType(val property: String)
 
 object AxiomType {
 
@@ -103,7 +115,7 @@ final case class PrintfAnnotation(
   annotationProperty: String,
   text: String,
   vars: List[String])
-    extends Annotations
+    extends Annotations with PrintfText
 
 final case class ListAnnotation(
   annotationProperty: String,
@@ -122,20 +134,20 @@ object Annotations {
 
 final case class PrintfAnnotationOBO(
   annotations: Option[List[Annotations]],
-  xrefs: Option[List[String]],
+  xrefs: Option[String],
   text: String,
   vars: List[String]) extends PrintfText
 
 object PrintfAnnotationOBO {
 
-  val Xref: String = "oboInOwl:hasDbXref" //FIXME should be IRI
-  val Name: String = "rdfs:label" //FIXME should be IRI
-  val Comment: String = "rdfs:comment" //FIXME should be IRI
-  val Def: String = "obo:IAO_0000115" //FIXME should be IRI
-  val ExactSynonym: String = "oboInOwl:hasExactSynonym" //FIXME should be IRI
-  val NarrowSynonym: String = "oboInOwl:hasNarrowSynonym" //FIXME should be IRI
-  val RelatedSynonym: String = "oboInOwl:hasRelatedSynonym" //FIXME should be IRI
-  val BroadSynonym: String = "oboInOwl:hasBroadSynonym" //FIXME should be IRI
+  val Xref: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasDbXref")
+  val Name: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#label")
+  val Comment: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#comment")
+  val Def: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/IAO_0000115")
+  val ExactSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")
+  val NarrowSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym")
+  val RelatedSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
+  val BroadSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym")
 
 }
 
