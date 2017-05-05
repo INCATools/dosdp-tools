@@ -6,7 +6,7 @@ organization  := "org.monarchinitiative"
 
 name          := "dosdp-scala"
 
-version       := "0.3-SNAPSHOT"
+version       := "0.3"
 
 scalaVersion  := "2.11.8"
 
