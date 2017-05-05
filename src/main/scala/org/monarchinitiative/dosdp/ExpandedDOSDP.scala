@@ -18,7 +18,7 @@ import org.semanticweb.owlapi.model.OWLAnnotationProperty
  */
 final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) {
 
-  private lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
+  lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
   private lazy val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(OWLManager.getOWLDataFactory, checker)
 
@@ -47,9 +47,14 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
 
   def filledLogicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = {
-    equivalentToExpression(bindings).map(e => (term EquivalentTo e)).toSet ++
-      subClassOfExpression(bindings).map(e => (term SubClassOf e)).toSet ++
-      disjointWithExpression(bindings).map(e => (term DisjointWith e)).toSet ++
+    val definedTerm = (for {
+      actualBindings <- bindings
+      defClass <- actualBindings.get("defined_class")
+      iri <- checker.idToIRI(defClass.value)
+    } yield Class(iri)).getOrElse(term)
+    equivalentToExpression(bindings).map(e => (definedTerm EquivalentTo e)).toSet ++
+      subClassOfExpression(bindings).map(e => (definedTerm SubClassOf e)).toSet ++
+      disjointWithExpression(bindings).map(e => (definedTerm DisjointWith e)).toSet ++
       gciAxiom(bindings).toSet ++ logicalAxioms(bindings)
   }
 
@@ -65,8 +70,14 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     axiomParser.parse(template.replaced(bindings))
 
   def filledAnnotationAxioms(bindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
-    (oboAnnotations(bindings) ++
-      annotations(bindings)).map(ann => AnnotationAssertion(ann.getAnnotations.asScala.toSet, ann.getProperty, term, ann.getValue))
+    val definedTerm = (for {
+      actualBindings <- bindings
+      SingleValue(value) <- actualBindings.get("defined_class")
+      iri <- checker.idToIRI(value)
+    } yield Class(iri)).getOrElse(term)
+    (oboAnnotations(bindings) ++ annotations(bindings))
+      .map(ann =>
+        AnnotationAssertion(ann.getAnnotations.asScala.toSet, ann.getProperty, definedTerm, ann.getValue))
   }
 
   def oboAnnotations(bindings: Option[Bindings]): Set[OWLAnnotation] = {
@@ -134,12 +145,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     Annotation(xrefAnnotations ++ annotationAnnotations, ap, pfao.replaced(bindings.map(singleValueBindings)))
   }
 
-  def readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map(identifiers =>
+  lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map(identifiers =>
     identifiers.map(checker.getOWLAnnotationProperty))).getOrElse(RDFSLabel :: Nil)
-
-  private def readableIdentifierForIRI(iri: String): String = {
-    ???
-
-  }
 
 }

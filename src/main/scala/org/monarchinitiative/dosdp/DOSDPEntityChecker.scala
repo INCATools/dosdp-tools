@@ -44,8 +44,9 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
   private val DOSDPVariable = "^'\\$(.+)'$".r
   private val Quoted = "^'(.*)'$".r
   private val CURIE = "^([^:]*):(.*)$".r
+  private val FullIRI = "^<(.+)>$".r
 
-  private def idToIRI(id: String): Option[IRI] = id match {
+  def idToIRI(id: String): Option[IRI] = id match {
     case HTTPURI(_*)          => Option(IRI.create(id))
     case CURIE(prefix, local) => prefixes.lift(prefix).map(uri => IRI.create(s"$uri$local"))
     case _                    => None
@@ -54,6 +55,9 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
   private def nameOrVariableToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
     case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
     case Quoted(unquoted)       => mapper.get(unquoted).flatMap(idToIRI)
+    case FullIRI(iri)           => Option(IRI.create(iri))
+    case http @ HTTPURI(_*)     => idToIRI(http)
+    case curie @ CURIE(_, _)    => idToIRI(curie)
     case _                      => mapper.get(name).flatMap(idToIRI)
   }
 

@@ -1,4 +1,4 @@
-package org.monarchinitiative.dosdp
+package org.monarchinitiative.dosdp.cli
 
 import java.io.File
 import java.io.FileReader
@@ -24,35 +24,17 @@ import org.apache.jena.query.ResultSetFormatter
 import scala.collection.JavaConverters._
 import org.semanticweb.owlapi.model.OWLOntology
 import org.apache.jena.rdf.model.ModelFactory
+import org.monarchinitiative.dosdp._
 
-object Main extends CliMain[Unit](
-  name = "dosdp-scala",
-  description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") {
+object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
-  var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology to query")
-  var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
-  var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
-  var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, and owl")
   var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently only valid option is `elk`)")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
-  var outfile = opt[File](name = "outfile", default = new File("dosdp.tsv"), description = "Output file (TSV)")
 
   def run: Unit = {
-    val ontIRIOpt = ontOpt.map(ontPath => if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath)))
-    val ontologyOpt = ontIRIOpt.map { ontIRI =>
-      val manager = OWLManager.createOWLOntologyManager()
-      manager.loadOntology(ontIRI)
-    }
     for {
-      json <- parser.parse(new FileReader(templateFile)).right
-      dosdp <- json.as[DOSDP].right
+      dosdp <- inputDOSDP.right
     } {
-      val specifiedPrefixes = (for {
-        prefixesFile <- prefixesFileOpt
-        prefixesJson <- parser.parse(new FileReader(prefixesFile)).right.toOption
-        prefixMap <- prefixesJson.as[Map[String, String]].right.toOption
-      } yield prefixMap).getOrElse(Map.empty)
-      val prefixes = if (oboPrefixes) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
       val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
       val processedQuery = (ontologyOpt, reasonerNameOpt) match {
         case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")

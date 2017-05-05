@@ -2,7 +2,7 @@
 
 # dosdp-scala
 
-Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), generate a SPARQL query that will return all slot fillers for that pattern
+Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), generate a SPARQL query that will return all slot fillers for that pattern.
 
 For context, see:
 https://github.com/dosumis/dead_simple_owl_design_patterns/issues/9
@@ -25,15 +25,24 @@ You will find executables for Unix and Windows in `target/universal/stage/bin/`.
 ```
 Usage
 
- dosdp-scala [options] : query an ontology for terms matching a Dead Simple OWL Design Pattern
+ dosdp-tools [options] command [command options]
 
 Options
 
-   --ontology    : OWL ontology to query
-   --print-query : Print generated query without running against ontology
-   --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
-   --template    : DOSDP file (YAML)
-   --prefixes    : CURIE prefixes (YAML)
+   --obo-prefixes : Assume prefixes are OBO ontologies; predefine rdf, rdfs, and owl
+   --ontology     : OWL ontology (provide labels, query axioms)
+   --outfile      : Output file (OWL or TSV)
+   --prefixes     : CURIE prefixes (YAML)
+   --template     : DOSDP file (YAML)
+
+Commands
+
+   generate [command options] : generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern
+      --infile : Input file (TSV)
+
+   query [command options] : query an ontology for terms matching a Dead Simple OWL Design Pattern
+      --print-query : Print generated query without running against ontology
+      --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
 ```
 
 Example: `dosdp-scala --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query`
