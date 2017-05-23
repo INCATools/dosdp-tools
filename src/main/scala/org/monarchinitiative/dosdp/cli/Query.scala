@@ -25,6 +25,7 @@ import scala.collection.JavaConverters._
 import org.semanticweb.owlapi.model.OWLOntology
 import org.apache.jena.rdf.model.ModelFactory
 import org.monarchinitiative.dosdp._
+import org.semanticweb.owlapi.apibinding.OWLManager
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
@@ -50,12 +51,14 @@ object Query extends Command(description = "query an ontology for terms matching
         println(processedQuery)
       } else {
         if (ontOpt.isEmpty) throw new RuntimeException("Can't run query; no ontology provided.")
-        val triples = for {
+        val model = ModelFactory.createDefaultModel()
+        val allAxioms = for {
           mainOnt <- ontologyOpt.toSet[OWLOntology]
           ont <- mainOnt.getImportsClosure.asScala
-          triple <- SesameJena.ontologyAsTriples(ont)
-        } yield triple
-        val model = ModelFactory.createDefaultModel()
+          axiom <- ont.getAxioms().asScala
+        } yield axiom
+        val manager = OWLManager.createOWLOntologyManager()
+        val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
         model.add(triples.toList.asJava)
         val query = QueryFactory.create(processedQuery)
         val results = QueryExecutionFactory.create(query, model).execSelect()
