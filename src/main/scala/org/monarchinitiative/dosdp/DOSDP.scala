@@ -50,11 +50,11 @@ final case class DOSDP(
 
 object DOSDP {
 
-  val MultiValueDelimiter = "|"
+  val MultiValueDelimiter: String = "|"
   
-  val variablePrefix = "urn:dosdp:"
+  val variablePrefix: String = "urn:dosdp:"
 
-  val DefinedClassVariable = "defined_class"
+  val DefinedClassVariable: String = "defined_class"
 
   def processedVariable(name: String): String = name.replaceAllLiterally(" ", "_")
 

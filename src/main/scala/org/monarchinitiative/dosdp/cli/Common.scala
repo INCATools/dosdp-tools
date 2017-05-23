@@ -16,8 +16,9 @@ import io.circe.parser._
 import io.circe.syntax._
 import io.circe.yaml.parser
 import org.monarchinitiative.dosdp._
+import com.typesafe.scalalogging.LazyLogging
 
-trait Common extends Command {
+trait Common extends Command with LazyLogging {
 
   def run(): Unit
 
@@ -33,7 +34,11 @@ trait Common extends Command {
     manager.loadOntology(ontIRI)
   }
 
-  def inputDOSDP: Either[Error, DOSDP] = parser.parse(new FileReader(templateFile)).right.flatMap(json => json.as[DOSDP])
+  def inputDOSDP: Either[Error, DOSDP] = {
+    val dosdp = parser.parse(new FileReader(templateFile)).right.flatMap(json => json.as[DOSDP])
+    dosdp.left.foreach(e => logger.error(s"Failed to parse pattern:\n${e.getMessage}"))
+    dosdp
+  }
 
   def prefixes: PartialFunction[String, String] = {
     val specifiedPrefixes = (for {
