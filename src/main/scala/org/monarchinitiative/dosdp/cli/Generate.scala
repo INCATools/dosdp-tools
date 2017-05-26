@@ -60,7 +60,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
           listVars <- dosdp.list_vars.toSeq
           listVar <- listVars.keys
           filler <- row.get(listVar)
-        } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter, -1).map(_.trim).toSet)).toMap
+        } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
         val dataVarBindings = (for {
           dataVars <- dosdp.data_vars.toSeq
           dataVar <- dataVars.keys
@@ -70,7 +70,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
           dataListVars <- dosdp.data_list_vars.toSeq
           dataListVar <- dataListVars.keys
           filler <- row.get(dataListVar)
-        } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter, -1).map(_.trim).toSet)).toMap
+        } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
         val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(row(DOSDP.DefinedClassVariable).trim)
         val logicalBindings = varBindings + iriBinding
         val annotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndex)) ++

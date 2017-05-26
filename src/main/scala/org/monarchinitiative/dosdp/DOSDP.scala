@@ -50,7 +50,7 @@ final case class DOSDP(
 
 object DOSDP {
 
-  val MultiValueDelimiter: String = "|"
+  val MultiValueDelimiter: Char = ','
   
   val variablePrefix: String = "urn:dosdp:"
 
