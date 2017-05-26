@@ -4,9 +4,9 @@ addCompilerPlugin("org.scalamacros" % "paradise" % "2.1.0" cross CrossVersion.fu
 
 organization  := "org.monarchinitiative"
 
-name          := "dosdp-scala"
+name          := "dosdp-tools"
 
-version       := "0.3.1"
+version       := "0.3.2-SNAPSHOT"
 
 scalaVersion  := "2.11.8"
 

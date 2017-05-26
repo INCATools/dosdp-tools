@@ -1,6 +1,6 @@
-[![Build Status](https://travis-ci.org/balhoff/dosdp-scala.svg?branch=master)](https://travis-ci.org/balhoff/dosdp-scala)
+[![Build Status](https://travis-ci.org/balhoff/dosdp-tools.svg?branch=master)](https://travis-ci.org/balhoff/dosdp-tools)
 
-# dosdp-scala
+# dosdp-tools
 
 Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), generate a SPARQL query that will return all slot fillers for that pattern.
 
@@ -8,7 +8,7 @@ For context, see:
 https://github.com/dosumis/dead_simple_owl_design_patterns/issues/9
 
 ## Releases
-dosdp-scala is still somewhat experimental, but pre-packaged releases can be downloaded from [here](https://github.com/balhoff/dosdp-scala/releases).
+Pre-packaged releases can be downloaded from [here](https://github.com/balhoff/dosdp-tools/releases).
 
 ## Building
 
@@ -45,7 +45,7 @@ Commands
       --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
 ```
 
-Example: `dosdp-scala --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query`
+Example: `dosdp-tools query --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query`
 
 Output:
 ```sparql
