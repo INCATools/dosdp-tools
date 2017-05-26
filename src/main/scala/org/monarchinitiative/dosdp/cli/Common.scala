@@ -34,10 +34,11 @@ trait Common extends Command with LazyLogging {
     manager.loadOntology(ontIRI)
   }
 
-  def inputDOSDP: Either[Error, DOSDP] = {
-    val dosdp = parser.parse(new FileReader(templateFile)).right.flatMap(json => json.as[DOSDP])
-    dosdp.left.foreach(e => logger.error(s"Failed to parse pattern:\n${e.getMessage}"))
-    dosdp
+  def inputDOSDP: DOSDP = parser.parse(new FileReader(templateFile)).right.flatMap(json => json.as[DOSDP]) match {
+    case Right(dosdp) => dosdp
+    case Left(error) =>
+      logger.error(s"Failed to parse pattern:\n${error.getMessage}")
+      throw error
   }
 
   def prefixes: PartialFunction[String, String] = {

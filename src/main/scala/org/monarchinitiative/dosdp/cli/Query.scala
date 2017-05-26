@@ -33,37 +33,33 @@ object Query extends Command(description = "query an ontology for terms matching
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
   def run: Unit = {
-    for {
-      dosdp <- inputDOSDP.right
-    } {
-      val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
-      val processedQuery = (ontologyOpt, reasonerNameOpt) match {
-        case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
-        case (Some(ontology), Some("elk")) => {
-          val reasoner = new ElkReasonerFactory().createReasoner(ontology)
-          val owlet = new Owlet(reasoner)
-          owlet.expandQueryString(sparqlQuery)
-        }
-        case (Some(ontology), Some(otherReasoner)) => throw new RuntimeException(s"$otherReasoner not supported as reasoner.")
-        case (_, None)                             => sparqlQuery
+    val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(inputDOSDP, prefixes))
+    val processedQuery = (ontologyOpt, reasonerNameOpt) match {
+      case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
+      case (Some(ontology), Some("elk")) => {
+        val reasoner = new ElkReasonerFactory().createReasoner(ontology)
+        val owlet = new Owlet(reasoner)
+        owlet.expandQueryString(sparqlQuery)
       }
-      if (printQuery) {
-        println(processedQuery)
-      } else {
-        if (ontOpt.isEmpty) throw new RuntimeException("Can't run query; no ontology provided.")
-        val model = ModelFactory.createDefaultModel()
-        val allAxioms = for {
-          mainOnt <- ontologyOpt.toSet[OWLOntology]
-          ont <- mainOnt.getImportsClosure.asScala
-          axiom <- ont.getAxioms().asScala
-        } yield axiom
-        val manager = OWLManager.createOWLOntologyManager()
-        val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
-        model.add(triples.toList.asJava)
-        val query = QueryFactory.create(processedQuery)
-        val results = QueryExecutionFactory.create(query, model).execSelect()
-        ResultSetFormatter.outputAsTSV(new FileOutputStream(outfile), results)
-      }
+      case (Some(ontology), Some(otherReasoner)) => throw new RuntimeException(s"$otherReasoner not supported as reasoner.")
+      case (_, None)                             => sparqlQuery
+    }
+    if (printQuery) {
+      println(processedQuery)
+    } else {
+      if (ontOpt.isEmpty) throw new RuntimeException("Can't run query; no ontology provided.")
+      val model = ModelFactory.createDefaultModel()
+      val allAxioms = for {
+        mainOnt <- ontologyOpt.toSet[OWLOntology]
+        ont <- mainOnt.getImportsClosure.asScala
+        axiom <- ont.getAxioms().asScala
+      } yield axiom
+      val manager = OWLManager.createOWLOntologyManager()
+      val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
+      model.add(triples.toList.asJava)
+      val query = QueryFactory.create(processedQuery)
+      val results = QueryExecutionFactory.create(query, model).execSelect()
+      ResultSetFormatter.outputAsTSV(new FileOutputStream(outfile), results)
     }
   }
 

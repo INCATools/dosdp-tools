@@ -43,48 +43,46 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV)")
 
   def run: Unit = {
-    for {
-      dosdp <- inputDOSDP.right
-    } {
-      val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
-      val readableIDIndex = ontologyOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
-      val axioms = (for {
-        row <- CSVReader.open(infile, "utf-8")(new TSVFormat {}).iteratorWithHeaders
-      } yield {
-        val varBindings = (for {
-          vars <- dosdp.vars.toSeq
-          varr <- vars.keys
-          filler <- row.get(varr)
-        } yield varr -> SingleValue(filler.trim)).toMap
-        val listVarBindings = (for {
-          listVars <- dosdp.list_vars.toSeq
-          listVar <- listVars.keys
-          filler <- row.get(listVar)
-        } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
-        val dataVarBindings = (for {
-          dataVars <- dosdp.data_vars.toSeq
-          dataVar <- dataVars.keys
-          filler <- row.get(dataVar)
-        } yield dataVar -> SingleValue(filler.trim)).toMap
-        val dataListBindings = (for {
-          dataListVars <- dosdp.data_list_vars.toSeq
-          dataListVar <- dataListVars.keys
-          filler <- row.get(dataListVar)
-        } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
-        val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(row(DOSDP.DefinedClassVariable).trim)
-        val logicalBindings = varBindings + iriBinding
-        val annotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndex)) ++
-          listVarBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndex)) ++
-          dataVarBindings ++
-          dataListBindings +
-          iriBinding
-        eDOSDP.filledLogicalAxioms(Some(logicalBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
-      }).toSet.flatten
+    val dosdp = inputDOSDP
+    val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
+    val readableIDIndex = ontologyOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
+    val axioms = (for {
+      row <- CSVReader.open(infile, "utf-8")(new TSVFormat {}).iteratorWithHeaders
+    } yield {
+      val varBindings = (for {
+        vars <- dosdp.vars.toSeq
+        varr <- vars.keys
+        filler <- row.get(varr)
+      } yield varr -> SingleValue(filler.trim)).toMap
+      val listVarBindings = (for {
+        listVars <- dosdp.list_vars.toSeq
+        listVar <- listVars.keys
+        filler <- row.get(listVar)
+      } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
+      val dataVarBindings = (for {
+        dataVars <- dosdp.data_vars.toSeq
+        dataVar <- dataVars.keys
+        filler <- row.get(dataVar)
+      } yield dataVar -> SingleValue(filler.trim)).toMap
+      val dataListBindings = (for {
+        dataListVars <- dosdp.data_list_vars.toSeq
+        dataListVar <- dataListVars.keys
+        filler <- row.get(dataListVar)
+      } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
+      val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(row(DOSDP.DefinedClassVariable).trim)
+      val logicalBindings = varBindings + iriBinding
+      val annotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndex)) ++
+        listVarBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndex)) ++
+        dataVarBindings ++
+        dataListBindings +
+        iriBinding
+      eDOSDP.filledLogicalAxioms(Some(logicalBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
+    }).toSet.flatten
 
-      val manager = OWLManager.createOWLOntologyManager()
-      val ont = manager.createOntology(axioms.asJava)
-      manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
-    }
+    val manager = OWLManager.createOWLOntologyManager()
+    val ont = manager.createOntology(axioms.asJava)
+    manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+
   }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
