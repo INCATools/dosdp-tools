@@ -24,9 +24,11 @@ import org.apache.jena.query.ResultSetFormatter
 import scala.collection.JavaConverters._
 import org.semanticweb.owlapi.model.OWLOntology
 import org.apache.jena.rdf.model.ModelFactory
+import org.apache.jena.system.JenaSystem
 
 object Main extends App {
 
+  JenaSystem.init()
   Cli.parse(args).withProgramName("dosdp-tools").withCommands(Generate, Query).foreach(_.run)
 
 }
