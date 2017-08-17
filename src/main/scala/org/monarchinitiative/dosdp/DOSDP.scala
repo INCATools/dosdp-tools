@@ -51,7 +51,7 @@ final case class DOSDP(
 object DOSDP {
 
   val MultiValueDelimiter: Char = ','
-  
+
   val variablePrefix: String = "urn:dosdp:"
 
   val DefinedClassVariable: String = "defined_class"
@@ -66,13 +66,15 @@ trait PrintfText {
 
   def text: String
 
-  def vars: List[String]
+  def vars: Option[List[String]]
 
   def replaced(bindings: Option[Map[String, SingleValue]]): String = {
-    val fillers = bindings match {
-      case None        => this.vars.map(name => "'$" + name + "'")
-      case Some(bound) => vars.map(bound.mapValues(_.value))
-    }
+    val fillers = (this.vars.map { realVars =>
+      bindings match {
+        case None        => realVars.map(name => "'$" + name + "'")
+        case Some(bound) => realVars.map(bound.mapValues(_.value))
+      }
+    }).getOrElse(Nil)
     this.text.format(fillers: _*)
   }
 
@@ -82,12 +84,12 @@ final case class PrintfOWL(
   annotations: Option[List[Annotations]],
   axiom_type: AxiomType,
   text: String,
-  vars: List[String]) extends PrintfText
+  vars: Option[List[String]]) extends PrintfText
 
 final case class PrintfOWLConvenience(
   annotations: Option[List[Annotations]],
   text: String,
-  vars: List[String]) extends PrintfText
+  vars: Option[List[String]]) extends PrintfText
 
 abstract sealed class AxiomType(val property: String)
 
@@ -116,7 +118,7 @@ final case class PrintfAnnotation(
   annotations: Option[List[Annotations]],
   annotationProperty: String,
   text: String,
-  vars: List[String])
+  vars: Option[List[String]])
     extends Annotations with PrintfText
 
 final case class ListAnnotation(
@@ -138,7 +140,7 @@ final case class PrintfAnnotationOBO(
   annotations: Option[List[Annotations]],
   xrefs: Option[String],
   text: String,
-  vars: List[String]) extends PrintfText
+  vars: Option[List[String]]) extends PrintfText
 
 object PrintfAnnotationOBO {
 
