@@ -2,7 +2,7 @@ package org.monarchinitiative.dosdp
 
 import java.util.UUID
 
-import scala.collection.JavaConversions._
+import scala.collection.JavaConverters._
 
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
@@ -12,13 +12,13 @@ import org.semanticweb.owlapi.model.OWLClassExpression
 import org.semanticweb.owlapi.model.OWLDisjointClassesAxiom
 import org.semanticweb.owlapi.model.OWLEntity
 import org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom
+import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom
 import org.semanticweb.owlapi.model.OWLObjectIntersectionOf
 import org.semanticweb.owlapi.model.OWLObjectSomeValuesFrom
+import org.semanticweb.owlapi.model.OWLObjectUnionOf
 import org.semanticweb.owlapi.model.OWLSubClassOfAxiom
 
 import com.typesafe.scalalogging.LazyLogging
-import org.semanticweb.owlapi.model.OWLObjectUnionOf
-import org.semanticweb.owlapi.model.OWLObjectAllValuesFrom
 
 object SPARQL extends LazyLogging {
 
@@ -49,7 +49,7 @@ ORDER BY ?defined_class_label
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
   def selectVariables(axiom: OWLAxiom): Set[String] =
-    axiom.getSignature.toSet[OWLEntity].map(_.getIRI.toString).collect {
+    axiom.getSignature.asScala.toSet[OWLEntity].map(_.getIRI.toString).collect {
       case DOSDPVariable(variable) => s"?$variable"
     }
 
@@ -75,8 +75,8 @@ ORDER BY ?defined_class_label
     case equivalentTo: OWLEquivalentClassesAxiom => {
       if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
       (for {
-        named <- equivalentTo.getNamedClasses.headOption
-        expression <- equivalentTo.getClassExpressionsMinus(named).headOption
+        named <- equivalentTo.getNamedClasses.asScala.headOption
+        expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
       } yield {
         val (namedClass, namedClassTriples) = triples(named)
         val (equivClass, equivClassTriples) = triples(expression)
@@ -84,10 +84,10 @@ ORDER BY ?defined_class_label
       }).toSeq.flatten
     }
     case disjointWith: OWLDisjointClassesAxiom => {
-      if (!disjointWith.getClassExpressions.exists(!_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      if (!disjointWith.getClassExpressions.asScala.exists(!_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
       (for {
-        named <- disjointWith.getClassExpressions.find(!_.isAnonymous)
-        expression <- disjointWith.getClassExpressionsMinus(named).headOption
+        named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
+        expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
       } yield {
         val (namedClass, namedClassTriples) = triples(named)
         val (equivClass, equivClassTriples) = triples(expression)
@@ -98,11 +98,10 @@ ORDER BY ?defined_class_label
 
   def triples(expression: OWLClassExpression): (String, Seq[String]) = expression match {
     case named: OWLClass => {
-      val node = named.getIRI.toString match {
-        case DOSDPVariable(variable) => s"?$variable"
-        case _                       => s"<${named.getIRI}>"
+      named.getIRI.toString match {
+        case DOSDPVariable(variable) => (s"?$variable", List(s"FILTER(isIRI(?$variable))"))
+        case _                       => (s"<${named.getIRI}>", Nil)
       }
-      (node, Seq.empty)
     }
     case svf: OWLObjectSomeValuesFrom => {
       val node = genVar
@@ -114,14 +113,14 @@ ORDER BY ?defined_class_label
     }
     case and: OWLObjectIntersectionOf => {
       val node = genVar
-      val (intersectionTriples, operandTriplesList, operands) = (and.getOperands.map { o =>
+      val (intersectionTriples, operandTriplesList, operands) = (and.getOperands.asScala.map { o =>
         val (operand, operandTriples) = triples(o)
         (s"$node owl:intersectionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }).unzip3
       val filters = operands.toSeq.combinations(2).map { pair =>
         s"FILTER(${pair(0)} != ${pair(1)})"
       }
-      val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
+      val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.asScala.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
       (node, (intersectionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
     }
     case or: OWLObjectUnionOf         => ???
