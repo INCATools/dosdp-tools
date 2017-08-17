@@ -1,22 +1,22 @@
 package org.monarchinitiative.dosdp
 
+import scala.collection.JavaConverters._
+
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxInlineAxiomParser
-import org.semanticweb.owlapi.model.OWLAxiom
-import org.semanticweb.owlapi.model.OWLClassExpression
-import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
 import org.semanticweb.owlapi.model.OWLAnnotation
 import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
-import scala.collection.JavaConverters._
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
-import org.semanticweb.owlapi.model.OWLAnnotationProperty
+import org.semanticweb.owlapi.model.OWLAxiom
+import org.semanticweb.owlapi.model.OWLClassExpression
+import com.typesafe.scalalogging.LazyLogging
 
 /**
  * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
  */
-final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) {
+final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) extends LazyLogging {
 
   lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
@@ -50,7 +50,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     val definedTerm = (for {
       actualBindings <- bindings
       defClass <- actualBindings.get(DOSDP.DefinedClassVariable)
-      iri <- checker.idToIRI(defClass.value)
+      iri <- Prefixes.idToIRI(defClass.value, prefixes)
     } yield Class(iri)).getOrElse(term)
     equivalentToExpression(bindings).map(e => (definedTerm EquivalentTo e)).toSet ++
       subClassOfExpression(bindings).map(e => (definedTerm SubClassOf e)).toSet ++
@@ -73,7 +73,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     val definedTerm = (for {
       actualBindings <- bindings
       SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
-      iri <- checker.idToIRI(value)
+      iri <- Prefixes.idToIRI(value, prefixes)
     } yield Class(iri)).getOrElse(term)
     (oboAnnotations(bindings) ++ annotations(bindings))
       .map(ann =>
@@ -145,7 +145,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     Annotation(xrefAnnotations ++ annotationAnnotations, ap, pfao.replaced(bindings.map(singleValueBindings)))
   }
 
-  lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map(identifiers =>
-    identifiers.map(checker.getOWLAnnotationProperty))).getOrElse(RDFSLabel :: Nil)
+  lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map { identifiers =>
+    identifiers.map { name =>
+      val prop = Option(checker.getOWLAnnotationProperty(name))
+      if (prop.isEmpty) logger.error(s"No annotation property mapping for '$name'")
+      prop
+    }.flatten
+  }).getOrElse(RDFSLabel :: Nil)
 
 }

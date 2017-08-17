@@ -1,7 +1,5 @@
 package org.monarchinitiative.dosdp
 
-import org.phenoscape.scowl._
-
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.expression.OWLEntityChecker
 import org.semanticweb.owlapi.model.IRI
@@ -23,7 +21,7 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
 
   def getOWLClass(name: String): OWLClass = {
     val classes = dosdp.classes.getOrElse(Map.empty)
-    nameOrVariableToIRI(name, classes).map(factory.getOWLClass).getOrElse(null)
+    Prefixes.nameOrVariableToIRI(name, classes, prefixes).map(factory.getOWLClass).getOrElse(null)
   }
 
   def getOWLDataProperty(name: String): OWLDataProperty = {
@@ -46,25 +44,10 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
   private val CURIE = "^([^:]*):(.*)$".r
   private val FullIRI = "^<(.+)>$".r
 
-  def idToIRI(id: String): Option[IRI] = id match {
-    case HTTPURI(_*)          => Option(IRI.create(id))
-    case CURIE(prefix, local) => prefixes.lift(prefix).map(uri => IRI.create(s"$uri$local"))
-    case _                    => None
-  }
-
-  private def nameOrVariableToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
-    case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
-    case Quoted(unquoted)       => mapper.get(unquoted).flatMap(idToIRI)
-    case FullIRI(iri)           => Option(IRI.create(iri))
-    case http @ HTTPURI(_*)     => idToIRI(http)
-    case curie @ CURIE(_, _)    => idToIRI(curie)
-    case _                      => mapper.get(name).flatMap(idToIRI)
-  }
-
   // Added this to avoid allowing variables to possibly be properties. OWL API parser jumps to conclusions.
   private def nameToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
-    case Quoted(unquoted) => mapper.get(unquoted).flatMap(idToIRI)
-    case _                => mapper.get(name).flatMap(idToIRI)
+    case Quoted(unquoted) => mapper.get(unquoted).flatMap(Prefixes.idToIRI(_, prefixes))
+    case _                => mapper.get(name).flatMap(Prefixes.idToIRI(_, prefixes))
   }
 
 }
