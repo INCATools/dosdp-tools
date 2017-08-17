@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/balhoff/dosdp-tools.svg?branch=master)](https://travis-ci.org/balhoff/dosdp-tools)
+[![Build Status](https://travis-ci.org/INCATools/dosdp-tools.svg?branch=master)](https://travis-ci.org/INCATools/dosdp-tools)
 
 # dosdp-tools
 
