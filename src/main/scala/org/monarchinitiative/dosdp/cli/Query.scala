@@ -1,31 +1,21 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.File
-import java.io.FileReader
+import java.io.FileOutputStream
+import java.io.OutputStreamWriter
+import java.io.PrintWriter
+import java.nio.charset.StandardCharsets
 
+import scala.collection.JavaConverters._
+
+import org.apache.jena.query.QueryExecutionFactory
+import org.apache.jena.query.QueryFactory
+import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
+import org.monarchinitiative.dosdp._
 import org.phenoscape.owlet.Owlet
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.model.IRI
-
-import io.circe._
-import io.circe.generic.auto._
-import io.circe.parser._
-import io.circe.syntax._
-import io.circe.yaml.parser
-import org.apache.jena.riot.RDFDataMgr
-
-import java.io.FileOutputStream
-import org.apache.jena.query.QueryFactory
-import org.apache.jena.query.QueryExecutionFactory
-import org.apache.jena.query.ResultSetFormatter
-
-import scala.collection.JavaConverters._
 import org.semanticweb.owlapi.model.OWLOntology
-import org.apache.jena.rdf.model.ModelFactory
-import org.monarchinitiative.dosdp._
-import org.semanticweb.owlapi.apibinding.OWLManager
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
@@ -59,7 +49,14 @@ object Query extends Command(description = "query an ontology for terms matching
       model.add(triples.toList.asJava)
       val query = QueryFactory.create(processedQuery)
       val results = QueryExecutionFactory.create(query, model).execSelect()
-      ResultSetFormatter.outputAsTSV(new FileOutputStream(outfile), results)
+      val columns = results.getResultVars.asScala.toList
+      val pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8))
+      pw.println(columns.mkString("\t"))
+      while (results.hasNext()) {
+        val qs = results.next()
+        pw.println(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")).mkString("\t"))
+      }
+      pw.close()
     }
   }
 

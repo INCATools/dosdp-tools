@@ -49,7 +49,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   def filledLogicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = {
     val definedTerm = (for {
       actualBindings <- bindings
-      defClass <- actualBindings.get("defined_class")
+      defClass <- actualBindings.get(DOSDP.DefinedClassVariable)
       iri <- checker.idToIRI(defClass.value)
     } yield Class(iri)).getOrElse(term)
     equivalentToExpression(bindings).map(e => (definedTerm EquivalentTo e)).toSet ++
@@ -72,7 +72,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   def filledAnnotationAxioms(bindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
     val definedTerm = (for {
       actualBindings <- bindings
-      SingleValue(value) <- actualBindings.get("defined_class")
+      SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
       iri <- checker.idToIRI(value)
     } yield Class(iri)).getOrElse(term)
     (oboAnnotations(bindings) ++ annotations(bindings))
