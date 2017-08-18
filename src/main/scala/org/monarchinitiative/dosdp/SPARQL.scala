@@ -4,6 +4,7 @@ import java.util.UUID
 
 import scala.collection.JavaConverters._
 
+import org.apache.jena.query.ParameterizedSparqlString
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLAxiom
@@ -60,7 +61,12 @@ ORDER BY ?defined_class_label
     val variableTriples = dosdp.varExpressions.toSeq.flatMap {
       case (variable, Thing)           => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
       case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
-      case (variable, expression)      => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf ${expression.asOMN} .")
+      case (variable, expression) => {
+        val pss = new ParameterizedSparqlString()
+        pss.appendNode(expression.asOMN)
+        val sanitizedExpression = pss.toString
+        Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
+      }
     }
     val labelTriples = axiomVariables(dosdp).map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
     axiomTriples ++ variableTriples ++ labelTriples
