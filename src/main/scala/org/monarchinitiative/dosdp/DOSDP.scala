@@ -1,19 +1,12 @@
 package org.monarchinitiative.dosdp
 
 import org.phenoscape.scowl._
-import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
-import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxInlineAxiomParser
 import org.semanticweb.owlapi.model.IRI
-import org.semanticweb.owlapi.model.OWLAxiom
-import org.semanticweb.owlapi.model.OWLClassExpression
+import org.semanticweb.owlapi.model.OWLAnnotationProperty
+
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
-import scala.util.Either
-import org.semanticweb.owlapi.model.OWLAnnotationProperty
-import cats.data.Validated
-import cats.data.NonEmptyList
 
 /**
  * Basic data model for DOSDP schema, for serializing to/from JSON.
@@ -32,6 +25,7 @@ final case class DOSDP(
   list_vars: Option[Map[String, String]],
   data_vars: Option[Map[String, String]],
   data_list_vars: Option[Map[String, String]],
+  substitutions: Option[List[RegexSub]],
   annotations: Option[List[PrintfAnnotation]],
   logical_axioms: Option[List[PrintfOWL]],
   equivalentTo: Option[PrintfOWLConvenience],
@@ -158,6 +152,8 @@ object PrintfAnnotationOBO {
 final case class ListAnnotationOBO(
   value: String,
   xrefs: Option[List[String]])
+
+final case class RegexSub(in: String, out: String, `match`: String, sub: String)
 
 final case class InstanceGraph(
   nodes: Map[String, String],

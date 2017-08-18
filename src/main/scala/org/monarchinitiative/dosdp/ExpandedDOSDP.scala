@@ -1,6 +1,7 @@
 package org.monarchinitiative.dosdp
 
 import scala.collection.JavaConverters._
+import scala.util.matching.Regex.Match
 
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
@@ -11,6 +12,7 @@ import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import org.semanticweb.owlapi.model.OWLAxiom
 import org.semanticweb.owlapi.model.OWLClassExpression
+
 import com.typesafe.scalalogging.LazyLogging
 
 /**
@@ -23,6 +25,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private lazy val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(OWLManager.getOWLDataFactory, checker)
 
   private type Bindings = Map[String, Binding]
+
+  val substitutions: Seq[ExpandedRegexSub] = dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub(_))
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
@@ -152,5 +156,37 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       prop
     }.flatten
   }).getOrElse(RDFSLabel :: Nil)
+
+}
+
+final case class ExpandedRegexSub(regexSub: RegexSub) extends LazyLogging {
+
+  private val groupFinder = raw"\\(\d+)".r
+
+  private val regex = regexSub.`match`.r
+
+  def substitute(value: String): String = {
+    val valueMatchOpt = regex.findFirstMatchIn(value)
+    val substitutedOpt = valueMatchOpt.map { valueMatch =>
+      groupFinder.replaceAllIn(regexSub.sub, (placeholder: Match) => {
+        val group = placeholder.group(1).toInt
+        valueMatch.group(group)
+      })
+    }
+    substitutedOpt match {
+      case Some(substitution) => substitution
+      case None =>
+        logger.warn(s"Regex sub '$regexSub' did not match on '$value'")
+        value
+    }
+  }
+
+  def expandBindings(bindings: Map[String, Binding]): Map[String, Binding] = {
+    val substituted: Option[(String, Binding)] = bindings.get(regexSub.in).map {
+      case SingleValue(value) => regexSub.out -> SingleValue(substitute(value))
+      case MultiValue(values) => regexSub.out -> MultiValue(values.map(substitute))
+    }
+    bindings ++ substituted
+  }
 
 }

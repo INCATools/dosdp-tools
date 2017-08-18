@@ -62,12 +62,13 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
       val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(row(DOSDP.DefinedClassVariable).trim)
       val logicalBindings = varBindings + iriBinding
-      val readableIDIndexPlusTSV = readableIDIndex + localLabels
-      val annotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusTSV)) ++
-        listVarBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusTSV)) ++
+      val readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
+      val initialAnnotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)) ++
+        listVarBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)) ++
         dataVarBindings ++
         dataListBindings +
         iriBinding
+      val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings))
       eDOSDP.filledLogicalAxioms(Some(logicalBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
     }).toSet.flatten
 
