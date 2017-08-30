@@ -45,7 +45,23 @@ Commands
       --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
 ```
 
-Example: `dosdp-tools query --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query`
+`dosdp-tools` has two modes: **generate** and **query**:
+
+### Generate
+
+The `generate` command creates an ontology from a DOSDP pattern file and an input file of tab-separated filler values. Column names in the TSV file need to match variables defined in the DOSDP. A special `defined_class` column should provide the IRI for the newly created class instantiating the pattern. A provided ontology is used to find labels for terms, needed to generate annotation values. Example:
+
+```bash
+dosdp-tools generate --obo-prefixes=true --template=exposure_to_chemical.yaml --infile=exposure_to_chemical.tsv --outfile=exposure_to_chemical.ofn --ontology=chebi_import.owl
+```
+
+### Query
+
+The `query` command queries an ontology for terms that meet the logical patterns defined in a DOSDP pattern file. Instead of performing the query, you can also simply print the generated SPARQL. Example:
+
+```bash
+dosdp-tools query --template=entity_attribute_location.yaml --prefixes=prefixes.yaml --print-query
+```
 
 Output:
 ```sparql
