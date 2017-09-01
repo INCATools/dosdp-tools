@@ -13,26 +13,35 @@ import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
 import org.monarchinitiative.dosdp._
 import org.phenoscape.owlet.Owlet
+import org.semanticweb.HermiT.ReasonerFactory
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLOntology
 
+import uk.ac.manchester.cs.jfact.JFactFactory
+
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
-  var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints (currently only valid option is `elk`)")
+  var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
   def run: Unit = {
     val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(inputDOSDP, prefixes))
-    val processedQuery = (ontologyOpt, reasonerNameOpt) match {
+    val reasonerFactoryOpt = reasonerNameOpt.map(_.toLowerCase).map { name =>
+      name match {
+        case "elk"    => new ElkReasonerFactory()
+        case "hermit" => new ReasonerFactory()
+        case "jfact"  => new JFactFactory()
+        case other    => throw new RuntimeException(s"Reasoner $other not supported. Options are ELK, HermiT, or JFact")
+      }
+    }
+    val processedQuery = (ontologyOpt, reasonerFactoryOpt) match {
       case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
-      case (Some(ontology), Some("elk")) => {
-        val reasoner = new ElkReasonerFactory().createReasoner(ontology)
+      case (Some(ontology), Some(factory)) =>
+        val reasoner = factory.createReasoner(ontology)
         val owlet = new Owlet(reasoner)
         owlet.expandQueryString(sparqlQuery)
-      }
-      case (Some(ontology), Some(otherReasoner)) => throw new RuntimeException(s"$otherReasoner not supported as reasoner.")
-      case (_, None)                             => sparqlQuery
+      case (_, None) => sparqlQuery
     }
     if (printQuery) {
       println(processedQuery)
