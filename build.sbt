@@ -18,6 +18,8 @@ mainClass in Compile := Some("org.monarchinitiative.dosdp.cli.Main")
 
 javaOptions += "-Xmx8G"
 
+scriptClasspath := Seq("*")
+
 libraryDependencies ++= {
     Seq(
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.2.1",
