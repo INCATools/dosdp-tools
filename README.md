@@ -2,13 +2,10 @@
 
 # dosdp-tools
 
-Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), generate a SPARQL query that will return all slot fillers for that pattern.
-
-For context, see:
-https://github.com/dosumis/dead_simple_owl_design_patterns/issues/9
+`dosdp-tools` is a command-line utility for working with DOSDP design patterns and OWL ontologies. Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), it can either generate ontology axioms from an input table of terms, or instead generate a SPARQL query that can be used to query an ontology for terms matching the pattern.
 
 ## Releases
-Pre-packaged releases can be downloaded from [here](https://github.com/balhoff/dosdp-tools/releases).
+Pre-packaged releases can be downloaded from [here](https://github.com/INCATools/dosdp-tools/releases).
 
 ## Building
 
