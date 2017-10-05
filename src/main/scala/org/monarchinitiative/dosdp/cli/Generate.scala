@@ -17,7 +17,6 @@ import org.semanticweb.owlapi.model.OWLOntology
 import org.semanticweb.owlapi.model.parameters.Imports
 
 import com.github.tototoshi.csv.CSVReader
-import com.github.tototoshi.csv.TSVFormat
 
 import cats.implicits._
 
@@ -28,11 +27,12 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
   def run: Unit = {
+    val sepFormat = tabularFormat
     val dosdp = inputDOSDP
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val readableIDIndex = ontologyOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
     val axioms = (for {
-      row <- CSVReader.open(infile, "utf-8")(new TSVFormat {}).iteratorWithHeaders
+      row <- CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders
     } yield {
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq

@@ -17,6 +17,9 @@ import io.circe.syntax._
 import io.circe.yaml.parser
 import org.monarchinitiative.dosdp._
 import com.typesafe.scalalogging.LazyLogging
+import com.github.tototoshi.csv.CSVFormat
+import com.github.tototoshi.csv.DefaultCSVFormat
+import com.github.tototoshi.csv.TSVFormat
 
 trait Common extends Command with LazyLogging {
 
@@ -27,6 +30,7 @@ trait Common extends Command with LazyLogging {
   var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, and owl")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
+  var tableFormat = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV or CSV")
 
   def ontologyOpt: Option[OWLOntology] = ontOpt.map { ontPath =>
     val ontIRI = if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath))
@@ -48,6 +52,12 @@ trait Common extends Command with LazyLogging {
       prefixMap <- prefixesJson.as[Map[String, String]].right.toOption
     } yield prefixMap).getOrElse(Map.empty)
     if (oboPrefixes) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
+  }
+
+  def tabularFormat: CSVFormat = tableFormat.toLowerCase match {
+    case "csv" => new DefaultCSVFormat {}
+    case "tsv" => new TSVFormat {}
+    case other => throw new RuntimeException(s"Invalid tabular format requested: $other")
   }
 
 }
