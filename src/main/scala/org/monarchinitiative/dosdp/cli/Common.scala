@@ -30,7 +30,7 @@ trait Common extends Command with LazyLogging {
   var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, and owl")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
-  var tableFormat = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV or CSV")
+  var tableFormat = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV (default) or CSV")
 
   def ontologyOpt: Option[OWLOntology] = ontOpt.map { ontPath =>
     val ontIRI = if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath))

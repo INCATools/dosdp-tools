@@ -29,6 +29,12 @@ import org.apache.jena.system.JenaSystem
 object Main extends App {
 
   JenaSystem.init()
-  Cli.parse(args).withProgramName("dosdp-tools").withCommands(Generate, Query).foreach(_.run)
+  try {
+    Cli.parse(args).withProgramName("dosdp-tools").withCommands(Generate, Query).foreach(_.run)
+  } catch {
+    case e: Exception =>
+      println(e.getMessage)
+      throw e
+  }
 
 }
