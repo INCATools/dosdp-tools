@@ -106,7 +106,11 @@ object AxiomType {
 
 }
 
-sealed trait Annotations
+sealed trait Annotations {
+  
+  def annotationProperty: String
+  
+}
 
 final case class PrintfAnnotation(
   annotations: Option[List[Annotations]],

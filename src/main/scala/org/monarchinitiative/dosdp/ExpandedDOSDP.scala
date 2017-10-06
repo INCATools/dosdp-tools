@@ -21,6 +21,7 @@ import com.typesafe.scalalogging.LazyLogging
 final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) extends LazyLogging {
 
   lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
+  lazy val safeChecker = new SafeOWLEntityChecker(checker)
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
   private lazy val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(OWLManager.getOWLDataFactory, checker)
 
@@ -111,19 +112,22 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   // if annotation: ids must be translated to labels using readable_identifiers
 
   private def translateAnnotations(annotationField: Annotations, bindings: Option[Bindings]): Set[OWLAnnotation] = {
-    annotationField match {
-      case pfa: PrintfAnnotation =>
-        Set(Annotation(
+    safeChecker.getOWLAnnotationProperty(annotationField.annotationProperty) match {
+      case Some(ap) => annotationField match {
+        case pfa: PrintfAnnotation => Set(Annotation(
           pfa.annotations.toList.flatten.flatMap(translateAnnotations(_, bindings)).toSet,
-          checker.getOWLAnnotationProperty(pfa.annotationProperty),
+          ap,
           pfa.replaced(bindings.map(singleValueBindings))))
-      case la: ListAnnotation =>
-        val ap = checker.getOWLAnnotationProperty(la.annotationProperty)
-        // If no variable bindings are passed in, dummy value is filled in using variable name
-        val multiValBindingsOpt = bindings.map(multiValueBindings)
-        val bindingsMap = multiValBindingsOpt.getOrElse(Map(la.value -> MultiValue(Set("'$" + la.value + "'"))))
-        val listValue = bindingsMap(la.value)
-        listValue.value.map(v => Annotation(ap, v))
+        case la: ListAnnotation =>
+          // If no variable bindings are passed in, dummy value is filled in using variable name
+          val multiValBindingsOpt = bindings.map(multiValueBindings)
+          val bindingsMap = multiValBindingsOpt.getOrElse(Map(la.value -> MultiValue(Set("'$" + la.value + "'"))))
+          val listValue = bindingsMap(la.value)
+          listValue.value.map(v => Annotation(ap, v))
+      }
+      case None =>
+        logger.error(s"No annotation property binding: ${annotationField.annotationProperty}")
+        Set.empty
     }
   }
 
@@ -151,7 +155,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map { identifiers =>
     identifiers.map { name =>
-      val prop = Option(checker.getOWLAnnotationProperty(name))
+      val prop = safeChecker.getOWLAnnotationProperty(name)
       if (prop.isEmpty) logger.error(s"No annotation property mapping for '$name'")
       prop
     }.flatten
