@@ -1,10 +1,5 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.FileOutputStream
-import java.io.OutputStreamWriter
-import java.io.PrintWriter
-import java.nio.charset.StandardCharsets
-
 import scala.collection.JavaConverters._
 
 import org.apache.jena.query.QueryExecutionFactory
@@ -18,6 +13,8 @@ import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLOntology
 
+import com.github.tototoshi.csv.CSVWriter
+
 import uk.ac.manchester.cs.jfact.JFactFactory
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
@@ -26,6 +23,7 @@ object Query extends Command(description = "query an ontology for terms matching
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
   def run: Unit = {
+    val sepFormat = tabularFormat
     val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(inputDOSDP, prefixes))
     val reasonerFactoryOpt = reasonerNameOpt.map(_.toLowerCase).map { name =>
       name match {
@@ -59,13 +57,13 @@ object Query extends Command(description = "query an ontology for terms matching
       val query = QueryFactory.create(processedQuery)
       val results = QueryExecutionFactory.create(query, model).execSelect()
       val columns = results.getResultVars.asScala.toList
-      val pw = new PrintWriter(new OutputStreamWriter(new FileOutputStream(outfile), StandardCharsets.UTF_8))
-      pw.println(columns.mkString("\t"))
+      val writer = CSVWriter.open(outfile, "utf-8")(sepFormat)
+      writer.writeRow(columns)
       while (results.hasNext()) {
         val qs = results.next()
-        pw.println(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")).mkString("\t"))
+        writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")))
       }
-      pw.close()
+      writer.close()
     }
   }
 
