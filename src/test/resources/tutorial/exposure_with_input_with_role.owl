@@ -1,0 +1,31 @@
+Prefix(:=<owlapi:ontology#ont1#>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<owlapi:ontology#ont1>
+
+Declaration(Class(<http://example.org/exposure/4>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CHEBI_50910>))
+Declaration(Class(<http://purl.obolibrary.org/obo/ExO_0000002>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_0000087>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_0002233>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+
+
+
+############################
+#   Classes
+############################
+
+# Class: <http://example.org/exposure/4> (exposure to neurotoxin)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://example.org/exposure/4> "A exposure event involving the interaction of an exposure receptor to a substance with neurotoxin role. Exposure may be through a variety of means, including through the air or surrounding medium, or through ingestion."^^xsd:string)
+AnnotationAssertion(rdfs:label <http://example.org/exposure/4> "exposure to neurotoxin"^^xsd:string)
+EquivalentClasses(<http://example.org/exposure/4> ObjectIntersectionOf(<http://purl.obolibrary.org/obo/ExO_0000002> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002233> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0000087> <http://purl.obolibrary.org/obo/CHEBI_50910>))))
+
+
+)

@@ -1,0 +1,27 @@
+pattern_name: exposure_with_input_with_role
+
+classes:
+  exposure event: ExO:0000002
+  Thing: owl:Thing
+
+relations:
+  has input: RO:0002233
+  has role: RO:0000087
+
+vars:
+  input: 'Thing'
+
+name:
+  text: "exposure to %s"
+  vars:
+    - input
+
+def:
+  text: "A exposure event involving the interaction of an exposure receptor to a substance with %s role. Exposure may be through a variety of means, including through the air or surrounding medium, or through ingestion."
+  vars:
+    - input
+
+equivalentTo: 
+  text: "'exposure event' and 'has input' some ('has role' some %s)"
+  vars:
+    - input
