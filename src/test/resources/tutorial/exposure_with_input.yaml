@@ -1,0 +1,49 @@
+# We can provide a name for this pattern here.
+pattern_name: exposure_with_input
+
+# In 'classes', we define the terms we will use in this pattern. 
+# In the OBO community the terms often have numeric IDs, so here 
+# we can provide human-readable names we can use further in the pattern.
+# The key is the name to be used; the value is the ID in prefixed form (i.e. a CURIE).
+classes:
+  exposure event: ExO:0000002
+  Thing: owl:Thing
+
+# Use 'relations' the same way as 'classes', 
+# but for the object properties used in the pattern.
+relations:
+  has input: RO:0002233
+
+# The 'vars' section defines the various slots that can be 
+# filled in for this pattern. We have only one, which we call 'input'. 
+# The value is the range, meaning the class of things that are valid 
+# values for this pattern. By specifying owl:Thing, we're allowing any 
+# class to be provided as a variable filler. You need a column in your 
+# spreadsheet for each variable defined here, in addition to the `defined class` column.
+vars:
+  input: 'Thing'
+
+# We can provide a template for an `rdfs:label` value to generate 
+# for our new term. dosdp-tools will search the source ontology 
+# to find the label for the filler term, and fill it into the 
+# name template in place of the %s.
+name:
+  text: "exposure to %s"
+  vars:
+    - input
+
+# This works the same as label generation, but instead creates
+# a definition annotation.
+def:
+  text: "A exposure event involving the interaction of an exposure receptor to %s. Exposure may be through a variety of means, including through the air or surrounding medium, or through ingestion."
+  vars:
+    - input
+
+# Here we can generate a logical axiom for our new concept. Create an 
+# expression using OWL Manchester syntax. The expression can use any
+# of the terms defined at the beginning of the pattern. A reference 
+# to the variable value will be inserted in place of the %s.
+equivalentTo: 
+  text: "'exposure event' and 'has input' some %s"
+  vars:
+    - input
