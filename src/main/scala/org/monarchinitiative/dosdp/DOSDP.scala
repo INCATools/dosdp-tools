@@ -12,35 +12,36 @@ import io.circe.syntax._
  * Basic data model for DOSDP schema, for serializing to/from JSON.
  */
 final case class DOSDP(
-  pattern_name: Option[String],
-  base_IRI: Option[String],
-  description: Option[String],
+  pattern_name:         Option[String],
+  base_IRI:             Option[String],
+  description:          Option[String],
   readable_identifiers: Option[List[String]],
-  classes: Option[Map[String, String]],
-  relations: Option[Map[String, String]],
-  objectProperties: Option[Map[String, String]],
-  dataProperties: Option[Map[String, String]],
+  classes:              Option[Map[String, String]],
+  relations:            Option[Map[String, String]],
+  objectProperties:     Option[Map[String, String]],
+  dataProperties:       Option[Map[String, String]],
   annotationProperties: Option[Map[String, String]],
-  vars: Option[Map[String, String]],
-  list_vars: Option[Map[String, String]],
-  data_vars: Option[Map[String, String]],
-  data_list_vars: Option[Map[String, String]],
-  substitutions: Option[List[RegexSub]],
-  annotations: Option[List[PrintfAnnotation]],
-  logical_axioms: Option[List[PrintfOWL]],
-  equivalentTo: Option[PrintfOWLConvenience],
-  subClassOf: Option[PrintfOWLConvenience],
-  disjointWith: Option[PrintfOWLConvenience],
-  GCI: Option[PrintfOWLConvenience],
-  name: Option[PrintfAnnotationOBO],
-  comment: Option[PrintfAnnotationOBO],
-  `def`: Option[PrintfAnnotationOBO],
-  exact_synonym: Option[PrintfAnnotationOBO],
-  narrow_synonym: Option[PrintfAnnotationOBO],
-  related_synonym: Option[PrintfAnnotationOBO],
-  broad_synonym: Option[PrintfAnnotationOBO],
-  xref: Option[PrintfAnnotationOBO],
-  instance_graph: Option[InstanceGraph])
+  vars:                 Option[Map[String, String]],
+  list_vars:            Option[Map[String, String]],
+  data_vars:            Option[Map[String, String]],
+  data_list_vars:       Option[Map[String, String]],
+  substitutions:        Option[List[RegexSub]],
+  annotations:          Option[List[PrintfAnnotation]],
+  logical_axioms:       Option[List[PrintfOWL]],
+  equivalentTo:         Option[PrintfOWLConvenience],
+  subClassOf:           Option[PrintfOWLConvenience],
+  disjointWith:         Option[PrintfOWLConvenience],
+  GCI:                  Option[PrintfOWLConvenience],
+  name:                 Option[PrintfAnnotationOBO],
+  comment:              Option[PrintfAnnotationOBO],
+  `def`:                Option[PrintfAnnotationOBO],
+  namespace:            Option[PrintfAnnotationOBO],
+  exact_synonym:        Option[PrintfAnnotationOBO],
+  narrow_synonym:       Option[PrintfAnnotationOBO],
+  related_synonym:      Option[PrintfAnnotationOBO],
+  broad_synonym:        Option[PrintfAnnotationOBO],
+  xref:                 Option[PrintfAnnotationOBO],
+  instance_graph:       Option[InstanceGraph])
 
 object DOSDP {
 
@@ -76,14 +77,14 @@ trait PrintfText {
 
 final case class PrintfOWL(
   annotations: Option[List[Annotations]],
-  axiom_type: AxiomType,
-  text: String,
-  vars: Option[List[String]]) extends PrintfText
+  axiom_type:  AxiomType,
+  text:        String,
+  vars:        Option[List[String]]) extends PrintfText
 
 final case class PrintfOWLConvenience(
   annotations: Option[List[Annotations]],
-  text: String,
-  vars: Option[List[String]]) extends PrintfText
+  text:        String,
+  vars:        Option[List[String]]) extends PrintfText
 
 abstract sealed class AxiomType(val property: String)
 
@@ -107,22 +108,22 @@ object AxiomType {
 }
 
 sealed trait Annotations {
-  
+
   def annotationProperty: String
-  
+
 }
 
 final case class PrintfAnnotation(
-  annotations: Option[List[Annotations]],
+  annotations:        Option[List[Annotations]],
   annotationProperty: String,
-  text: String,
-  vars: Option[List[String]])
-    extends Annotations with PrintfText
+  text:               String,
+  vars:               Option[List[String]])
+  extends Annotations with PrintfText
 
 final case class ListAnnotation(
   annotationProperty: String,
-  value: String)
-    extends Annotations
+  value:              String)
+  extends Annotations
 
 object Annotations {
 
@@ -136,9 +137,9 @@ object Annotations {
 
 final case class PrintfAnnotationOBO(
   annotations: Option[List[Annotations]],
-  xrefs: Option[String],
-  text: String,
-  vars: Option[List[String]]) extends PrintfText
+  xrefs:       Option[String],
+  text:        String,
+  vars:        Option[List[String]]) extends PrintfText
 
 object PrintfAnnotationOBO {
 
@@ -146,6 +147,7 @@ object PrintfAnnotationOBO {
   val Name: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#label")
   val Comment: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#comment")
   val Def: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/IAO_0000115")
+  val Namespace: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasOBONamespace")
   val ExactSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")
   val NarrowSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym")
   val RelatedSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
@@ -164,6 +166,6 @@ final case class InstanceGraph(
   edges: List[OPA])
 
 final case class OPA(
-  edge: List[String],
+  edge:        List[String],
   annotations: Option[List[Annotations]],
-  not: Option[Boolean]) 
+  not:         Option[Boolean]) 

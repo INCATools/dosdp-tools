@@ -91,6 +91,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       dosdp.name -> Name,
       dosdp.comment -> Comment,
       dosdp.`def` -> Def,
+      dosdp.namespace -> Namespace,
       dosdp.exact_synonym -> ExactSynonym,
       dosdp.narrow_synonym -> NarrowSynonym,
       dosdp.related_synonym -> RelatedSynonym,
