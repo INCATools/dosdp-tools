@@ -6,9 +6,9 @@ organization  := "org.monarchinitiative"
 
 name          := "dosdp-tools"
 
-version       := "0.6"
+version       := "0.6.1"
 
-scalaVersion  := "2.12.3"
+scalaVersion  := "2.12.4"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
