@@ -12,6 +12,7 @@ import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import org.semanticweb.owlapi.model.OWLAxiom
 import org.semanticweb.owlapi.model.OWLClassExpression
+import org.semanticweb.owlapi.model.OWLClass
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -42,24 +43,27 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   def logicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = (for {
     axiomDefs <- dosdp.logical_axioms.toList
     axiomDef <- axiomDefs
+    defTerm = definedTerm(bindings)
   } yield axiomDef.axiom_type match {
-    case AxiomType.EquivalentTo => term EquivalentTo expressionFor(axiomDef, bindings)
-    case AxiomType.SubClassOf   => term SubClassOf expressionFor(axiomDef, bindings)
-    case AxiomType.DisjointWith => term DisjointWith expressionFor(axiomDef, bindings)
+    case AxiomType.EquivalentTo => defTerm EquivalentTo expressionFor(axiomDef, bindings)
+    case AxiomType.SubClassOf   => defTerm SubClassOf expressionFor(axiomDef, bindings)
+    case AxiomType.DisjointWith => defTerm DisjointWith expressionFor(axiomDef, bindings)
     case AxiomType.GCI          => axiomFor(axiomDef, bindings)
   }).toSet
 
   private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
 
+  private def definedTerm(bindings: Option[Map[String, SingleValue]]): OWLClass = (for {
+    actualBindings <- bindings
+    defClass <- actualBindings.get(DOSDP.DefinedClassVariable)
+    iri <- Prefixes.idToIRI(defClass.value, prefixes)
+  } yield Class(iri)).getOrElse(term)
+
   def filledLogicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = {
-    val definedTerm = (for {
-      actualBindings <- bindings
-      defClass <- actualBindings.get(DOSDP.DefinedClassVariable)
-      iri <- Prefixes.idToIRI(defClass.value, prefixes)
-    } yield Class(iri)).getOrElse(term)
-    equivalentToExpression(bindings).map(e => (definedTerm EquivalentTo e)).toSet ++
-      subClassOfExpression(bindings).map(e => (definedTerm SubClassOf e)).toSet ++
-      disjointWithExpression(bindings).map(e => (definedTerm DisjointWith e)).toSet ++
+    val theDefinedTerm = definedTerm(bindings)
+    equivalentToExpression(bindings).map(e => (theDefinedTerm EquivalentTo e)).toSet ++
+      subClassOfExpression(bindings).map(e => (theDefinedTerm SubClassOf e)).toSet ++
+      disjointWithExpression(bindings).map(e => (theDefinedTerm DisjointWith e)).toSet ++
       gciAxiom(bindings).toSet ++ logicalAxioms(bindings)
   }
 
