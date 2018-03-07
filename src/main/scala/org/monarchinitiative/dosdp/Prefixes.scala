@@ -7,7 +7,12 @@ object OBOPrefixes extends PartialFunction[String, String] {
   private val standardPrefixes = Map(
     "rdf" -> "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
     "rdfs" -> "http://www.w3.org/2000/01/rdf-schema#",
-    "owl" -> "http://www.w3.org/2002/07/owl#")
+    "owl" -> "http://www.w3.org/2002/07/owl#",
+    "dc" -> "http://purl.org/dc/elements/1.1/",
+    "dct" -> "http://purl.org/dc/terms/",
+    "skos" -> "http://www.w3.org/2004/02/skos/core#",
+    "obo" -> "http://purl.obolibrary.org/obo/",
+    "oio" -> "http://www.geneontology.org/formats/oboInOwl#")
 
   private val OBONamespace = "http://purl.obolibrary.org/obo/"
 
