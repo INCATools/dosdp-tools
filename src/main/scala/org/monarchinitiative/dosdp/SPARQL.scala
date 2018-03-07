@@ -45,7 +45,7 @@ ORDER BY ?defined_class_label
       .mkString(" ")
   }
 
-  private def axiomVariables(dosdp: ExpandedDOSDP): Set[String] = dosdp.filledLogicalAxioms(None).flatMap(selectVariables)
+  private def axiomVariables(dosdp: ExpandedDOSDP): Set[String] = dosdp.filledLogicalAxioms(None, None).flatMap(selectVariables)
 
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
@@ -57,7 +57,7 @@ ORDER BY ?defined_class_label
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
   def triplesFor(dosdp: ExpandedDOSDP): Seq[String] = {
-    val axiomTriples = dosdp.filledLogicalAxioms(None).toSeq.flatMap(triples)
+    val axiomTriples = dosdp.filledLogicalAxioms(None, None).toSeq.flatMap(triples)
     val variableTriples = dosdp.varExpressions.toSeq.flatMap {
       case (variable, Thing)           => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
       case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")

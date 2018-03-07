@@ -69,7 +69,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListBindings +
         iriBinding
       val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings))
-      eDOSDP.filledLogicalAxioms(Some(logicalBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
+      eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
     }).toSet.flatten
 
     val manager = OWLManager.createOWLOntologyManager()

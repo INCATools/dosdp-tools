@@ -62,6 +62,8 @@ trait PrintfText {
   def text: String
 
   def vars: Option[List[String]]
+  
+  def annotations: Option[List[Annotations]]
 
   def replaced(bindings: Option[Map[String, SingleValue]]): String = {
     val fillers = (this.vars.map { realVars =>
@@ -166,6 +168,6 @@ final case class InstanceGraph(
   edges: List[OPA])
 
 final case class OPA(
-  edge:        List[String],
+  edge:        List[String], //TODO require length of 3
   annotations: Option[List[Annotations]],
   not:         Option[Boolean]) 

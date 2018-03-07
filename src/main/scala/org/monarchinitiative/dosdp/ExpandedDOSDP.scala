@@ -32,23 +32,23 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
-  def equivalentToExpression(bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] = dosdp.equivalentTo.map(expressionFor(_, bindings))
+  def equivalentToExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.equivalentTo.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
 
-  def subClassOfExpression(bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] = dosdp.subClassOf.map(expressionFor(_, bindings))
+  def subClassOfExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.subClassOf.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
 
-  def disjointWithExpression(bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] = dosdp.disjointWith.map(expressionFor(_, bindings))
+  def disjointWithExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.disjointWith.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
 
-  def gciAxiom(bindings: Option[Map[String, SingleValue]]): Option[OWLAxiom] = dosdp.GCI.map(gci => axiomFor(gci, bindings))
+  def gciAxiom(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLAxiom, Set[OWLAnnotation])] = dosdp.GCI.map(gci => axiomFor(gci, logicalBindings) -> annotationsFor(gci, annotationBindings))
 
-  def logicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = (for {
+  def logicalAxioms(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Set[OWLAxiom] = (for {
     axiomDefs <- dosdp.logical_axioms.toList
     axiomDef <- axiomDefs
-    defTerm = definedTerm(bindings)
+    defTerm = definedTerm(logicalBindings)
   } yield axiomDef.axiom_type match {
-    case AxiomType.EquivalentTo => defTerm EquivalentTo expressionFor(axiomDef, bindings)
-    case AxiomType.SubClassOf   => defTerm SubClassOf expressionFor(axiomDef, bindings)
-    case AxiomType.DisjointWith => defTerm DisjointWith expressionFor(axiomDef, bindings)
-    case AxiomType.GCI          => axiomFor(axiomDef, bindings)
+    case AxiomType.EquivalentTo => EquivalentClasses(annotationsFor(axiomDef, annotationBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.SubClassOf   => SubClassOf(annotationsFor(axiomDef, annotationBindings), defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.DisjointWith => DisjointClasses(annotationsFor(axiomDef, annotationBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.GCI          => axiomFor(axiomDef, logicalBindings).getAnnotatedAxiom(annotationsFor(axiomDef, annotationBindings).asJava)
   }).toSet
 
   private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
@@ -59,12 +59,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     iri <- Prefixes.idToIRI(defClass.value, prefixes)
   } yield Class(iri)).getOrElse(term)
 
-  def filledLogicalAxioms(bindings: Option[Map[String, SingleValue]]): Set[OWLAxiom] = {
-    val theDefinedTerm = definedTerm(bindings)
-    equivalentToExpression(bindings).map(e => (theDefinedTerm EquivalentTo e)).toSet ++
-      subClassOfExpression(bindings).map(e => (theDefinedTerm SubClassOf e)).toSet ++
-      disjointWithExpression(bindings).map(e => (theDefinedTerm DisjointWith e)).toSet ++
-      gciAxiom(bindings).toSet ++ logicalAxioms(bindings)
+  def filledLogicalAxioms(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Set[OWLAxiom] = {
+    val theDefinedTerm = definedTerm(logicalBindings)
+    equivalentToExpression(logicalBindings, annotationBindings).map { case (e, anns) => EquivalentClasses(anns.toSeq: _*)(theDefinedTerm, e) }.toSet ++
+      subClassOfExpression(logicalBindings, annotationBindings).map { case (e, anns) => SubClassOf(anns, theDefinedTerm, e) }.toSet ++
+      disjointWithExpression(logicalBindings, annotationBindings).map { case (e, anns) => DisjointClasses(anns.toSeq: _*)(theDefinedTerm, e) }.toSet ++
+      gciAxiom(logicalBindings, annotationBindings).map { case (axiom, anns) => axiom.getAnnotatedAxiom(anns.asJava) }.toSet ++ logicalAxioms(logicalBindings, annotationBindings)
   }
 
   def varExpressions: Map[String, OWLClassExpression] = {
@@ -77,6 +77,9 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def axiomFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): OWLAxiom =
     axiomParser.parse(template.replaced(bindings))
+
+  private def annotationsFor(element: PrintfText, bindings: Option[Map[String, Binding]]): Set[OWLAnnotation] =
+    element.annotations.toSet.flatten.flatMap(translateAnnotations(_, bindings))
 
   def filledAnnotationAxioms(bindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
     val definedTerm = (for {
