@@ -137,10 +137,10 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       text,
       vars,
       anns.toSet.flatten.map(normalizeAnnotation))
-    case la @ ListAnnotation(ap, value) => NormalizedListAnnotation(
+    case la @ ListAnnotation(anns, ap, value) => NormalizedListAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       value,
-      Set.empty)
+      anns.toSet.flatten.map(normalizeAnnotation))
   }
 
   private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty): NormalizedAnnotation = annotation match {

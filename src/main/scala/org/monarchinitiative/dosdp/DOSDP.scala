@@ -135,6 +135,7 @@ final case class PrintfAnnotation(
   extends Annotations with PrintfText
 
 final case class ListAnnotation(
+  annotations:        Option[List[Annotations]],
   annotationProperty: String,
   value:              String)
   extends Annotations
@@ -144,7 +145,7 @@ object Annotations {
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[PrintfAnnotation].map[Annotations](identity).or(Decoder[ListAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
     case pfa @ PrintfAnnotation(_, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _)          => la.asJson
+    case la @ ListAnnotation(_, _, _)       => la.asJson
   }
 
 }
