@@ -12,36 +12,40 @@ import io.circe.syntax._
  * Basic data model for DOSDP schema, for serializing to/from JSON.
  */
 final case class DOSDP(
-  pattern_name:         Option[String],
-  base_IRI:             Option[String],
-  description:          Option[String],
-  readable_identifiers: Option[List[String]],
-  classes:              Option[Map[String, String]],
-  relations:            Option[Map[String, String]],
-  objectProperties:     Option[Map[String, String]],
-  dataProperties:       Option[Map[String, String]],
-  annotationProperties: Option[Map[String, String]],
-  vars:                 Option[Map[String, String]],
-  list_vars:            Option[Map[String, String]],
-  data_vars:            Option[Map[String, String]],
-  data_list_vars:       Option[Map[String, String]],
-  substitutions:        Option[List[RegexSub]],
-  annotations:          Option[List[PrintfAnnotation]],
-  logical_axioms:       Option[List[PrintfOWL]],
-  equivalentTo:         Option[PrintfOWLConvenience],
-  subClassOf:           Option[PrintfOWLConvenience],
-  disjointWith:         Option[PrintfOWLConvenience],
-  GCI:                  Option[PrintfOWLConvenience],
-  name:                 Option[PrintfAnnotationOBO],
-  comment:              Option[PrintfAnnotationOBO],
-  `def`:                Option[PrintfAnnotationOBO],
-  namespace:            Option[PrintfAnnotationOBO],
-  exact_synonym:        Option[PrintfAnnotationOBO],
-  narrow_synonym:       Option[PrintfAnnotationOBO],
-  related_synonym:      Option[PrintfAnnotationOBO],
-  broad_synonym:        Option[PrintfAnnotationOBO],
-  xref:                 Option[PrintfAnnotationOBO],
-  instance_graph:       Option[InstanceGraph])
+  pattern_name:               Option[String],
+  base_IRI:                   Option[String],
+  description:                Option[String],
+  readable_identifiers:       Option[List[String]],
+  classes:                    Option[Map[String, String]],
+  relations:                  Option[Map[String, String]],
+  objectProperties:           Option[Map[String, String]],
+  dataProperties:             Option[Map[String, String]],
+  annotationProperties:       Option[Map[String, String]],
+  vars:                       Option[Map[String, String]],
+  list_vars:                  Option[Map[String, String]],
+  data_vars:                  Option[Map[String, String]],
+  data_list_vars:             Option[Map[String, String]],
+  substitutions:              Option[List[RegexSub]],
+  annotations:                Option[List[PrintfAnnotation]],
+  logical_axioms:             Option[List[PrintfOWL]],
+  equivalentTo:               Option[PrintfOWLConvenience],
+  subClassOf:                 Option[PrintfOWLConvenience],
+  disjointWith:               Option[PrintfOWLConvenience],
+  GCI:                        Option[PrintfOWLConvenience],
+  name:                       Option[PrintfAnnotationOBO],
+  comment:                    Option[PrintfAnnotationOBO],
+  `def`:                      Option[PrintfAnnotationOBO],
+  namespace:                  Option[PrintfAnnotationOBO],
+  exact_synonym:              Option[ListAnnotationOBO],
+  narrow_synonym:             Option[ListAnnotationOBO],
+  related_synonym:            Option[ListAnnotationOBO],
+  broad_synonym:              Option[ListAnnotationOBO],
+  generated_synonyms:         Option[List[PrintfAnnotationOBO]],
+  generated_narrow_synonyms:  Option[List[PrintfAnnotationOBO]],
+  generated_broad_synonyms:   Option[List[PrintfAnnotationOBO]],
+  generated_related_synonyms: Option[List[PrintfAnnotationOBO]],
+  xref:                       Option[ListAnnotationOBO],
+  instance_graph:             Option[InstanceGraph])
 
 object DOSDP {
 
@@ -62,17 +66,23 @@ trait PrintfText {
   def text: String
 
   def vars: Option[List[String]]
-  
+
   def annotations: Option[List[Annotations]]
 
-  def replaced(bindings: Option[Map[String, SingleValue]]): String = {
-    val fillers = (this.vars.map { realVars =>
+  def replaced(bindings: Option[Map[String, SingleValue]]): String = PrintfText.replaced(this.text, this.vars, bindings)
+
+}
+
+object PrintfText {
+
+  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]]): String = {
+    val fillers = (vars.map { realVars =>
       bindings match {
         case None        => realVars.map(name => "'$" + name + "'")
         case Some(bound) => realVars.map(bound.mapValues(_.value))
       }
     }).getOrElse(Nil)
-    this.text.format(fillers: _*)
+    text.format(fillers: _*)
   }
 
 }
@@ -109,7 +119,9 @@ object AxiomType {
 
 }
 
-sealed trait Annotations {
+sealed trait AnnotationLike
+
+sealed trait Annotations extends AnnotationLike {
 
   def annotationProperty: String
 
@@ -137,11 +149,13 @@ object Annotations {
 
 }
 
+sealed trait OBOAnnotations
+
 final case class PrintfAnnotationOBO(
   annotations: Option[List[Annotations]],
   xrefs:       Option[String],
   text:        String,
-  vars:        Option[List[String]]) extends PrintfText
+  vars:        Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations
 
 object PrintfAnnotationOBO {
 
@@ -159,7 +173,7 @@ object PrintfAnnotationOBO {
 
 final case class ListAnnotationOBO(
   value: String,
-  xrefs: Option[List[String]])
+  xrefs: Option[String]) extends AnnotationLike with OBOAnnotations
 
 final case class RegexSub(in: String, out: String, `match`: String, sub: String)
 

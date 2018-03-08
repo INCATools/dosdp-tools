@@ -79,7 +79,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     axiomParser.parse(template.replaced(bindings))
 
   private def annotationsFor(element: PrintfText, bindings: Option[Map[String, Binding]]): Set[OWLAnnotation] =
-    element.annotations.toSet.flatten.flatMap(translateAnnotations(_, bindings))
+    (for {
+      annotations <- element.annotations.toSeq
+      annotation <- annotations
+      normalizedAnnotation = normalizeAnnotation(annotation)
+      owlAnnotation <- translateAnnotations(normalizedAnnotation, bindings)
+    } yield owlAnnotation).toSet
 
   def filledAnnotationAxioms(bindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
     val definedTerm = (for {
@@ -87,79 +92,75 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
       iri <- Prefixes.idToIRI(value, prefixes)
     } yield Class(iri)).getOrElse(term)
-    (oboAnnotations(bindings) ++ annotations(bindings))
-      .map(ann =>
-        AnnotationAssertion(ann.getAnnotations.asScala.toSet, ann.getProperty, definedTerm, ann.getValue))
+    for {
+      normalizedAnnotationField <- normalizedOBOAnnotations ++ dosdp.annotations.toList.flatten.map(normalizeAnnotation)
+      annotation <- translateAnnotations(normalizedAnnotationField, bindings)
+    } yield AnnotationAssertion(annotation.getAnnotations.asScala.toSet, annotation.getProperty, definedTerm, annotation.getValue)
   }
 
-  def oboAnnotations(bindings: Option[Bindings]): Set[OWLAnnotation] = {
+  private def normalizedOBOAnnotations: Set[NormalizedAnnotation] = {
     import PrintfAnnotationOBO._
     (Map(
-      dosdp.name -> Name,
-      dosdp.comment -> Comment,
-      dosdp.`def` -> Def,
-      dosdp.namespace -> Namespace,
-      dosdp.exact_synonym -> ExactSynonym,
-      dosdp.narrow_synonym -> NarrowSynonym,
-      dosdp.related_synonym -> RelatedSynonym,
-      dosdp.broad_synonym -> BroadSynonym,
-      dosdp.xref -> Xref).flatMap {
-        case (value, property) => value.map(v => translateOBOAnnotation(property, v, bindings)).toSet
+      dosdp.name.toSet -> Name,
+      dosdp.comment.toSet -> Comment,
+      dosdp.`def`.toSet -> Def,
+      dosdp.namespace.toSet -> Namespace,
+      dosdp.exact_synonym.toSet -> ExactSynonym,
+      dosdp.narrow_synonym.toSet -> NarrowSynonym,
+      dosdp.related_synonym.toSet -> RelatedSynonym,
+      dosdp.broad_synonym.toSet -> BroadSynonym,
+      dosdp.xref.toSet -> Xref,
+      dosdp.generated_synonyms.toSet.flatten -> ExactSynonym,
+      dosdp.generated_narrow_synonyms.toSet.flatten -> NarrowSynonym,
+      dosdp.generated_broad_synonyms.toSet.flatten -> BroadSynonym,
+      dosdp.generated_related_synonyms.toSet.flatten -> RelatedSynonym).flatMap {
+        case (value, property) => value.map(ann => normalizeOBOAnnotation(ann, property))
       }).toSet
   }
-
-  def annotations(bindings: Option[Bindings]): Set[OWLAnnotation] = (for {
-    annotationDefs <- dosdp.annotations.toList
-    annotationDef <- annotationDefs
-    annotation <- translateAnnotations(annotationDef, bindings)
-  } yield {
-    annotation
-  }).toSet
 
   //TODO check membership of variable in various variable sets: regular vs. list, regular vs. data
   // if annotation: ids must be translated to labels using readable_identifiers
 
-  private def translateAnnotations(annotationField: Annotations, bindings: Option[Bindings]): Set[OWLAnnotation] = {
-    safeChecker.getOWLAnnotationProperty(annotationField.annotationProperty) match {
-      case Some(ap) => annotationField match {
-        case pfa: PrintfAnnotation => Set(Annotation(
-          pfa.annotations.toList.flatten.flatMap(translateAnnotations(_, bindings)).toSet,
-          ap,
-          pfa.replaced(bindings.map(singleValueBindings))))
-        case la: ListAnnotation =>
-          // If no variable bindings are passed in, dummy value is filled in using variable name
-          val multiValBindingsOpt = bindings.map(multiValueBindings)
-          val bindingsMap = multiValBindingsOpt.getOrElse(Map(la.value -> MultiValue(Set("'$" + la.value + "'"))))
-          val listValue = bindingsMap(la.value)
-          listValue.value.map(v => Annotation(ap, v))
-      }
-      case None =>
-        logger.error(s"No annotation property binding: ${annotationField.annotationProperty}")
-        Set.empty
-    }
+  private def translateAnnotations(annotationField: NormalizedAnnotation, bindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
+    case NormalizedPrintfAnnotation(prop, text, vars, subAnnotations) => Set(Annotation(
+      subAnnotations.flatMap(translateAnnotations(_, bindings)),
+      prop,
+      PrintfText.replaced(text, vars, bindings.map(singleValueBindings))))
+    case NormalizedListAnnotation(prop, value, subAnnotations) =>
+      // If no variable bindings are passed in, dummy value is filled in using variable name
+      val multiValBindingsOpt = bindings.map(multiValueBindings)
+      val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
+      val listValue = bindingsMap(value)
+      listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, bindings)), prop, v))
+  }
+
+  private def normalizeAnnotation(annotation: Annotations): NormalizedAnnotation = annotation match {
+    case pfa @ PrintfAnnotation(anns, ap, text, vars) => NormalizedPrintfAnnotation(
+      safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
+      text,
+      vars,
+      anns.toSet.flatten.map(normalizeAnnotation))
+    case la @ ListAnnotation(ap, value) => NormalizedListAnnotation(
+      safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
+      value,
+      Set.empty)
+  }
+
+  private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty): NormalizedAnnotation = annotation match {
+    case pfao @ PrintfAnnotationOBO(anns, xrefs, text, vars) => NormalizedPrintfAnnotation(
+      property,
+      text,
+      vars,
+      anns.toSet.flatten.map(normalizeAnnotation) ++ xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)))
+    case lao @ ListAnnotationOBO(value, xrefs) => NormalizedListAnnotation(
+      property,
+      value,
+      xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)).toSet)
   }
 
   private def singleValueBindings(bindings: Bindings): Map[String, SingleValue] = bindings.collect { case (key, value: SingleValue) => key -> value }
 
   private def multiValueBindings(bindings: Bindings): Map[String, MultiValue] = bindings.collect { case (key, value: MultiValue) => key -> value }
-
-  private def translateOBOAnnotation(ap: OWLAnnotationProperty, pfao: PrintfAnnotationOBO, bindings: Option[Bindings]): OWLAnnotation = {
-    val multiValBindingsOpt = bindings.map(multiValueBindings)
-    val xrefAnnotations: Set[OWLAnnotation] = (for {
-      xrefsVar <- pfao.xrefs
-      // If no variable bindings are passed in, dummy value is filled in using variable name
-      bindingsMap = multiValBindingsOpt.getOrElse(Map(xrefsVar -> MultiValue(Set("'$" + xrefsVar + "'"))))
-      xrefValues <- bindingsMap.get(xrefsVar)
-    } yield xrefValues.value.map(xrefVal => Annotation(PrintfAnnotationOBO.Xref, xrefVal)).toSet).getOrElse(Set.empty) //TODO how are list values delimited?
-    val annotationAnnotations = (for {
-      annotationDefs <- pfao.annotations.toList
-      annotationDef <- annotationDefs
-      annotation <- translateAnnotations(annotationDef, bindings)
-    } yield {
-      annotation
-    }).toSet
-    Annotation(xrefAnnotations ++ annotationAnnotations, ap, pfao.replaced(bindings.map(singleValueBindings)))
-  }
 
   lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map { identifiers =>
     identifiers.map { name =>
@@ -168,6 +169,15 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       prop
     }.flatten
   }).getOrElse(RDFSLabel :: Nil)
+
+  private sealed trait NormalizedAnnotation {
+    def property: OWLAnnotationProperty
+    def subAnnotations: Set[NormalizedAnnotation]
+  }
+
+  private case class NormalizedPrintfAnnotation(property: OWLAnnotationProperty, text: String, vars: Option[List[String]], subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
+
+  private case class NormalizedListAnnotation(property: OWLAnnotationProperty, value: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
 
 }
 
