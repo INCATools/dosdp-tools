@@ -11,8 +11,8 @@ import org.semanticweb.owlapi.model.OWLAnnotation
 import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import org.semanticweb.owlapi.model.OWLAxiom
-import org.semanticweb.owlapi.model.OWLClassExpression
 import org.semanticweb.owlapi.model.OWLClass
+import org.semanticweb.owlapi.model.OWLClassExpression
 
 import com.typesafe.scalalogging.LazyLogging
 
@@ -117,9 +117,6 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         case (value, property) => value.map(ann => normalizeOBOAnnotation(ann, property))
       }).toSet
   }
-
-  //TODO check membership of variable in various variable sets: regular vs. list, regular vs. data
-  // if annotation: ids must be translated to labels using readable_identifiers
 
   private def translateAnnotations(annotationField: NormalizedAnnotation, bindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
     case NormalizedPrintfAnnotation(prop, text, vars, subAnnotations) => Set(Annotation(
