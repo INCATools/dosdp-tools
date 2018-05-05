@@ -4,7 +4,7 @@ organization  := "org.monarchinitiative"
 
 name          := "dosdp-tools"
 
-version       := "0.7.1"
+version       := "0.8-SNAPSHOT"
 
 scalaVersion  := "2.12.4"
 
@@ -30,6 +30,7 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-generic"          % "0.8.0",
       "io.circe"                   %% "circe-parser"           % "0.8.0",
       "io.circe"                   %% "circe-yaml"             % "0.6.1",
+      "com.github.pathikrit"       %% "better-files"           % "3.4.0",
       "org.apache.jena"            %  "apache-jena-libs"       % "3.2.0" exclude("org.slf4j", "slf4j-log4j12"),
       "org.backuity.clist"         %% "clist-core"             % "3.2.2",
       "org.backuity.clist"         %% "clist-macros"           % "3.2.2" % "provided",

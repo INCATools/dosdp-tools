@@ -22,7 +22,7 @@ import cats.implicits._
 
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
-  var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV)")
+  var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
