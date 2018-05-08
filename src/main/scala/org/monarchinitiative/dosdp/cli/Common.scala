@@ -20,12 +20,14 @@ import com.typesafe.scalalogging.LazyLogging
 import com.github.tototoshi.csv.CSVFormat
 import com.github.tototoshi.csv.DefaultCSVFormat
 import com.github.tototoshi.csv.TSVFormat
+import org.obolibrary.robot.CatalogXmlIRIMapper
 
 trait Common extends Command with LazyLogging {
 
   def run(): Unit
 
   var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology (provide labels, query axioms)")
+  var catalogFileOpt = opt[Option[File]](name = "catalog", description = "catalog file to use for resolving ontology locations")
   var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
   var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
@@ -35,6 +37,7 @@ trait Common extends Command with LazyLogging {
   def ontologyOpt: Option[OWLOntology] = ontOpt.map { ontPath =>
     val ontIRI = if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath))
     val manager = OWLManager.createOWLOntologyManager()
+    catalogFileOpt.foreach(catalog => manager.addIRIMapper(new CatalogXmlIRIMapper(catalog)))
     manager.loadOntology(ontIRI)
   }
 
