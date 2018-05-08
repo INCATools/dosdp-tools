@@ -6,7 +6,7 @@ name          := "dosdp-tools"
 
 version       := "0.8-SNAPSHOT"
 
-scalaVersion  := "2.12.4"
+scalaVersion  := "2.12.6"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -26,6 +26,7 @@ libraryDependencies ++= {
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3",
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.3.8.431",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
+      "org.obolibrary.robot"       %  "robot-core"             % "1.0.0",
       "io.circe"                   %% "circe-core"             % "0.8.0",
       "io.circe"                   %% "circe-generic"          % "0.8.0",
       "io.circe"                   %% "circe-parser"           % "0.8.0",
