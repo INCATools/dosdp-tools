@@ -23,10 +23,17 @@ import cats.implicits._
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
   var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
+  var restrictAxioms = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
   def run: Unit = {
+    val (outputLogicalAxioms, outputAnnotationAxioms) = restrictAxioms match {
+      case "all"        => (true, true)
+      case "logical"    => (true, false)
+      case "annotation" => (false, true)
+      case other        => throw new UnsupportedOperationException(s"Invalid argument for restrict-axioms-to: $other")
+    }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
@@ -69,7 +76,9 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListBindings +
         iriBinding
       val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings))
-      eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) ++ eDOSDP.filledAnnotationAxioms(Some(annotationBindings))
+      val logicalAxioms = if (outputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
+      val annotationAxioms = if (outputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings)) else Set.empty
+      logicalAxioms ++ annotationAxioms
     }).toSet.flatten
 
     val manager = OWLManager.createOWLOntologyManager()
