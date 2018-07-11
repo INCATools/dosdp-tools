@@ -21,6 +21,7 @@ import com.github.tototoshi.csv.CSVFormat
 import com.github.tototoshi.csv.DefaultCSVFormat
 import com.github.tototoshi.csv.TSVFormat
 import org.obolibrary.robot.CatalogXmlIRIMapper
+import scala.io.Source
 
 trait Common extends Command with LazyLogging {
 
@@ -28,7 +29,7 @@ trait Common extends Command with LazyLogging {
 
   var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology (provide labels, query axioms)")
   var catalogFileOpt = opt[Option[File]](name = "catalog", description = "catalog file to use for resolving ontology locations")
-  var templateFile = opt[File](name = "template", default = new File("dosdp.yaml"), description = "DOSDP file (YAML)")
+  var templateFile = opt[String](name = "template", default = "dosdp.yaml", description = "DOSDP file (YAML)")
   var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
@@ -41,11 +42,16 @@ trait Common extends Command with LazyLogging {
     manager.loadOntology(ontIRI)
   }
 
-  def inputDOSDP: DOSDP = parser.parse(new FileReader(templateFile)).right.flatMap(json => json.as[DOSDP]) match {
-    case Right(dosdp) => dosdp
-    case Left(error) =>
-      logger.error(s"Failed to parse pattern:\n${error.getMessage}")
-      throw error
+  def inputDOSDP: DOSDP = {
+    val possibleFile = new File(templateFile)
+    val source = if (possibleFile.exists) Source.fromFile(possibleFile, "UTF-8")
+    else Source.fromURL(templateFile, "UTF-8")
+    parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
+      case Right(dosdp) => dosdp
+      case Left(error) =>
+        logger.error(s"Failed to parse pattern:\n${error.getMessage}")
+        throw error
+    }
   }
 
   def prefixes: PartialFunction[String, String] = {
