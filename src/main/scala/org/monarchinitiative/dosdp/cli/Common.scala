@@ -29,7 +29,7 @@ trait Common extends Command with LazyLogging {
 
   var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology (provide labels, query axioms)")
   var catalogFileOpt = opt[Option[File]](name = "catalog", description = "catalog file to use for resolving ontology locations")
-  var templateFile = opt[String](name = "template", default = "dosdp.yaml", description = "DOSDP file (YAML)")
+  var templateFile = opt[String](name = "template", default = "dosdp.yaml", description = "DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.")
   var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
