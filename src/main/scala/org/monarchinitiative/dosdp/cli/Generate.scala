@@ -19,6 +19,7 @@ import org.semanticweb.owlapi.model.parameters.Imports
 import com.github.tototoshi.csv.CSVReader
 
 import cats.implicits._
+import org.semanticweb.owlapi.model.OWLAxiom
 
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
@@ -36,10 +37,20 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
+    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms)
+    val manager = OWLManager.createOWLOntologyManager()
+    val ont = manager.createOntology(axioms.asJava)
+    manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+  }
+
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean): Set[OWLAxiom] =
+    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms)
+
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean): Set[OWLAxiom] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
-    val readableIDIndex = ontologyOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
-    val axioms = (for {
-      row <- CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders
+    val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
+    (for {
+      row <- fillers
     } yield {
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
@@ -80,10 +91,6 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val annotationAxioms = if (outputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings)) else Set.empty
       logicalAxioms ++ annotationAxioms
     }).toSet.flatten
-
-    val manager = OWLManager.createOWLOntologyManager()
-    val ont = manager.createOntology(axioms.asJava)
-    manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
   }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
