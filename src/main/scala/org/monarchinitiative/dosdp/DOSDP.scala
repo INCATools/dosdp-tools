@@ -13,6 +13,7 @@ import io.circe.syntax._
  */
 final case class DOSDP(
   pattern_name:               Option[String],
+  pattern_iri:                Option[String],
   base_IRI:                   Option[String],
   description:                Option[String],
   readable_identifiers:       Option[List[String]],

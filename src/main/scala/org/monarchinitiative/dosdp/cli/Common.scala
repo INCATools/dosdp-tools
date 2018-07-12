@@ -42,8 +42,10 @@ trait Common extends Command with LazyLogging {
     manager.loadOntology(ontIRI)
   }
 
-  def inputDOSDP: DOSDP = {
-    val possibleFile = new File(templateFile)
+  def inputDOSDP: DOSDP = inputDOSDPFrom(templateFile)
+
+  def inputDOSDPFrom(location: String): DOSDP = {
+    val possibleFile = new File(location)
     val source = if (possibleFile.exists) Source.fromFile(possibleFile, "UTF-8")
     else Source.fromURL(templateFile, "UTF-8")
     parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
