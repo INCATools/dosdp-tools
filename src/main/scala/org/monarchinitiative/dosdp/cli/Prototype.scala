@@ -22,13 +22,11 @@ object Prototype extends Command(description = "output \"prototype\" axioms usin
     val possibleFile = File(templateFile)
     val filenames = if (possibleFile.isDirectory) {
       possibleFile.list.filter { f =>
-        println(f)
         f.extension(false, false, true).map { ext =>
           (ext == "yaml") || (ext == "yml")
         }.getOrElse(false)
       }.map(_.toString).toSet
     } else Set(templateFile)
-    println(filenames)
     val dosdps = filenames.map(inputDOSDPFrom)
     val axioms = for {
       dosdp <- dosdps
