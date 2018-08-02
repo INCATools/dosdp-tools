@@ -25,6 +25,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
 
   var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
   var restrictAxioms = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
+  var restrictAxiomsColumn = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -37,16 +38,16 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
-    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms)
+    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn)
     val manager = OWLManager.createOWLOntologyManager()
     val ont = manager.createOntology(axioms.asJava)
     manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
   }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean): Set[OWLAxiom] =
-    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms)
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String]): Set[OWLAxiom] =
+    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean): Set[OWLAxiom] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String]): Set[OWLAxiom] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
     (for {
@@ -87,8 +88,15 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListBindings +
         iriBinding
       val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings))
-      val logicalAxioms = if (outputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
-      val annotationAxioms = if (outputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings)) else Set.empty
+      val (localOutputLogicalAxioms, localOutputAnnotationAxioms) = restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim).map {
+        case "all"        => (true, true)
+        case "logical"    => (true, false)
+        case "annotation" => (false, true)
+        case ""           => (outputLogicalAxioms, outputAnnotationAxioms)
+        case other        => throw new UnsupportedOperationException(s"Invalid value for restrict-axioms-column: $other")
+      }.getOrElse((outputLogicalAxioms, outputAnnotationAxioms))
+      val logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
+      val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings)) else Set.empty
       logicalAxioms ++ annotationAxioms
     }).toSet.flatten
   }

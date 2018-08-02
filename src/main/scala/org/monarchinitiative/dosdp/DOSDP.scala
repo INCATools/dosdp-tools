@@ -50,6 +50,8 @@ final case class DOSDP(
 
 object DOSDP {
 
+  val empty = DOSDP(None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+
   val MultiValueDelimiter: Char = '|'
 
   val variablePrefix: String = "urn:dosdp:"
