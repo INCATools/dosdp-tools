@@ -6,7 +6,7 @@ name          := "dosdp-tools"
 
 version       := "0.10-SNAPSHOT"
 
-scalaVersion  := "2.12.6"
+scalaVersion  := "2.12.7"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
