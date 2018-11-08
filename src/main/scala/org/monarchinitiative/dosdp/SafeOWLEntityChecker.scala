@@ -1,12 +1,7 @@
 package org.monarchinitiative.dosdp
 
 import org.semanticweb.owlapi.expression.OWLEntityChecker
-import org.semanticweb.owlapi.model.OWLAnnotationProperty
-import org.semanticweb.owlapi.model.OWLClass
-import org.semanticweb.owlapi.model.OWLDataProperty
-import org.semanticweb.owlapi.model.OWLDatatype
-import org.semanticweb.owlapi.model.OWLNamedIndividual
-import org.semanticweb.owlapi.model.OWLObjectProperty
+import org.semanticweb.owlapi.model._
 
 class SafeOWLEntityChecker(checker: OWLEntityChecker) {
 

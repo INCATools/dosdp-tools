@@ -17,7 +17,7 @@ object Terms extends Command(description = "dump terms referenced in TSV input a
 
   var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
 
-  def run: Unit = {
+  def run(): Unit = {
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)

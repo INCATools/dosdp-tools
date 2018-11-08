@@ -17,8 +17,8 @@ import org.semanticweb.owlapi.model.OWLClassExpression
 import com.typesafe.scalalogging.LazyLogging
 
 /**
- * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
- */
+  * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
+  */
 final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) extends LazyLogging {
 
   lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
@@ -28,7 +28,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private type Bindings = Map[String, Binding]
 
-  val substitutions: Seq[ExpandedRegexSub] = dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub(_))
+  val substitutions: Seq[ExpandedRegexSub] = dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub)
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
@@ -100,7 +100,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def normalizedOBOAnnotations: Set[NormalizedAnnotation] = {
     import PrintfAnnotationOBO._
-    (Map(
+    Map(
       dosdp.name.toSet -> Name,
       dosdp.comment.toSet -> Comment,
       dosdp.`def`.toSet -> Def,
@@ -114,8 +114,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       dosdp.generated_narrow_synonyms.toSet.flatten -> NarrowSynonym,
       dosdp.generated_broad_synonyms.toSet.flatten -> BroadSynonym,
       dosdp.generated_related_synonyms.toSet.flatten -> RelatedSynonym).flatMap {
-        case (value, property) => value.map(ann => normalizeOBOAnnotation(ann, property))
-      }).toSet
+      case (value, property) => value.map(ann => normalizeOBOAnnotation(ann, property))
+    }.toSet
   }
 
   private def translateAnnotations(annotationField: NormalizedAnnotation, bindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
@@ -123,7 +123,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       subAnnotations.flatMap(translateAnnotations(_, bindings)),
       prop,
       PrintfText.replaced(text, vars, bindings.map(singleValueBindings))))
-    case NormalizedListAnnotation(prop, value, subAnnotations) =>
+    case NormalizedListAnnotation(prop, value, subAnnotations)        =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = bindings.map(multiValueBindings)
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
@@ -132,24 +132,24 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   }
 
   private def normalizeAnnotation(annotation: Annotations): NormalizedAnnotation = annotation match {
-    case pfa @ PrintfAnnotation(anns, ap, text, vars) => NormalizedPrintfAnnotation(
+    case PrintfAnnotation(anns, ap, text, vars) => NormalizedPrintfAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       text,
       vars,
       anns.toSet.flatten.map(normalizeAnnotation))
-    case la @ ListAnnotation(anns, ap, value) => NormalizedListAnnotation(
+    case ListAnnotation(anns, ap, value)        => NormalizedListAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       value,
       anns.toSet.flatten.map(normalizeAnnotation))
   }
 
   private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty): NormalizedAnnotation = annotation match {
-    case pfao @ PrintfAnnotationOBO(anns, xrefs, text, vars) => NormalizedPrintfAnnotation(
+    case PrintfAnnotationOBO(anns, xrefs, text, vars) => NormalizedPrintfAnnotation(
       property,
       text,
       vars,
       anns.toSet.flatten.map(normalizeAnnotation) ++ xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)))
-    case lao @ ListAnnotationOBO(value, xrefs) => NormalizedListAnnotation(
+    case ListAnnotationOBO(value, xrefs)              => NormalizedListAnnotation(
       property,
       value,
       xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)).toSet)
@@ -159,16 +159,17 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def multiValueBindings(bindings: Bindings): Map[String, MultiValue] = bindings.collect { case (key, value: MultiValue) => key -> value }
 
-  lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = (dosdp.readable_identifiers.map { identifiers =>
-    identifiers.map { name =>
+  lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = dosdp.readable_identifiers.map { identifiers =>
+    identifiers.flatMap { name =>
       val prop = safeChecker.getOWLAnnotationProperty(name)
       if (prop.isEmpty) logger.error(s"No annotation property mapping for '$name'")
       prop
-    }.flatten
-  }).getOrElse(RDFSLabel :: Nil)
+    }
+  }.getOrElse(RDFSLabel :: Nil)
 
   private sealed trait NormalizedAnnotation {
     def property: OWLAnnotationProperty
+
     def subAnnotations: Set[NormalizedAnnotation]
   }
 
@@ -194,7 +195,7 @@ final case class ExpandedRegexSub(regexSub: RegexSub) extends LazyLogging {
     }
     substitutedOpt match {
       case Some(substitution) => substitution
-      case None =>
+      case None               =>
         logger.warn(s"Regex sub '$regexSub' did not match on '$value'")
         value
     }

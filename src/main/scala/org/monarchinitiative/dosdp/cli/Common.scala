@@ -1,26 +1,17 @@
 package org.monarchinitiative.dosdp.cli
 
-import org.backuity.clist._
-import java.io.File
-import org.semanticweb.owlapi.model.OWLOntology
-import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.model.IRI
-import scala.util.Either
-import io.circe.ParsingFailure
-import io.circe.Error
-import java.io.FileReader
+import java.io.{File, FileReader}
 
-import io.circe._
-import io.circe.generic.auto._
-import io.circe.parser._
-import io.circe.syntax._
-import io.circe.yaml.parser
-import org.monarchinitiative.dosdp._
+import com.github.tototoshi.csv.{CSVFormat, DefaultCSVFormat, TSVFormat}
 import com.typesafe.scalalogging.LazyLogging
-import com.github.tototoshi.csv.CSVFormat
-import com.github.tototoshi.csv.DefaultCSVFormat
-import com.github.tototoshi.csv.TSVFormat
+import io.circe.generic.auto._
+import io.circe.yaml.parser
+import org.backuity.clist._
+import org.monarchinitiative.dosdp._
 import org.obolibrary.robot.CatalogXmlIRIMapper
+import org.semanticweb.owlapi.apibinding.OWLManager
+import org.semanticweb.owlapi.model.{IRI, OWLOntology}
+
 import scala.io.Source
 
 trait Common extends Command with LazyLogging {
@@ -50,7 +41,7 @@ trait Common extends Command with LazyLogging {
     else Source.fromURL(templateFile, "UTF-8")
     parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
       case Right(dosdp) => dosdp
-      case Left(error) =>
+      case Left(error)  =>
         logger.error(s"Failed to parse pattern:\n${error.getMessage}")
         throw error
     }

@@ -22,24 +22,22 @@ object Query extends Command(description = "query an ontology for terms matching
   var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.")
   var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
-  def run: Unit = {
+  def run(): Unit = {
     val sepFormat = tabularFormat
     val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(inputDOSDP, prefixes))
-    val reasonerFactoryOpt = reasonerNameOpt.map(_.toLowerCase).map { name =>
-      name match {
-        case "elk"    => new ElkReasonerFactory()
-        case "hermit" => new ReasonerFactory()
-        case "jfact"  => new JFactFactory()
-        case other    => throw new RuntimeException(s"Reasoner $other not supported. Options are ELK, HermiT, or JFact")
-      }
+    val reasonerFactoryOpt = reasonerNameOpt.map(_.toLowerCase).map {
+      case "elk"    => new ElkReasonerFactory()
+      case "hermit" => new ReasonerFactory()
+      case "jfact"  => new JFactFactory()
+      case other    => throw new RuntimeException(s"Reasoner $other not supported. Options are ELK, HermiT, or JFact")
     }
     val processedQuery = (ontologyOpt, reasonerFactoryOpt) match {
-      case (None, Some(_)) => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
+      case (None, Some(_))                 => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
       case (Some(ontology), Some(factory)) =>
         val reasoner = factory.createReasoner(ontology)
         val owlet = new Owlet(reasoner)
         owlet.expandQueryString(sparqlQuery)
-      case (_, None) => sparqlQuery
+      case (_, None)                       => sparqlQuery
     }
     if (printQuery) {
       println(processedQuery)
@@ -59,7 +57,7 @@ object Query extends Command(description = "query an ontology for terms matching
       val columns = results.getResultVars.asScala.toList
       val writer = CSVWriter.open(outfile, "utf-8")(sepFormat)
       writer.writeRow(columns)
-      while (results.hasNext()) {
+      while (results.hasNext) {
         val qs = results.next()
         writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")))
       }

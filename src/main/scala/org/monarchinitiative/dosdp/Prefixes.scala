@@ -20,7 +20,7 @@ object OBOPrefixes extends PartialFunction[String, String] {
 
   def isDefinedAt(prefix: String): Boolean = true
 
-  private val mapper: (String => String) = standardPrefixes.orElse { case prefix => expandToOBO(prefix) }
+  private val mapper: String => String = standardPrefixes.orElse { case prefix => expandToOBO(prefix) }
 
   private def expandToOBO(prefix: String): String = s"$OBONamespace${prefix}_"
 

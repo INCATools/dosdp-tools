@@ -16,17 +16,17 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
 
   def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = {
     val properties = dosdp.annotationProperties.getOrElse(Map.empty)
-    nameToIRI(name, properties).map(factory.getOWLAnnotationProperty).getOrElse(null)
+    nameToIRI(name, properties).map(factory.getOWLAnnotationProperty).orNull
   }
 
   def getOWLClass(name: String): OWLClass = {
     val classes = dosdp.classes.getOrElse(Map.empty)
-    Prefixes.nameOrVariableToIRI(name, classes, prefixes).map(factory.getOWLClass).getOrElse(null)
+    Prefixes.nameOrVariableToIRI(name, classes, prefixes).map(factory.getOWLClass).orNull
   }
 
   def getOWLDataProperty(name: String): OWLDataProperty = {
     val properties = dosdp.dataProperties.getOrElse(Map.empty)
-    nameToIRI(name, properties).map(factory.getOWLDataProperty).getOrElse(null)
+    nameToIRI(name, properties).map(factory.getOWLDataProperty).orNull
   }
 
   def getOWLDatatype(name: String): OWLDatatype = null
@@ -35,14 +35,10 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
 
   def getOWLObjectProperty(name: String): OWLObjectProperty = {
     val properties = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
-    nameToIRI(name, properties).map(factory.getOWLObjectProperty).getOrElse(null)
+    nameToIRI(name, properties).map(factory.getOWLObjectProperty).orNull
   }
 
-  private val HTTPURI = "^http.+".r
-  private val DOSDPVariable = "^'\\$(.+)'$".r
   private val Quoted = "^'(.*)'$".r
-  private val CURIE = "^([^:]*):(.*)$".r
-  private val FullIRI = "^<(.+)>$".r
 
   // Added this to avoid allowing variables to possibly be properties. OWL API parser jumps to conclusions.
   private def nameToIRI(name: String, mapper: Map[String, String]): Option[IRI] = name match {
