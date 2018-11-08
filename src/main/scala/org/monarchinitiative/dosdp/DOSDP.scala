@@ -27,7 +27,7 @@ final case class DOSDP(
                         data_vars: Option[Map[String, String]],
                         data_list_vars: Option[Map[String, String]],
                         substitutions: Option[List[RegexSub]],
-                        annotations: Option[List[PrintfAnnotation]],
+                        annotations: Option[List[Annotations]],
                         logical_axioms: Option[List[PrintfOWL]],
                         equivalentTo: Option[PrintfOWLConvenience],
                         subClassOf: Option[PrintfOWLConvenience],
