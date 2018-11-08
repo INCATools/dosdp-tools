@@ -1,20 +1,13 @@
 package org.monarchinitiative.dosdp
 
-import scala.collection.JavaConverters._
-import scala.util.matching.Regex.Match
-
+import com.typesafe.scalalogging.LazyLogging
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
-import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxInlineAxiomParser
-import org.semanticweb.owlapi.model.OWLAnnotation
-import org.semanticweb.owlapi.model.OWLAnnotationAssertionAxiom
-import org.semanticweb.owlapi.model.OWLAnnotationProperty
-import org.semanticweb.owlapi.model.OWLAxiom
-import org.semanticweb.owlapi.model.OWLClass
-import org.semanticweb.owlapi.model.OWLClassExpression
+import org.semanticweb.owlapi.manchestersyntax.parser.{ManchesterOWLSyntaxClassExpressionParser, ManchesterOWLSyntaxInlineAxiomParser}
+import org.semanticweb.owlapi.model._
 
-import com.typesafe.scalalogging.LazyLogging
+import scala.collection.JavaConverters._
+import scala.util.matching.Regex.Match
 
 /**
   * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
@@ -129,6 +122,19 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
       val listValue = bindingsMap(value)
       listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, bindings)), prop, v))
+    case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)     =>
+      val iriValue = (for {
+        actualBindings <- bindings
+        bindingValue = actualBindings.get(varr)
+        _ = if (bindingValue.isEmpty) logger.error(s"No binding for variable $varr")
+        SingleValue(value) <- bindingValue
+        iri <- Prefixes.idToIRI(value, prefixes)
+      } yield iri).getOrElse(DOSDP.variableToIRI(varr))
+      Set(Annotation(
+        subAnnotations.flatMap(translateAnnotations(_, bindings)),
+        prop,
+        iriValue)
+      )
   }
 
   private def normalizeAnnotation(annotation: Annotations): NormalizedAnnotation = annotation match {
@@ -140,6 +146,10 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     case ListAnnotation(anns, ap, value)        => NormalizedListAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       value,
+      anns.toSet.flatten.map(normalizeAnnotation))
+    case IRIValueAnnotation(anns, ap, varr)     => NormalizedIRIValueAnnotation(
+      safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
+      varr,
       anns.toSet.flatten.map(normalizeAnnotation))
   }
 
@@ -176,6 +186,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private case class NormalizedPrintfAnnotation(property: OWLAnnotationProperty, text: String, vars: Option[List[String]], subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
 
   private case class NormalizedListAnnotation(property: OWLAnnotationProperty, value: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
+
+  private case class NormalizedIRIValueAnnotation(property: OWLAnnotationProperty, `var`: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
 
 }
 
