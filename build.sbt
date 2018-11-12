@@ -25,7 +25,7 @@ libraryDependencies ++= {
       "org.phenoscape"             %% "owlet"                  % "1.6.1" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.0.432",
-      "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
+      "net.sourceforge.owlapi"     %  "jfact"                  % "5.0.3",
       "org.obolibrary.robot"       %  "robot-core"             % "1.1.0" exclude("org.slf4j", "slf4j-log4j12"),
       "io.circe"                   %% "circe-core"             % "0.9.3",
       "io.circe"                   %% "circe-generic"          % "0.9.3",
