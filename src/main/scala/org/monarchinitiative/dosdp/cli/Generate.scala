@@ -96,7 +96,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         case other        => throw new UnsupportedOperationException(s"Invalid value for restrict-axioms-column: $other")
       }.getOrElse((outputLogicalAxioms, outputAnnotationAxioms))
       val logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
-      val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings)) else Set.empty
+      val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
       logicalAxioms ++ annotationAxioms
     }).toSet.flatten
   }

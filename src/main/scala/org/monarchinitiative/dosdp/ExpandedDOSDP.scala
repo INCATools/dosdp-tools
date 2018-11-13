@@ -25,23 +25,23 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
-  def equivalentToExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.equivalentTo.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
+  def equivalentToExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.equivalentTo.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings, logicalBindings))
 
-  def subClassOfExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.subClassOf.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
+  def subClassOfExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.subClassOf.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings, logicalBindings))
 
-  def disjointWithExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.disjointWith.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings))
+  def disjointWithExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLClassExpression, Set[OWLAnnotation])] = dosdp.disjointWith.map(eq => expressionFor(eq, logicalBindings) -> annotationsFor(eq, annotationBindings, logicalBindings))
 
-  def gciAxiom(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLAxiom, Set[OWLAnnotation])] = dosdp.GCI.map(gci => axiomFor(gci, logicalBindings) -> annotationsFor(gci, annotationBindings))
+  def gciAxiom(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Option[(OWLAxiom, Set[OWLAnnotation])] = dosdp.GCI.map(gci => axiomFor(gci, logicalBindings) -> annotationsFor(gci, annotationBindings, logicalBindings))
 
   def logicalAxioms(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Set[OWLAxiom] = (for {
     axiomDefs <- dosdp.logical_axioms.toList
     axiomDef <- axiomDefs
     defTerm = definedTerm(logicalBindings)
   } yield axiomDef.axiom_type match {
-    case AxiomType.EquivalentTo => EquivalentClasses(annotationsFor(axiomDef, annotationBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
-    case AxiomType.SubClassOf   => SubClassOf(annotationsFor(axiomDef, annotationBindings), defTerm, expressionFor(axiomDef, logicalBindings))
-    case AxiomType.DisjointWith => DisjointClasses(annotationsFor(axiomDef, annotationBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
-    case AxiomType.GCI          => axiomFor(axiomDef, logicalBindings).getAnnotatedAxiom(annotationsFor(axiomDef, annotationBindings).asJava)
+    case AxiomType.EquivalentTo => EquivalentClasses(annotationsFor(axiomDef, annotationBindings, logicalBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.SubClassOf   => SubClassOf(annotationsFor(axiomDef, annotationBindings, logicalBindings), defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.DisjointWith => DisjointClasses(annotationsFor(axiomDef, annotationBindings, logicalBindings).toSeq: _*)(defTerm, expressionFor(axiomDef, logicalBindings))
+    case AxiomType.GCI          => axiomFor(axiomDef, logicalBindings).getAnnotatedAxiom(annotationsFor(axiomDef, annotationBindings, logicalBindings).asJava)
   }).toSet
 
   private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
@@ -71,23 +71,23 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private def axiomFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): OWLAxiom =
     axiomParser.parse(template.replaced(bindings))
 
-  private def annotationsFor(element: PrintfText, bindings: Option[Map[String, Binding]]): Set[OWLAnnotation] =
+  private def annotationsFor(element: PrintfText, annotationBindings: Option[Map[String, Binding]], logicalBindings: Option[Map[String, Binding]]): Set[OWLAnnotation] =
     (for {
       annotations <- element.annotations.toSeq
       annotation <- annotations
       normalizedAnnotation = normalizeAnnotation(annotation)
-      owlAnnotation <- translateAnnotations(normalizedAnnotation, bindings)
+      owlAnnotation <- translateAnnotations(normalizedAnnotation, annotationBindings, logicalBindings)
     } yield owlAnnotation).toSet
 
-  def filledAnnotationAxioms(bindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
+  def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): Set[OWLAnnotationAssertionAxiom] = {
     val definedTerm = (for {
-      actualBindings <- bindings
+      actualBindings <- annotationBindings
       SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
       iri <- Prefixes.idToIRI(value, prefixes)
     } yield Class(iri)).getOrElse(term)
     for {
       normalizedAnnotationField <- normalizedOBOAnnotations ++ dosdp.annotations.toList.flatten.map(normalizeAnnotation)
-      annotation <- translateAnnotations(normalizedAnnotationField, bindings)
+      annotation <- translateAnnotations(normalizedAnnotationField, annotationBindings, logicalBindings)
     } yield AnnotationAssertion(annotation.getAnnotations.asScala.toSet, annotation.getProperty, definedTerm, annotation.getValue)
   }
 
@@ -111,27 +111,28 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     }.toSet
   }
 
-  private def translateAnnotations(annotationField: NormalizedAnnotation, bindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
+  private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
     case NormalizedPrintfAnnotation(prop, text, vars, subAnnotations) => Set(Annotation(
-      subAnnotations.flatMap(translateAnnotations(_, bindings)),
+      subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)),
       prop,
-      PrintfText.replaced(text, vars, bindings.map(singleValueBindings))))
+      PrintfText.replaced(text, vars, annotationBindings.map(singleValueBindings))))
     case NormalizedListAnnotation(prop, value, subAnnotations)        =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
-      val multiValBindingsOpt = bindings.map(multiValueBindings)
+      val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
       val listValue = bindingsMap(value)
-      listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, bindings)), prop, v))
+      listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, v))
     case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)     =>
       val iriValue = (for {
-        actualBindings <- bindings
+        actualBindings <- logicalBindings
+        _ = println(s"Bindings: $actualBindings")
         bindingValue = actualBindings.get(varr)
         _ = if (bindingValue.isEmpty) logger.error(s"No binding for variable $varr")
         SingleValue(value) <- bindingValue
         iri <- Prefixes.idToIRI(value, prefixes)
       } yield iri).getOrElse(DOSDP.variableToIRI(varr))
       Set(Annotation(
-        subAnnotations.flatMap(translateAnnotations(_, bindings)),
+        subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)),
         prop,
         iriValue)
       )
