@@ -125,7 +125,6 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)     =>
       val iriValue = (for {
         actualBindings <- logicalBindings
-        _ = println(s"Bindings: $actualBindings")
         bindingValue = actualBindings.get(varr)
         _ = if (bindingValue.isEmpty) logger.error(s"No binding for variable $varr")
         SingleValue(value) <- bindingValue
