@@ -20,7 +20,7 @@ scriptClasspath := Seq("*")
 
 libraryDependencies ++= {
     Seq(
-      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.6",
+      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.7",
       "org.phenoscape"             %% "scowl"                  % "1.3.1",
       "org.phenoscape"             %% "owlet"                  % "1.6.1" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
