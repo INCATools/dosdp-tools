@@ -3,10 +3,10 @@ package org.monarchinitiative.dosdp
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.IRI
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
-
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
+import org.apache.commons.codec.digest.DigestUtils
 
 /**
   * Basic data model for DOSDP schema, for serializing to/from JSON.
@@ -61,6 +61,17 @@ object DOSDP {
   def processedVariable(name: String): String = name.replaceAllLiterally(" ", "_")
 
   def variableToIRI(name: String): IRI = IRI.create(variablePrefix + processedVariable(name))
+
+  def computeDefinedIRI(pattern: IRI, bindings: Map[String, Binding]): IRI = {
+    val text: String = bindings.toSeq.sortBy(_._1).map { case (_, binding) =>
+      binding match {
+        case SingleValue(value) => value
+        case MultiValue(values) => values.toSeq.sorted.mkString("|")
+      }
+    }.mkString("&")
+    val hash = DigestUtils.sha1Hex(text)
+    IRI.create(s"$pattern#$hash")
+  }
 
 }
 

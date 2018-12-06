@@ -36,6 +36,7 @@ libraryDependencies ++= {
       "org.backuity.clist"         %% "clist-core"             % "3.5.0",
       "org.backuity.clist"         %% "clist-macros"           % "3.5.0" % "provided",
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.5",
+      "commons-codec"              %  "commons-codec"          % "1.11",
       "com.typesafe.scala-logging" %% "scala-logging"          % "3.9.0",
       "ch.qos.logback"             %  "logback-classic"        % "1.2.3",
       "org.codehaus.groovy"        %  "groovy-all"             % "2.5.4",

@@ -26,6 +26,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
   var restrictAxioms = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
   var restrictAxiomsColumn = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
+  var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -79,7 +80,13 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListVar <- dataListVars.keys
         filler <- row.get(dataListVar)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
-      val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(row(DOSDP.DefinedClassVariable).trim)
+      val definedClass = if (generateDefinedClass) {
+        dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
+          val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
+          DOSDP.computeDefinedIRI(patternIRI, bindingsForDefinedClass).toString
+        }.getOrElse(throw new UnsupportedOperationException("Pattern must have an IRI if generate-defined-class is requested."))
+      } else row(DOSDP.DefinedClassVariable).trim
+      val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
       val logicalBindings = varBindings + iriBinding
       val readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
       val initialAnnotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)) ++

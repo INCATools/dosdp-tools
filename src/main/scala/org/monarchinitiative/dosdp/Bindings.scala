@@ -1,6 +1,6 @@
 package org.monarchinitiative.dosdp
 
-sealed trait Binding
+sealed trait Binding extends Product with Serializable
 
 final case class SingleValue(value: String) extends Binding
 
