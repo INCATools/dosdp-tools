@@ -12,7 +12,8 @@ object OBOPrefixes extends PartialFunction[String, String] {
     "dct" -> "http://purl.org/dc/terms/",
     "skos" -> "http://www.w3.org/2004/02/skos/core#",
     "obo" -> "http://purl.obolibrary.org/obo/",
-    "oio" -> "http://www.geneontology.org/formats/oboInOwl#")
+    "oio" -> "http://www.geneontology.org/formats/oboInOwl#",
+    "oboInOwl" -> "http://www.geneontology.org/formats/oboInOwl#")
 
   private val OBONamespace = "http://purl.obolibrary.org/obo/"
 

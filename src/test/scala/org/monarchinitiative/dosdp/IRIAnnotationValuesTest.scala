@@ -22,7 +22,7 @@ class IRIAnnotationValuesTest extends UnitSpec {
   val annotationAxiom = term Annotation(isDefinedBy, item.getIRI)
 
   "Axioms" should "contain IRI valued annotation" in {
-    val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002")), None, true, true, None)
+    val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002")), None, true, true, None, false)
     axioms1(annotationAxiom) shouldEqual true
   }
 

@@ -2,24 +2,17 @@ package org.monarchinitiative.dosdp.cli
 
 import java.io.File
 
-import scala.collection.JavaConverters._
-
+import cats.implicits._
+import com.github.tototoshi.csv.CSVReader
 import org.backuity.clist._
-import org.monarchinitiative.dosdp._
-import org.monarchinitiative.dosdp.Binding
-import org.monarchinitiative.dosdp.ExpandedDOSDP
+import org.monarchinitiative.dosdp.{Binding, ExpandedDOSDP, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
-import org.semanticweb.owlapi.model.AxiomType
-import org.semanticweb.owlapi.model.IRI
-import org.semanticweb.owlapi.model.OWLOntology
+import org.semanticweb.owlapi.model.{AxiomType, IRI, OWLAxiom, OWLOntology}
 import org.semanticweb.owlapi.model.parameters.Imports
 
-import com.github.tototoshi.csv.CSVReader
-
-import cats.implicits._
-import org.semanticweb.owlapi.model.OWLAxiom
+import scala.collection.JavaConverters._
 
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
@@ -27,6 +20,8 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var restrictAxioms = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
   var restrictAxiomsColumn = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
   var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
+  var addAxiomSourceAnnotation = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
+  var axiomSourceAnnotationProperty = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -39,19 +34,21 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
-    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn)
+    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
     val manager = OWLManager.createOWLOntologyManager()
     val ont = manager.createOntology(axioms.asJava)
     manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
   }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String]): Set[OWLAxiom] =
-    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName)
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] =
+    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String]): Set[OWLAxiom] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
-    (for {
+    val AxiomHasSource = Prefixes.idToIRI(axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_))
+      .getOrElse(throw new UnsupportedOperationException("Couldn't create IRI for axiom source annotation property."))
+    val generatedAxioms: Set[OWLAxiom] = (for {
       row <- fillers
     } yield {
       val (varBindingsItems, localLabelItems) = (for {
@@ -106,6 +103,10 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
       logicalAxioms ++ annotationAxioms
     }).toSet.flatten
+    if (annotateAxiomSource) {
+      val patternIRI = dosdp.pattern_iri.map(IRI.create).getOrElse(throw new UnsupportedOperationException("Axiom annotations require a value for pattern IRI"))
+      generatedAxioms.map(_ Annotation(AxiomHasSource, patternIRI))
+    } else generatedAxioms
   }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {

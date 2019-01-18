@@ -39,7 +39,7 @@ object Prototype extends Command(description = "output \"prototype\" axioms usin
         dosdp.data_vars.getOrElse(Map.empty) ++
         dosdp.data_list_vars.getOrElse(Map.empty) +
         (DOSDP.DefinedClassVariable -> iri)
-      Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None) ++ dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
+      Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false) ++ dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
     }.toSet.flatten
 
 }
