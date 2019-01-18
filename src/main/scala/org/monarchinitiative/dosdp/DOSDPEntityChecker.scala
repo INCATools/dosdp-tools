@@ -31,7 +31,7 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
 
   def getOWLDatatype(name: String): OWLDatatype = null
 
-  def getOWLIndividual(name: String): OWLNamedIndividual = null
+  def getOWLIndividual(name: String): OWLNamedIndividual = Prefixes.nameOrVariableToIRI(name, Map.empty, prefixes).map(factory.getOWLNamedIndividual).orNull
 
   def getOWLObjectProperty(name: String): OWLObjectProperty = {
     val properties = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
