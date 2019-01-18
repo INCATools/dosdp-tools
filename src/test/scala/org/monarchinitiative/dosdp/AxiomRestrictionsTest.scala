@@ -21,26 +21,26 @@ class AxiomRestrictionsTest extends UnitSpec {
   val logicalAxiom = term SubClassOf (partOf some item)
 
   "Axiom filters" should "filter correctly" in {
-    val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, None)
+    val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, None, false)
     axioms1(annotationAxiom) shouldEqual true
     axioms1(logicalAxiom) shouldEqual true
-    val axioms2 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, Some("axiom_filter"))
+    val axioms2 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, Some("axiom_filter"),false)
     axioms2(annotationAxiom) shouldEqual true
     axioms2(logicalAxiom) shouldEqual true
-    val axioms3 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "logical")), None, true, true, Some("axiom_filter"))
+    val axioms3 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "logical")), None, true, true, Some("axiom_filter"), false)
     axioms3(annotationAxiom) shouldEqual false
     axioms3(logicalAxiom) shouldEqual true
-    val axioms4 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, true, true, Some("axiom_filter"))
+    val axioms4 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, true, true, Some("axiom_filter"), false)
     axioms4(annotationAxiom) shouldEqual true
     axioms4(logicalAxiom) shouldEqual false
-    val axioms5 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, false, false, Some("axiom_filter"))
+    val axioms5 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, false, false, Some("axiom_filter"), false)
     axioms5(annotationAxiom) shouldEqual true
     axioms5(logicalAxiom) shouldEqual false
-    val axioms6 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "")), None, true, false, Some("axiom_filter"))
+    val axioms6 = Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "")), None, true, false, Some("axiom_filter"), false)
     axioms6(annotationAxiom) shouldEqual false
     axioms6(logicalAxiom) shouldEqual true
     assertThrows[UnsupportedOperationException] {
-      Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "blah")), None, true, false, Some("axiom_filter"))
+      Generate.renderPattern(dosdp, OBOPrefixes, Iterator(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "blah")), None, true, false, Some("axiom_filter"), false)
     }
   }
 
