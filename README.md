@@ -26,23 +26,35 @@ Usage
 
 Options
 
-   --obo-prefixes : Assume prefixes are OBO ontologies; predefine rdf, rdfs, and owl
-   --ontology     : OWL ontology (provide labels, query axioms)
-   --outfile      : Output file (OWL or TSV)
-   --prefixes     : CURIE prefixes (YAML)
-   --template     : DOSDP file (YAML)
+   --catalog             : catalog file to use for resolving ontology locations
+   --obo-prefixes        : Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.
+   --ontology            : OWL ontology (provide labels, query axioms)
+   --outfile             : Output file (OWL or TSV)
+   --prefixes            : CURIE prefixes (YAML)
+   --table-format=STRING : Tabular format: TSV (default) or CSV
+   --template=STRING     : DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.
 
 Commands
 
    generate [command options] : generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern
-      --infile : Input file (TSV)
+      --add-axiom-source-annotation             : Add axiom annotation to generated axioms linking to pattern IRI
+      --axiom-source-annotation-property=STRING : IRI for annotation property to use to link generated axioms to pattern IRI
+      --generate-defined-class                  : Computed defined class IRI from pattern IRI and variable fillers
+      --infile                                  : Input file (TSV or CSV)
+      --restrict-axioms-column                  : Data column containing local axiom output restrictions
+      --restrict-axioms-to=STRING               : Restrict generated axioms to 'logical', 'annotation', or 'all' (default)
+
+   prototype : output "prototype" axioms using default fillers for a pattern or folder of patterns
 
    query [command options] : query an ontology for terms matching a Dead Simple OWL Design Pattern
       --print-query : Print generated query without running against ontology
-      --reasoner    : Reasoner to use for expanding variable constraints (currently only valid option is `elk`)
+      --reasoner    : Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.
+
+   terms [command options] : dump terms referenced in TSV input and a Dead Simple OWL Design Pattern
+      --infile : Input file (TSV or CSV)
 ```
 
-`dosdp-tools` has two modes: **generate** and **query**:
+`dosdp-tools` has four modes: **generate**, **query**, **prototype**, and **terms**:
 
 ### Generate
 
