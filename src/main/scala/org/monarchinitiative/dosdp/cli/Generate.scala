@@ -57,7 +57,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         filler <- row.get(varr)
         fillerLabelOpt = for {
           fillerIRI <- Prefixes.idToIRI(filler, prefixes)
-          label <- row.get(s"${varr}_label")
+          label <- row.get(s"${varr}_label").flatMap(stripToOption)
         } yield fillerIRI -> label
       } yield (varr -> SingleValue(filler.trim), fillerLabelOpt)).unzip
       val varBindings = varBindingsItems.toMap
@@ -129,6 +129,11 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       case prop if index.get(prop).exists(_.isDefinedAt(iri)) => index(prop)(iri)
     }
     labelOpt.getOrElse(iri.toString)
+  }
+
+  private def stripToOption(text: String): Option[String] = {
+    val trimmed = text.trim
+    if (trimmed.isEmpty) None else Some(trimmed)
   }
 
 }
