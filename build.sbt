@@ -39,7 +39,7 @@ libraryDependencies ++= {
       "commons-codec"              %  "commons-codec"          % "1.12",
       "com.typesafe.scala-logging" %% "scala-logging"          % "3.9.2",
       "ch.qos.logback"             %  "logback-classic"        % "1.2.3",
-      "org.codehaus.groovy"        %  "groovy-all"             % "2.5.5",
+      "org.codehaus.groovy"        %  "groovy-all"             % "2.5.6",
       "org.scalatest"              %% "scalatest"              % "3.0.6" % Test
     )
 }
