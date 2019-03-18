@@ -48,6 +48,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
     val AxiomHasSource = Prefixes.idToIRI(axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_))
       .getOrElse(throw new UnsupportedOperationException("Couldn't create IRI for axiom source annotation property."))
+    val knownColumns = Set(dosdp.vars, dosdp.list_vars, dosdp.data_vars, dosdp.data_list_vars).flatMap(_.toSet).flatMap(_.keySet)
     val generatedAxioms: Set[OWLAxiom] = (for {
       row <- fillers
     } yield {
@@ -77,6 +78,9 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListVar <- dataListVars.keys
         filler <- row.get(dataListVar)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
+      val additionalBindings = for {
+        (key, value) <- row.filterKeys(k => !knownColumns(k))
+      } yield key -> SingleValue(value.trim)
       val definedClass = if (generateDefinedClass) {
         dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
           val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
@@ -91,7 +95,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataVarBindings ++
         dataListBindings +
         iriBinding
-      val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings))
+      val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings)) ++ additionalBindings
       val (localOutputLogicalAxioms, localOutputAnnotationAxioms) = restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim).map {
         case "all"        => (true, true)
         case "logical"    => (true, false)

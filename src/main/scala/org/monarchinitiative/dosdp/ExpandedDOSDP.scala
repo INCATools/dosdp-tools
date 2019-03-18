@@ -94,35 +94,40 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private def normalizedOBOAnnotations: Set[NormalizedAnnotation] = {
     import PrintfAnnotationOBO._
     Map(
-      dosdp.name.toSet -> Name,
-      dosdp.comment.toSet -> Comment,
-      dosdp.`def`.toSet -> Def,
-      dosdp.namespace.toSet -> Namespace,
-      dosdp.exact_synonym.toSet -> ExactSynonym,
-      dosdp.narrow_synonym.toSet -> NarrowSynonym,
-      dosdp.related_synonym.toSet -> RelatedSynonym,
-      dosdp.broad_synonym.toSet -> BroadSynonym,
-      dosdp.xref.toSet -> Xref,
-      dosdp.generated_synonyms.toSet.flatten -> ExactSynonym,
-      dosdp.generated_narrow_synonyms.toSet.flatten -> NarrowSynonym,
-      dosdp.generated_broad_synonyms.toSet.flatten -> BroadSynonym,
-      dosdp.generated_related_synonyms.toSet.flatten -> RelatedSynonym).flatMap {
-      case (value, property) => value.map(ann => normalizeOBOAnnotation(ann, property))
+      dosdp.name.toSet -> (Name, Some(overrides(Name))),
+      dosdp.comment.toSet -> (Comment, Some(overrides(Comment))),
+      dosdp.`def`.toSet -> (Def, Some(overrides(Def))),
+      dosdp.namespace.toSet -> (Namespace, Some(overrides(Namespace))),
+      dosdp.exact_synonym.toSet -> (ExactSynonym, None),
+      dosdp.narrow_synonym.toSet -> (NarrowSynonym, None),
+      dosdp.related_synonym.toSet -> (RelatedSynonym, None),
+      dosdp.broad_synonym.toSet -> (BroadSynonym, None),
+      dosdp.xref.toSet -> (Xref, None),
+      dosdp.generated_synonyms.toSet.flatten -> (ExactSynonym, Some(overrides(ExactSynonym))),
+      dosdp.generated_narrow_synonyms.toSet.flatten -> (NarrowSynonym, Some(overrides(NarrowSynonym))),
+      dosdp.generated_broad_synonyms.toSet.flatten -> (BroadSynonym, Some(overrides(BroadSynonym))),
+      dosdp.generated_related_synonyms.toSet.flatten -> (RelatedSynonym, Some(overrides(RelatedSynonym)))).flatMap {
+      case (value, (property, overrideColumnOpt)) => value.map(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
     }.toSet
   }
 
   private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
-    case NormalizedPrintfAnnotation(prop, text, vars, subAnnotations) => Set(Annotation(
-      subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)),
-      prop,
-      PrintfText.replaced(text, vars, annotationBindings.map(singleValueBindings))))
-    case NormalizedListAnnotation(prop, value, subAnnotations)        =>
+    case NormalizedPrintfAnnotation(prop, text, vars, overrideColumnOpt, subAnnotations) =>
+      val value = (for {
+        column <- overrideColumnOpt
+        bindings <- annotationBindings
+        SingleValue(binding) <- bindings.get(column)
+        trimmed = binding.trim
+        if trimmed.nonEmpty
+      } yield trimmed).getOrElse(PrintfText.replaced(text, vars, annotationBindings.map(singleValueBindings)))
+      Set(Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
+    case NormalizedListAnnotation(prop, value, subAnnotations)                           =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
       val listValue = bindingsMap(value)
       listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, v))
-    case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)     =>
+    case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)                        =>
       val iriValue = (for {
         actualBindings <- logicalBindings
         bindingValue = actualBindings.get(varr)
@@ -138,26 +143,28 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   }
 
   private def normalizeAnnotation(annotation: Annotations): NormalizedAnnotation = annotation match {
-    case PrintfAnnotation(anns, ap, text, vars) => NormalizedPrintfAnnotation(
+    case PrintfAnnotation(anns, ap, text, vars, overrideColumn) => NormalizedPrintfAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       text,
       vars,
+      overrideColumn,
       anns.toSet.flatten.map(normalizeAnnotation))
-    case ListAnnotation(anns, ap, value)        => NormalizedListAnnotation(
+    case ListAnnotation(anns, ap, value)                        => NormalizedListAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       value,
       anns.toSet.flatten.map(normalizeAnnotation))
-    case IRIValueAnnotation(anns, ap, varr)     => NormalizedIRIValueAnnotation(
+    case IRIValueAnnotation(anns, ap, varr)                     => NormalizedIRIValueAnnotation(
       safeChecker.getOWLAnnotationProperty(ap).getOrElse(throw new RuntimeException(s"No annotation property binding: $ap")),
       varr,
       anns.toSet.flatten.map(normalizeAnnotation))
   }
 
-  private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty): NormalizedAnnotation = annotation match {
+  private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty, overrideColumn: Option[String]): NormalizedAnnotation = annotation match {
     case PrintfAnnotationOBO(anns, xrefs, text, vars) => NormalizedPrintfAnnotation(
       property,
       text,
       vars,
+      overrideColumn,
       anns.toSet.flatten.map(normalizeAnnotation) ++ xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)))
     case ListAnnotationOBO(value, xrefs)              => NormalizedListAnnotation(
       property,
@@ -183,7 +190,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     def subAnnotations: Set[NormalizedAnnotation]
   }
 
-  private case class NormalizedPrintfAnnotation(property: OWLAnnotationProperty, text: String, vars: Option[List[String]], subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
+  private case class NormalizedPrintfAnnotation(property: OWLAnnotationProperty, text: String, vars: Option[List[String]], overrideColumn: Option[String], subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
 
   private case class NormalizedListAnnotation(property: OWLAnnotationProperty, value: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
 
