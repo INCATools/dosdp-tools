@@ -1,9 +1,9 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.File
+import java.io.{File, StringReader}
 
 import cats.implicits._
-import com.github.tototoshi.csv.CSVReader
+import com.github.tototoshi.csv.{CSVFormat, CSVReader}
 import org.backuity.clist._
 import org.monarchinitiative.dosdp.{Binding, ExpandedDOSDP, _}
 import org.phenoscape.scowl._
@@ -13,6 +13,7 @@ import org.semanticweb.owlapi.model.{AxiomType, IRI, OWLAxiom, OWLOntology}
 import org.semanticweb.owlapi.model.parameters.Imports
 
 import scala.collection.JavaConverters._
+import scala.io.Source
 
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
@@ -34,10 +35,16 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
-    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, CSVReader.open(infile, "utf-8")(sepFormat).iteratorWithHeaders, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
+    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, readFillers(infile, sepFormat), ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
     val manager = OWLManager.createOWLOntologyManager()
     val ont = manager.createOntology(axioms.asJava)
     manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+  }
+
+  def readFillers(file: File, sepFormat: CSVFormat): Iterator[Map[String, String]] = {
+    val cleaned = Source.fromFile(file, "utf-8").getLines().filterNot(_.trim.isEmpty).mkString("\n")
+    val reader = new StringReader(cleaned)
+    CSVReader.open(reader)(sepFormat).iteratorWithHeaders
   }
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] =
@@ -52,6 +59,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val generatedAxioms: Set[OWLAxiom] = (for {
       row <- fillers
     } yield {
+      println(s"Row: $row")
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
