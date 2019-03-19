@@ -9,9 +9,9 @@ Pre-packaged releases can be downloaded from [here](https://github.com/INCATools
 
 ## Building
 
-Install `sbt` on your system. For Mac OS X, it is easily done using [Homebrew](http://brew.sh): `brew install sbt`
+If you don't already have it, install `sbt` on your system. For Mac OS X, it is easily done using [Homebrew](http://brew.sh): `brew install sbt`
 
-To compile and build the executable package, run:
+Clone the project from GitHub (`git clone git@github.com:INCATools/dosdp-tools.git`) and then change into the project directory: `cd dosdp-tools`. To compile and build the executable package, run:
 
 `sbt stage`
 
