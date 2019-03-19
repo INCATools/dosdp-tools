@@ -148,7 +148,8 @@ final case class PrintfAnnotation(
                                    annotations: Option[List[Annotations]],
                                    annotationProperty: String,
                                    text: String,
-                                   vars: Option[List[String]])
+                                   vars: Option[List[String]],
+                                   `override`: Option[String])
   extends Annotations with PrintfText
 
 final case class ListAnnotation(
@@ -168,9 +169,9 @@ object Annotations {
 
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[PrintfAnnotation].map[Annotations](identity).or(Decoder[ListAnnotation].map[Annotations](identity)).or(Decoder[IRIValueAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
-    case pfa @ PrintfAnnotation(_, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _, _)       => la.asJson
-    case iva @ IRIValueAnnotation(_, _, _)  => iva.asJson
+    case pfa @ PrintfAnnotation(_, _, _, _, _) => pfa.asJson
+    case la @ ListAnnotation(_, _, _)          => la.asJson
+    case iva @ IRIValueAnnotation(_, _, _)     => iva.asJson
   }
 
 }
@@ -194,6 +195,17 @@ object PrintfAnnotationOBO {
   val NarrowSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym")
   val RelatedSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
   val BroadSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym")
+
+  val overrides = Map(
+    Name -> "defined_class_name",
+    Comment -> "defined_class_comment",
+    Def -> "defined_class_definition",
+    Namespace -> "defined_class_namespace",
+    ExactSynonym -> "defined_class_exact_synonym",
+    NarrowSynonym -> "defined_class_narrow_synonym",
+    RelatedSynonym -> "defined_class_related_synonym",
+    BroadSynonym -> "defined_class_broad_synonym"
+  )
 
 }
 
