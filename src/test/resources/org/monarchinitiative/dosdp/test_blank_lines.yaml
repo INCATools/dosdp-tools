@@ -1,0 +1,17 @@
+pattern_name: blank_lines
+
+classes:
+  Thing: http://www.w3.org/2002/07/owl#Thing
+
+relations:
+  part of: BFO:0000050
+  inheres in: RO:0000052
+
+vars:
+  entity: "'Thing'"
+
+name:
+  text: "%s thing"
+  vars:
+    - entity
+
