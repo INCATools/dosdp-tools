@@ -136,7 +136,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   }
 
   private def readableIdentifierForIRI(iri: IRI, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): String = {
-    val properties = LocalLabelProperty :: dosdp.readableIdentifierProperties.map(_.getIRI)
+    val properties = dosdp.readableIdentifierProperties.map(_.getIRI) ::: LocalLabelProperty :: Nil
     val labelOpt = properties.collectFirst {
       case prop if index.get(prop).exists(_.isDefinedAt(iri)) => index(prop)(iri)
     }

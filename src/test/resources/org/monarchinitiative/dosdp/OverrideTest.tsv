@@ -2,3 +2,5 @@ defined_class	defined_class_name	source_column	source_override	entity	entity_lab
 http://ex.org/1		source1	overridden source 1	http://example.org/Entity1
 http://ex.org/2	Entity 2 TSV	source2	    	http://example.org/Entity2
 http://ex.org/3	   	source3		http://example.org/Entity3
+http://ex.org/4	   	source4		http://example.org/Entity4	Entity4LabelInTSV
+http://ex.org/5	   	source5		http://example.org/Entity5	Entity5LabelInTSV
