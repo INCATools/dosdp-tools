@@ -11,6 +11,7 @@ Ontology(<http://example.org/>
 Declaration(Class(:Entity1))
 Declaration(Class(:Entity2))
 Declaration(Class(:Entity3))
+Declaration(Class(:Entity5))
 
 
 ############################
@@ -20,6 +21,10 @@ Declaration(Class(:Entity3))
 # Class: :Entity1 (Entity 1)
 
 AnnotationAssertion(rdfs:label :Entity1 "Entity 1")
+
+# Class: :Entity5 (Entity5LabelInOnt)
+
+AnnotationAssertion(rdfs:label :Entity5 "Entity5LabelInOnt")
 
 
 )

@@ -22,12 +22,15 @@ class OverrideTest extends UnitSpec {
     axioms should contain(Class("http://ex.org/1") Annotation(RDFSLabel, "Entity 1 thing"))
     axioms should contain(Class("http://ex.org/2") Annotation(RDFSLabel, "Entity 2 TSV"))
     axioms should contain(Class("http://ex.org/3") Annotation(RDFSLabel, "http://example.org/Entity3 thing"))
+    axioms should contain(Class("http://ex.org/4") Annotation(RDFSLabel, "Entity4LabelInTSV thing"))
+    axioms should contain(Class("http://ex.org/5") Annotation(RDFSLabel, "Entity5LabelInOnt thing"))
     axioms should contain(Class("http://ex.org/1") Annotation(DCSource, "overridden source 1"))
     axioms should contain(Class("http://ex.org/2") Annotation(DCSource, "The source is source2"))
     axioms should contain(Class("http://ex.org/3") Annotation(DCSource, "The source is source3"))
 
     axioms shouldNot contain(Class("http://ex.org/2") Annotation(RDFSLabel, "Entity 2 thing"))
     axioms shouldNot contain(Class("http://ex.org/1") Annotation(DCSource, "The source is source1"))
+    axioms shouldNot contain(Class("http://ex.org/5") Annotation(RDFSLabel, "Entity5LabelInTSV thing"))
   }
 
 }
