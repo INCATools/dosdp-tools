@@ -35,7 +35,7 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "apache-jena-libs"       % "3.12.0" exclude("org.slf4j", "slf4j-log4j12"),
       "org.backuity.clist"         %% "clist-core"             % "3.5.0",
       "org.backuity.clist"         %% "clist-macros"           % "3.5.0" % "provided",
-      "com.github.tototoshi"       %% "scala-csv"              % "1.3.5",
+      "com.github.tototoshi"       %% "scala-csv"              % "1.3.6",
       "commons-codec"              %  "commons-codec"          % "1.12",
       "com.typesafe.scala-logging" %% "scala-logging"          % "3.9.2",
       "ch.qos.logback"             %  "logback-classic"        % "1.2.3",
