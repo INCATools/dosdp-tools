@@ -97,9 +97,16 @@ ORDER BY ?defined_class_label
       val node = genVar
       val (filler, fillerTriples) = triples(svf.getFiller)
       (node, Seq(
-        //FIXME this assumes named object property
+        //this assumes named object property
         s"$node owl:onProperty <${svf.getProperty.asOWLObjectProperty.getIRI}> .",
         s"$node owl:someValuesFrom $filler .") ++ fillerTriples)
+    case avf: OWLObjectAllValuesFrom  =>
+      val node = genVar
+      val (filler, fillerTriples) = triples(avf.getFiller)
+      (node, Seq(
+        //this assumes named object property
+        s"$node owl:onProperty <${avf.getProperty.asOWLObjectProperty.getIRI}> .",
+        s"$node owl:allValuesFrom $filler .") ++ fillerTriples)
     case and: OWLObjectIntersectionOf =>
       val node = genVar
       val (intersectionTriples, operandTriplesList, operands) = and.getOperands.asScala.map { o =>
@@ -111,8 +118,17 @@ ORDER BY ?defined_class_label
       }
       val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.asScala.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
       (node, (intersectionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
-    case or: OWLObjectUnionOf         => ???
-    case only: OWLObjectAllValuesFrom => ???
+    case or: OWLObjectUnionOf         =>
+      val node = genVar
+      val (unionTriples, operandTriplesList, operands) = or.getOperands.asScala.map { o =>
+        val (operand, operandTriples) = triples(o)
+        (s"$node owl:unionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
+      }.unzip3
+      val filters = operands.toSeq.combinations(2).map { pair =>
+        s"FILTER(${pair.head} != ${pair.last})"
+      }
+      val listLengthTriple = s"$node owl:unionOf/${or.getOperands.asScala.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
+      (node, (unionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
   }
 
   private def genVar: String = "?" + UUID.randomUUID.toString.replaceAllLiterally("-", "")
