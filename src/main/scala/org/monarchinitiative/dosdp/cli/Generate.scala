@@ -59,7 +59,6 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val generatedAxioms: Set[OWLAxiom] = (for {
       row <- fillers
     } yield {
-      println(s"Row: $row")
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
