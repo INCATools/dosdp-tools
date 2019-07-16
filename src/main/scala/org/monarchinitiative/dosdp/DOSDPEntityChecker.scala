@@ -29,7 +29,7 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
     nameToIRI(name, properties).map(factory.getOWLDataProperty).orNull
   }
 
-  def getOWLDatatype(name: String): OWLDatatype = null
+  def getOWLDatatype(name: String): OWLDatatype = Prefixes.nameOrVariableToIRI(name, Map.empty, prefixes).map(factory.getOWLDatatype).orNull
 
   def getOWLIndividual(name: String): OWLNamedIndividual = Prefixes.nameOrVariableToIRI(name, Map.empty, prefixes).map(factory.getOWLNamedIndividual).orNull
 
