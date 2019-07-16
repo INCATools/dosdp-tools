@@ -1,9 +1,7 @@
 package org.monarchinitiative.dosdp.cli
 
 import scala.collection.JavaConverters._
-
-import org.apache.jena.query.QueryExecutionFactory
-import org.apache.jena.query.QueryFactory
+import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution, ResultSet}
 import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
 import org.monarchinitiative.dosdp._
@@ -12,10 +10,9 @@ import org.semanticweb.HermiT.ReasonerFactory
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLOntology
-
 import com.github.tototoshi.csv.CSVWriter
-
 import uk.ac.manchester.cs.jfact.JFactFactory
+import scala.collection.JavaConverters._
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
@@ -42,18 +39,8 @@ object Query extends Command(description = "query an ontology for terms matching
     if (printQuery) {
       println(processedQuery)
     } else {
-      if (ontOpt.isEmpty) throw new RuntimeException("Can't run query; no ontology provided.")
-      val model = ModelFactory.createDefaultModel()
-      val allAxioms = for {
-        mainOnt <- ontologyOpt.toSet[OWLOntology]
-        ont <- mainOnt.getImportsClosure.asScala
-        axiom <- ont.getAxioms().asScala
-      } yield axiom
-      val manager = OWLManager.createOWLOntologyManager()
-      val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
-      model.add(triples.toList.asJava)
-      val query = QueryFactory.create(processedQuery)
-      val results = QueryExecutionFactory.create(query, model).execSelect()
+      val ont = ontologyOpt.getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
+      val results = performQuery(processedQuery, ont)
       val columns = results.getResultVars.asScala.toList
       val writer = CSVWriter.open(outfile, "utf-8")(sepFormat)
       writer.writeRow(columns)
@@ -64,5 +51,19 @@ object Query extends Command(description = "query an ontology for terms matching
       writer.close()
     }
   }
+
+  def performQuery(sparql: String, ont: OWLOntology): ResultSet = {
+    val model = ModelFactory.createDefaultModel()
+    val allAxioms = for {
+      completeOnt <- ont.getImportsClosure.asScala
+      axiom <- completeOnt.getAxioms().asScala
+    } yield axiom
+    val manager = OWLManager.createOWLOntologyManager()
+    val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
+    model.add(triples.toList.asJava)
+    val query = QueryFactory.create(sparql)
+    QueryExecutionFactory.create(query, model).execSelect()
+  }
+
 
 }
