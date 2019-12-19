@@ -30,7 +30,7 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-core"             % "0.11.1",
       "io.circe"                   %% "circe-generic"          % "0.11.1",
       "io.circe"                   %% "circe-parser"           % "0.11.1",
-      "io.circe"                   %% "circe-yaml"             % "0.10.0",
+      "io.circe"                   %% "circe-yaml"             % "0.10.1",
       "com.github.pathikrit"       %% "better-files"           % "3.8.0",
       "org.apache.jena"            %  "apache-jena-libs"       % "3.12.0" exclude("org.slf4j", "slf4j-log4j12"),
       "org.backuity.clist"         %% "clist-core"             % "3.5.1",
