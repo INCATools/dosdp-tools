@@ -16,7 +16,6 @@ class OverrideTest extends UnitSpec {
   val fillers = CSVReader.open(new File("src/test/resources/org/monarchinitiative/dosdp/OverrideTest.tsv"), "utf-8")(new TSVFormat {}).iteratorWithHeaders
   val ontology = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(new File("src/test/resources/org/monarchinitiative/dosdp/OverrideTest.ofn")))
   val axioms = Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers: Iterator[Map[String, String]], Some(ontology), true, true, None, false)
-  axioms.foreach(println)
 
   "Overrides" should "be checked" in {
     axioms should contain(Class("http://ex.org/1") Annotation(RDFSLabel, "Entity 1 thing"))

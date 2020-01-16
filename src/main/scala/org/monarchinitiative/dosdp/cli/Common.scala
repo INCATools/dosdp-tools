@@ -38,7 +38,7 @@ trait Common extends Command with LazyLogging {
   def inputDOSDPFrom(location: String): DOSDP = {
     val possibleFile = new File(location)
     val source = if (possibleFile.exists) Source.fromFile(possibleFile, "UTF-8")
-    else Source.fromURL(templateFile, "UTF-8")
+    else Source.fromURL(location, "UTF-8")
     parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
       case Right(dosdp) => dosdp
       case Left(error)  =>

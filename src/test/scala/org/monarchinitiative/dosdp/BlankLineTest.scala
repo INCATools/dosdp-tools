@@ -10,7 +10,7 @@ class BlankLineTest extends UnitSpec {
 
   val dosdp = Generate.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/test_blank_lines.yaml")
   val fillers = Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/test_blank_lines.tsv"), new TSVFormat {})
-  val axioms = Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers: Iterator[Map[String, String]], None, true, true, None, false)
+  val axioms = Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false)
 
   "Blank lines" should "not cause errors" in {
     axioms should contain(Class("http://ex.org/1") Annotation(RDFSLabel, "http://example.org/Entity1 thing"))
