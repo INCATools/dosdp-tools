@@ -6,7 +6,7 @@ name          := "dosdp-tools"
 
 version       := "0.13.1"
 
-scalaVersion  := "2.12.8"
+scalaVersion  := "2.12.10"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -20,26 +20,24 @@ scriptClasspath := Seq("*")
 
 libraryDependencies ++= {
     Seq(
-      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.13",
+      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.14",
       "org.phenoscape"             %% "scowl"                  % "1.3.4",
       "org.phenoscape"             %% "owlet"                  % "1.6.1" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
-      "org.obolibrary.robot"       %  "robot-core"             % "1.4.1" exclude("org.slf4j", "slf4j-log4j12"),
       "io.circe"                   %% "circe-core"             % "0.12.3",
       "io.circe"                   %% "circe-generic"          % "0.12.3",
       "io.circe"                   %% "circe-parser"           % "0.12.3",
+      "org.obolibrary.robot"       %  "robot-core"             % "1.5.0" exclude("org.slf4j", "slf4j-log4j12"),
       "io.circe"                   %% "circe-yaml"             % "0.10.0",
       "com.github.pathikrit"       %% "better-files"           % "3.8.0",
-      "org.apache.jena"            %  "apache-jena-libs"       % "3.12.0" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.apache.jena"            %  "apache-jena-libs"       % "3.13.1" exclude("org.slf4j", "slf4j-log4j12"),
       "org.backuity.clist"         %% "clist-core"             % "3.5.1",
       "org.backuity.clist"         %% "clist-macros"           % "3.5.1" % "provided",
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.6",
-      "commons-codec"              %  "commons-codec"          % "1.12",
-      "com.typesafe.scala-logging" %% "scala-logging"          % "3.9.2",
-      "ch.qos.logback"             %  "logback-classic"        % "1.2.3",
-      "org.codehaus.groovy"        %  "groovy-all"             % "2.5.4",
-      "org.scalatest"              %% "scalatest"              % "3.0.8" % Test
+      "commons-codec"              %  "commons-codec"          % "1.14",
+      "com.outr"                   %% "scribe-slf4j"           % "2.7.10",
+      "org.scalatest"              %% "scalatest"              % "3.1.0" % Test
     )
 }
