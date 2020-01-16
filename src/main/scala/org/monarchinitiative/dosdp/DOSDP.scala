@@ -99,13 +99,7 @@ object PrintfText {
           realVars.map(v => stringValues.get(v)).sequence
       }
     }
-    println(text)
-    println(vars)
-    println(bindings)
-    println(fillersOpt)
-    println
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
-    //fillersOpt.map(_.getOrElse(Nil)).map(fillers => text.format(fillers: _*))
   }
 
 }

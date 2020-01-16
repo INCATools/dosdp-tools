@@ -54,3 +54,9 @@ substitutions:
     out: substitute_me_munged
     match: (.+) (.+)
     sub: \2 and then \1
+
+equivalentTo:
+  text: "%s and (part_of some %s)"
+  vars:
+    - structure
+    - taxon

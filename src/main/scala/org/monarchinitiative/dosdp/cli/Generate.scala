@@ -63,7 +63,6 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
         filler <- row.get(varr).flatMap(stripToOption)
-        _ = println(filler)
         fillerLabelOpt = for {
           fillerIRI <- Prefixes.idToIRI(filler, prefixes)
           label <- row.get(s"${varr}_label").flatMap(stripToOption)
