@@ -12,7 +12,6 @@ class MissingValuesTest extends UnitSpec {
     val fillers = Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.tsv"), new TSVFormat {})
     val axioms = Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false)
     // No exceptions should be thrown
-    axioms.foreach(println)
   }
 
 }
