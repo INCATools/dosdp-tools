@@ -23,6 +23,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
   var addAxiomSourceAnnotation = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
   var axiomSourceAnnotationProperty = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
+  var patterns = opt[Seq[String]](name = "patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -34,14 +35,31 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       case other        => throw new UnsupportedOperationException(s"Invalid argument for restrict-axioms-to: $other")
     }
     val sepFormat = tabularFormat
-    val dosdp = inputDOSDP
-    val (columns, fillers) = readFillers(infile, sepFormat)
-    val missingColumns = dosdp.allVars.diff(columns)
-    missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
-    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
-    val manager = OWLManager.createOWLOntologyManager()
-    val ont = manager.createOntology(axioms.asJava)
-    manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+    val patternNames = patterns
+    if (patternNames.nonEmpty) {
+      logger.info("Running in batch mode; ignoring any specified in/out files")
+      patternNames.foreach { pattern =>
+        val dosdp = inputDOSDPFrom(s"$pattern.yaml")
+        val dataExtension = tableFormat.toLowerCase
+        val (columns, fillers) = readFillers(new File(s"$pattern.$dataExtension"), sepFormat)
+        val missingColumns = dosdp.allVars.diff(columns)
+        missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
+        val outputFile = new File(s"$pattern.ofn")
+        val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
+        val manager = OWLManager.createOWLOntologyManager()
+        val ont = manager.createOntology(axioms.asJava)
+        manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outputFile))
+      }
+    } else {
+      val dosdp = inputDOSDP
+      val (columns, fillers) = readFillers(infile, sepFormat)
+      val missingColumns = dosdp.allVars.diff(columns)
+      missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
+      val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
+      val manager = OWLManager.createOWLOntologyManager()
+      val ont = manager.createOntology(axioms.asJava)
+      manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+    }
   }
 
   def readFillers(file: File, sepFormat: CSVFormat): (Set[String], Iterator[Map[String, String]]) = {
@@ -67,7 +85,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
-        filler <- row.get(varr)
+        filler <- row.get(varr).flatMap(stripToOption)
         fillerLabelOpt = for {
           fillerIRI <- Prefixes.idToIRI(filler, prefixes)
           label <- row.get(s"${varr}_label").flatMap(stripToOption)
@@ -78,17 +96,17 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val listVarBindings = (for {
         listVars <- dosdp.list_vars.toSeq
         listVar <- listVars.keys
-        filler <- row.get(listVar)
+        filler <- row.get(listVar).flatMap(stripToOption)
       } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
       val dataVarBindings = (for {
         dataVars <- dosdp.data_vars.toSeq
         dataVar <- dataVars.keys
-        filler <- row.get(dataVar)
+        filler <- row.get(dataVar).flatMap(stripToOption)
       } yield dataVar -> SingleValue(filler.trim)).toMap
       val dataListBindings = (for {
         dataListVars <- dosdp.data_list_vars.toSeq
         dataListVar <- dataListVars.keys
-        filler <- row.get(dataListVar)
+        filler <- row.get(dataListVar).flatMap(stripToOption)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
       val additionalBindings = for {
         (key, value) <- row.filterKeys(k => !knownColumns(k))

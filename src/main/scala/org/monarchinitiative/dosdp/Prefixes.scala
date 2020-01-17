@@ -44,7 +44,7 @@ object Prefixes {
 
   def nameOrVariableToIRI(name: String, mapper: Map[String, String], prefixes: PartialFunction[String, String]): Option[IRI] = name match {
     case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
-    case Quoted(unquoted)       => mapper.get(unquoted).flatMap(idToIRI(_, prefixes))
+    case Quoted(unquoted)       => nameOrVariableToIRI(unquoted, mapper, prefixes)
     case FullIRI(iri)           => Option(IRI.create(iri))
     case http @ HTTPURI(_*)     => idToIRI(http, prefixes)
     case curie @ CURIE(_, _)    => idToIRI(curie, prefixes)

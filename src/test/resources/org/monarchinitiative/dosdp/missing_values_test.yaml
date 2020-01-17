@@ -1,0 +1,62 @@
+pattern_name: missing_values_test
+
+classes:
+  shape: PATO:shape
+  anatomical_entity: UBERON:anatomical_entity
+  thing: owl:Thing
+
+relations:
+  part_of: RO:part_of
+
+annotationProperties:
+  never_in_taxon: RO:never_in_taxon
+
+vars:
+  structure: anatomical_entity
+  taxon: thing
+
+list_vars:
+  seeAlso: anatomical_entity
+
+data_vars:
+  term_name: xsd:string
+  substitute_me: xsd:string
+
+data_list_vars:
+  exactSynonym: xsd:string
+  relatedSynonyms: xsd:string
+  broadSynonyms: xsd:string # don't put this column in the test input
+
+annotations:
+  - annotationProperty: never_in_taxon
+    var: taxon
+
+name:
+  text: "%s"
+  vars:
+    - term_name
+
+def:
+  text: "%s %s %s"
+  vars:
+    - term_name
+    - structure
+    - substitute_me_munged
+
+exact_synonym:
+  value: exactSynonym
+
+broad_synonym:
+  value: broadSynonyms
+
+substitutions:
+  - in: substitute_me
+    out: substitute_me_munged
+    match: (.+) (.+)
+    sub: \2 and then \1
+
+equivalentTo:
+  text: "%s and (part_of some %s)"
+  vars:
+    - structure
+    - taxon

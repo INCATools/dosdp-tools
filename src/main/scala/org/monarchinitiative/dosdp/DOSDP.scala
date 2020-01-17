@@ -9,44 +9,44 @@ import io.circe.syntax._
 import org.apache.commons.codec.digest.DigestUtils
 
 /**
-  * Basic data model for DOSDP schema, for serializing to/from JSON.
-  */
+ * Basic data model for DOSDP schema, for serializing to/from JSON.
+ */
 final case class DOSDP(
-                        pattern_name: Option[String],
-                        pattern_iri: Option[String],
-                        base_IRI: Option[String],
-                        description: Option[String],
-                        readable_identifiers: Option[List[String]],
-                        classes: Option[Map[String, String]],
-                        relations: Option[Map[String, String]],
-                        objectProperties: Option[Map[String, String]],
-                        dataProperties: Option[Map[String, String]],
-                        annotationProperties: Option[Map[String, String]],
-                        vars: Option[Map[String, String]],
-                        list_vars: Option[Map[String, String]],
-                        data_vars: Option[Map[String, String]],
-                        data_list_vars: Option[Map[String, String]],
-                        substitutions: Option[List[RegexSub]],
-                        annotations: Option[List[Annotations]],
-                        logical_axioms: Option[List[PrintfOWL]],
-                        equivalentTo: Option[PrintfOWLConvenience],
-                        subClassOf: Option[PrintfOWLConvenience],
-                        disjointWith: Option[PrintfOWLConvenience],
-                        GCI: Option[PrintfOWLConvenience],
-                        name: Option[PrintfAnnotationOBO],
-                        comment: Option[PrintfAnnotationOBO],
-                        `def`: Option[PrintfAnnotationOBO],
-                        namespace: Option[PrintfAnnotationOBO],
-                        exact_synonym: Option[ListAnnotationOBO],
-                        narrow_synonym: Option[ListAnnotationOBO],
-                        related_synonym: Option[ListAnnotationOBO],
-                        broad_synonym: Option[ListAnnotationOBO],
-                        generated_synonyms: Option[List[PrintfAnnotationOBO]],
-                        generated_narrow_synonyms: Option[List[PrintfAnnotationOBO]],
-                        generated_broad_synonyms: Option[List[PrintfAnnotationOBO]],
-                        generated_related_synonyms: Option[List[PrintfAnnotationOBO]],
-                        xref: Option[ListAnnotationOBO],
-                        instance_graph: Option[InstanceGraph]) {
+                        pattern_name: Option[String] = None,
+                        pattern_iri: Option[String] = None,
+                        base_IRI: Option[String] = None,
+                        description: Option[String] = None,
+                        readable_identifiers: Option[List[String]] = None,
+                        classes: Option[Map[String, String]] = None,
+                        relations: Option[Map[String, String]] = None,
+                        objectProperties: Option[Map[String, String]] = None,
+                        dataProperties: Option[Map[String, String]] = None,
+                        annotationProperties: Option[Map[String, String]] = None,
+                        vars: Option[Map[String, String]] = None,
+                        list_vars: Option[Map[String, String]] = None,
+                        data_vars: Option[Map[String, String]] = None,
+                        data_list_vars: Option[Map[String, String]] = None,
+                        substitutions: Option[List[RegexSub]] = None,
+                        annotations: Option[List[Annotations]] = None,
+                        logical_axioms: Option[List[PrintfOWL]] = None,
+                        equivalentTo: Option[PrintfOWLConvenience] = None,
+                        subClassOf: Option[PrintfOWLConvenience] = None,
+                        disjointWith: Option[PrintfOWLConvenience] = None,
+                        GCI: Option[PrintfOWLConvenience] = None,
+                        name: Option[PrintfAnnotationOBO] = None,
+                        comment: Option[PrintfAnnotationOBO] = None,
+                        `def`: Option[PrintfAnnotationOBO] = None,
+                        namespace: Option[PrintfAnnotationOBO] = None,
+                        exact_synonym: Option[ListAnnotationOBO] = None,
+                        narrow_synonym: Option[ListAnnotationOBO] = None,
+                        related_synonym: Option[ListAnnotationOBO] = None,
+                        broad_synonym: Option[ListAnnotationOBO] = None,
+                        generated_synonyms: Option[List[PrintfAnnotationOBO]] = None,
+                        generated_narrow_synonyms: Option[List[PrintfAnnotationOBO]] = None,
+                        generated_broad_synonyms: Option[List[PrintfAnnotationOBO]] = None,
+                        generated_related_synonyms: Option[List[PrintfAnnotationOBO]] = None,
+                        xref: Option[ListAnnotationOBO] = None,
+                        instance_graph: Option[InstanceGraph] = None) {
 
   def allVars: Set[String] = vars.toSet[Map[String, String]].flatMap(_.keySet) ++ list_vars.toSet[Map[String, String]].flatMap(_.keySet) ++ data_vars.toSet[Map[String, String]].flatMap(_.keySet) ++ data_list_vars.toSet[Map[String, String]].flatMap(_.keySet)
 
@@ -54,7 +54,7 @@ final case class DOSDP(
 
 object DOSDP {
 
-  val empty = DOSDP(None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None, None)
+  val empty: DOSDP = DOSDP()
 
   val MultiValueDelimiter: Char = '|'
 
@@ -87,20 +87,25 @@ trait PrintfText {
 
   def annotations: Option[List[Annotations]]
 
-  def replaced(bindings: Option[Map[String, SingleValue]]): String = PrintfText.replaced(this.text, this.vars, bindings)
+  def replaced(bindings: Option[Map[String, SingleValue]]): Option[String] = PrintfText.replaced(this.text, this.vars, bindings, shouldQuote)
+
+  def shouldQuote: Boolean
 
 }
 
 object PrintfText {
 
-  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]]): String = {
-    val fillers = vars.map { realVars =>
+  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+    import cats.implicits._
+    val fillersOpt = vars.map { realVars =>
       bindings match {
-        case None        => realVars.map(name => "'$" + name + "'")
-        case Some(bound) => realVars.map(bound.mapValues(_.value))
+        case None        => Some(realVars.map(name => "'$" + name + "'"))
+        case Some(bound) =>
+          val stringValues = bound.mapValues(_.value)
+          realVars.map(v => stringValues.get(v).map(text => if (quote) s"'$text'" else text)).sequence
       }
-    }.getOrElse(Nil)
-    text.format(fillers: _*)
+    }
+    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
   }
 
 }
@@ -109,12 +114,20 @@ final case class PrintfOWL(
                             annotations: Option[List[Annotations]],
                             axiom_type: AxiomType,
                             text: String,
-                            vars: Option[List[String]]) extends PrintfText
+                            vars: Option[List[String]]) extends PrintfText {
+
+  val shouldQuote = true
+
+}
 
 final case class PrintfOWLConvenience(
                                        annotations: Option[List[Annotations]],
                                        text: String,
-                                       vars: Option[List[String]]) extends PrintfText
+                                       vars: Option[List[String]]) extends PrintfText {
+
+  val shouldQuote = true
+
+}
 
 abstract sealed class AxiomType(val property: String)
 
@@ -154,7 +167,11 @@ final case class PrintfAnnotation(
                                    text: String,
                                    vars: Option[List[String]],
                                    `override`: Option[String])
-  extends Annotations with PrintfText
+  extends Annotations with PrintfText {
+
+  val shouldQuote = false
+
+}
 
 final case class ListAnnotation(
                                  annotations: Option[List[Annotations]],
@@ -186,7 +203,11 @@ final case class PrintfAnnotationOBO(
                                       annotations: Option[List[Annotations]],
                                       xrefs: Option[String],
                                       text: String,
-                                      vars: Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations
+                                      vars: Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations {
+
+  val shouldQuote = false
+
+}
 
 object PrintfAnnotationOBO {
 
