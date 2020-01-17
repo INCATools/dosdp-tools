@@ -131,7 +131,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         SingleValue(binding) <- bindings.get(column)
         trimmed = binding.trim
         if trimmed.nonEmpty
-      } yield trimmed).orElse(PrintfText.replaced(text, vars, annotationBindings.map(singleValueBindings)))
+      } yield trimmed).orElse(PrintfText.replaced(text, vars, annotationBindings.map(singleValueBindings), false))
       valueOpt.toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
     case NormalizedListAnnotation(prop, value, subAnnotations)                           =>
       // If no variable bindings are passed in, dummy value is filled in using variable name

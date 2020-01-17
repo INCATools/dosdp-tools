@@ -83,20 +83,22 @@ trait PrintfText {
 
   def annotations: Option[List[Annotations]]
 
-  def replaced(bindings: Option[Map[String, SingleValue]]): Option[String] = PrintfText.replaced(this.text, this.vars, bindings)
+  def replaced(bindings: Option[Map[String, SingleValue]]): Option[String] = PrintfText.replaced(this.text, this.vars, bindings, shouldQuote)
+
+  def shouldQuote: Boolean
 
 }
 
 object PrintfText {
 
-  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]]): Option[String] = {
+  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.mapValues(_.value)
-          realVars.map(v => stringValues.get(v)).sequence
+          realVars.map(v => stringValues.get(v).map(text => if (quote) s"'$text'" else text)).sequence
       }
     }
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
@@ -108,12 +110,20 @@ final case class PrintfOWL(
                             annotations: Option[List[Annotations]],
                             axiom_type: AxiomType,
                             text: String,
-                            vars: Option[List[String]]) extends PrintfText
+                            vars: Option[List[String]]) extends PrintfText {
+
+  val shouldQuote = true
+
+}
 
 final case class PrintfOWLConvenience(
                                        annotations: Option[List[Annotations]],
                                        text: String,
-                                       vars: Option[List[String]]) extends PrintfText
+                                       vars: Option[List[String]]) extends PrintfText {
+
+  val shouldQuote = true
+
+}
 
 abstract sealed class AxiomType(val property: String)
 
@@ -153,7 +163,11 @@ final case class PrintfAnnotation(
                                    text: String,
                                    vars: Option[List[String]],
                                    `override`: Option[String])
-  extends Annotations with PrintfText
+  extends Annotations with PrintfText {
+
+  val shouldQuote = false
+
+}
 
 final case class ListAnnotation(
                                  annotations: Option[List[Annotations]],
@@ -185,7 +199,11 @@ final case class PrintfAnnotationOBO(
                                       annotations: Option[List[Annotations]],
                                       xrefs: Option[String],
                                       text: String,
-                                      vars: Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations
+                                      vars: Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations {
+
+  val shouldQuote = false
+
+}
 
 object PrintfAnnotationOBO {
 
