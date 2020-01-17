@@ -62,7 +62,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
-        filler <- row.get(varr)
+        filler <- row.get(varr).flatMap(stripToOption)
         fillerLabelOpt = for {
           fillerIRI <- Prefixes.idToIRI(filler, prefixes)
           label <- row.get(s"${varr}_label").flatMap(stripToOption)
@@ -73,17 +73,17 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val listVarBindings = (for {
         listVars <- dosdp.list_vars.toSeq
         listVar <- listVars.keys
-        filler <- row.get(listVar)
+        filler <- row.get(listVar).flatMap(stripToOption)
       } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
       val dataVarBindings = (for {
         dataVars <- dosdp.data_vars.toSeq
         dataVar <- dataVars.keys
-        filler <- row.get(dataVar)
+        filler <- row.get(dataVar).flatMap(stripToOption)
       } yield dataVar -> SingleValue(filler.trim)).toMap
       val dataListBindings = (for {
         dataListVars <- dosdp.data_list_vars.toSeq
         dataListVar <- dataListVars.keys
-        filler <- row.get(dataListVar)
+        filler <- row.get(dataListVar).flatMap(stripToOption)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
       val additionalBindings = for {
         (key, value) <- row.filterKeys(k => !knownColumns(k))

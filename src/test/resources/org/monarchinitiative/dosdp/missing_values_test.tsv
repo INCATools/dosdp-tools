@@ -1,0 +1,6 @@
+defined_class	structure	structure_label	taxon	seeAlso	exactSynonym	relatedSynonyms	term_name	substitute_me
+EX:0001	UBERON:arm	Arm	VTO:Holothuroidea	UBERON:tentacle	a synonym for this term	related term 1|related term 2	Term 0001	one two
+EX:0002	UBERON:arm	Arm	VTO:Holothuroidea	UBERON:tentacle		related term 1|related term 2	Term 0002	one two
+EX:0003	UBERON:arm	Arm	VTO:Holothuroidea	UBERON:tentacle		related term 1|related term 2		one two
+EX:0004			VTO:Holothuroidea	UBERON:tentacle		related term 1|related term 2	Term 0004	one two
+EX:0005	UBERON:arm	Arm	VTO:Holothuroidea	UBERON:tentacle	a synonym for this term	related term 1|related term 2	Term 0005
