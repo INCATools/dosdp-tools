@@ -35,16 +35,21 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     }
     val sepFormat = tabularFormat
     val dosdp = inputDOSDP
-    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, readFillers(infile, sepFormat), ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
+    val (columns, fillers) = readFillers(infile, sepFormat)
+    val missingColumns = dosdp.allVars.diff(columns)
+    missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
+    val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
     val manager = OWLManager.createOWLOntologyManager()
     val ont = manager.createOntology(axioms.asJava)
     manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
   }
 
-  def readFillers(file: File, sepFormat: CSVFormat): Iterator[Map[String, String]] = {
+  def readFillers(file: File, sepFormat: CSVFormat): (Set[String], Iterator[Map[String, String]]) = {
     val cleaned = Source.fromFile(file, "utf-8").getLines().filterNot(_.trim.isEmpty).mkString("\n")
+    val iteratorToCheckColumns = CSVReader.open(new StringReader(cleaned))(sepFormat).iteratorWithHeaders
+    val columns = if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next.keySet else Set.empty[String]
     val reader = new StringReader(cleaned)
-    CSVReader.open(reader)(sepFormat).iteratorWithHeaders
+    columns -> CSVReader.open(reader)(sepFormat).iteratorWithHeaders
   }
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] =
@@ -55,7 +60,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
     val AxiomHasSource = Prefixes.idToIRI(axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_))
       .getOrElse(throw new UnsupportedOperationException("Couldn't create IRI for axiom source annotation property."))
-    val knownColumns = Set(dosdp.vars, dosdp.list_vars, dosdp.data_vars, dosdp.data_list_vars).flatMap(_.toSet).flatMap(_.keySet)
+    val knownColumns = dosdp.allVars
     val generatedAxioms: Set[OWLAxiom] = (for {
       row <- fillers
     } yield {
