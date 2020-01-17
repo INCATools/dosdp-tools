@@ -23,7 +23,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
   var addAxiomSourceAnnotation = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
   var axiomSourceAnnotationProperty = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
-  var patterns = opt[Seq[String]](name = "patterns", description = "List of patterns to process in batch (space separated, enclose list in quotes)", default = Nil)
+  var patterns = opt[Seq[String]](name = "patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -37,7 +37,6 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val sepFormat = tabularFormat
     val patternNames = patterns
     if (patternNames.nonEmpty) {
-      println(patternNames)
       logger.info("Running in batch mode; ignoring any specified in/out files")
       patternNames.foreach { pattern =>
         val dosdp = inputDOSDPFrom(s"$pattern.yaml")
