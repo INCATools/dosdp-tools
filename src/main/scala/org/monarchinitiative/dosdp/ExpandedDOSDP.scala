@@ -140,18 +140,16 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       val listValueOpt = bindingsMap.get(value)
       listValueOpt.toSet[MultiValue].flatMap(listValue => listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, v)))
     case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)                        =>
-      val iriValue = (for {
-        actualBindings <- logicalBindings
-        bindingValue = actualBindings.get(varr)
-        _ = if (bindingValue.isEmpty) logger.error(s"No binding for variable $varr")
-        SingleValue(value) <- bindingValue
-        iri <- Prefixes.idToIRI(value, prefixes)
-      } yield iri).getOrElse(DOSDP.variableToIRI(varr))
-      Set(Annotation(
+      val maybeIRIValue = logicalBindings.map { actualBindings =>
+        for {
+          SingleValue(value) <- actualBindings.get(varr)
+          iri <- Prefixes.idToIRI(value, prefixes)
+        } yield iri
+      }.getOrElse(Some(DOSDP.variableToIRI(varr)))
+      maybeIRIValue.toSet[IRI].map(iriValue => Annotation(
         subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)),
         prop,
-        iriValue)
-      )
+        iriValue))
   }
 
   private def normalizeAnnotation(annotation: Annotations): NormalizedAnnotation = annotation match {

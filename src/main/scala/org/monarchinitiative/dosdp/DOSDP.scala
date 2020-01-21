@@ -46,7 +46,11 @@ final case class DOSDP(
                         generated_broad_synonyms: Option[List[PrintfAnnotationOBO]] = None,
                         generated_related_synonyms: Option[List[PrintfAnnotationOBO]] = None,
                         xref: Option[ListAnnotationOBO] = None,
-                        instance_graph: Option[InstanceGraph] = None)
+                        instance_graph: Option[InstanceGraph] = None) {
+
+  def allVars: Set[String] = vars.toSet[Map[String, String]].flatMap(_.keySet) ++ list_vars.toSet[Map[String, String]].flatMap(_.keySet) ++ data_vars.toSet[Map[String, String]].flatMap(_.keySet) ++ data_list_vars.toSet[Map[String, String]].flatMap(_.keySet)
+
+}
 
 object DOSDP {
 
