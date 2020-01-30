@@ -71,7 +71,7 @@ object Query extends Command(description = "query an ontology for terms matching
         writer.close()
       }
     }
-
+    reasonerOpt.foreach(_.dispose())
   }
 
   def performQuery(sparql: String, ont: OWLOntology): ResultSet = {
