@@ -23,7 +23,6 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
   var addAxiomSourceAnnotation = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
   var axiomSourceAnnotationProperty = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
-  var patterns = opt[Seq[String]](name = "patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
 
   val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -35,30 +34,30 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       case other        => throw new UnsupportedOperationException(s"Invalid argument for restrict-axioms-to: $other")
     }
     val sepFormat = tabularFormat
-    val patternNames = patterns
-    if (patternNames.nonEmpty) {
-      logger.info("Running in batch mode; ignoring any specified in/out files")
-      patternNames.foreach { pattern =>
-        val dosdp = inputDOSDPFrom(s"$pattern.yaml")
+    val patternNames = batchPatterns
+    val targets = if (patternNames.nonEmpty) {
+      logger.info("Running in batch mode")
+      if (!(new File(templateFile).isDirectory)) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
+      if (!(infile.isDirectory)) throw new UnsupportedOperationException(s"--infile must be a directory in batch mode")
+      if (!(outfile.isDirectory)) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
+      patternNames.map { pattern =>
+        val templateFileName = s"$templateFile/$pattern.yaml"
         val dataExtension = tableFormat.toLowerCase
-        val (columns, fillers) = readFillers(new File(s"$pattern.$dataExtension"), sepFormat)
-        val missingColumns = dosdp.allVars.diff(columns)
-        missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
-        val outputFile = new File(s"$pattern.ofn")
-        val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
-        val manager = OWLManager.createOWLOntologyManager()
-        val ont = manager.createOntology(axioms.asJava)
-        manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outputFile))
+        val dataFileName = s"$infile/$pattern.$dataExtension"
+        val outFileName = s"$outfile/$pattern.ofn"
+        GenerateTarget(templateFileName, dataFileName, outFileName)
       }
-    } else {
-      val dosdp = inputDOSDP
-      val (columns, fillers) = readFillers(infile, sepFormat)
+    } else List(GenerateTarget(templateFile, infile.toString, outfile.toString))
+    targets.foreach { target =>
+      val dosdp = inputDOSDPFrom(target.templateFile)
+      val (columns, fillers) = readFillers(new File(target.inputFile), sepFormat)
       val missingColumns = dosdp.allVars.diff(columns)
       missingColumns.foreach(column => logger.warn(s"Input is missing column for pattern variable <$column>"))
+      val outputFile = new File(target.outputFile)
       val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
       val manager = OWLManager.createOWLOntologyManager()
       val ont = manager.createOntology(axioms.asJava)
-      manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+      manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outputFile))
     }
   }
 
@@ -169,5 +168,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val trimmed = text.trim
     if (trimmed.isEmpty) None else Some(trimmed)
   }
+
+  private final case class GenerateTarget(templateFile: String, inputFile: String, outputFile: String)
 
 }

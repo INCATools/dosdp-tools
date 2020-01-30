@@ -1,5 +1,7 @@
 package org.monarchinitiative.dosdp.cli
 
+import java.io.{File, FileWriter, PrintWriter}
+
 import scala.collection.JavaConverters._
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution, ResultSet}
 import org.apache.jena.rdf.model.ModelFactory
@@ -12,6 +14,7 @@ import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLOntology
 import com.github.tototoshi.csv.CSVWriter
 import uk.ac.manchester.cs.jfact.JFactFactory
+
 import scala.collection.JavaConverters._
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
@@ -21,35 +24,54 @@ object Query extends Command(description = "query an ontology for terms matching
 
   def run(): Unit = {
     val sepFormat = tabularFormat
-    val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(inputDOSDP, prefixes))
+    val patternNames = batchPatterns
+    val targets = if (patternNames.nonEmpty) {
+      logger.info("Running in batch mode")
+      if (!(new File(templateFile).isDirectory)) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
+      if (!(outfile.isDirectory)) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
+      patternNames.map { pattern =>
+        val templateFileName = s"$templateFile/$pattern.yaml"
+        val outFileName = s"$outfile/$pattern.rq"
+        QueryTarget(templateFileName, outFileName)
+      }
+    } else List(QueryTarget(templateFile, outfile.toString))
     val reasonerFactoryOpt = reasonerNameOpt.map(_.toLowerCase).map {
       case "elk"    => new ElkReasonerFactory()
       case "hermit" => new ReasonerFactory()
       case "jfact"  => new JFactFactory()
       case other    => throw new RuntimeException(s"Reasoner $other not supported. Options are ELK, HermiT, or JFact")
     }
-    val processedQuery = (ontologyOpt, reasonerFactoryOpt) match {
-      case (None, Some(_))                 => throw new RuntimeException("Reasoner requested but no ontology specified; exiting.")
-      case (Some(ontology), Some(factory)) =>
-        val reasoner = factory.createReasoner(ontology)
-        val owlet = new Owlet(reasoner)
-        owlet.expandQueryString(sparqlQuery)
-      case (_, None)                       => sparqlQuery
-    }
-    if (printQuery) {
-      println(processedQuery)
-    } else {
-      val ont = ontologyOpt.getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
-      val results = performQuery(processedQuery, ont)
-      val columns = results.getResultVars.asScala.toList
-      val writer = CSVWriter.open(outfile, "utf-8")(sepFormat)
-      writer.writeRow(columns)
-      while (results.hasNext) {
-        val qs = results.next()
-        writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")))
+    val reasonerOpt = for {
+      ontology <- ontologyOpt
+      factory <- reasonerFactoryOpt
+    } yield factory.createReasoner(ontology)
+    targets.foreach { target =>
+      val dosdp = inputDOSDPFrom(target.templateFile)
+      val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
+      val processedQuery = reasonerOpt match {
+        case Some(reasoner) =>
+          val owlet = new Owlet(reasoner)
+          owlet.expandQueryString(sparqlQuery)
+        case None           => sparqlQuery
       }
-      writer.close()
+      if (printQuery) {
+        val writer = new PrintWriter(new File(target.outputFile), "utf-8")
+        writer.print(processedQuery)
+        writer.close()
+      } else {
+        val ont = ontologyOpt.getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
+        val results = performQuery(processedQuery, ont)
+        val columns = results.getResultVars.asScala.toList
+        val writer = CSVWriter.open(target.outputFile, "utf-8")(sepFormat)
+        writer.writeRow(columns)
+        while (results.hasNext) {
+          val qs = results.next()
+          writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")))
+        }
+        writer.close()
+      }
     }
+
   }
 
   def performQuery(sparql: String, ont: OWLOntology): ResultSet = {
@@ -65,5 +87,6 @@ object Query extends Command(description = "query an ontology for terms matching
     QueryExecutionFactory.create(query, model).execSelect()
   }
 
+  private final case class QueryTarget(templateFile: String, outputFile: String)
 
 }

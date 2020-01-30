@@ -25,6 +25,7 @@ trait Common extends Command with LazyLogging {
   var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
   var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
   var tableFormat = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV (default) or CSV")
+  var batchPatterns = opt[Seq[String]](name = "batch-patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
 
   def ontologyOpt: Option[OWLOntology] = ontOpt.map { ontPath =>
     val ontIRI = if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath))
