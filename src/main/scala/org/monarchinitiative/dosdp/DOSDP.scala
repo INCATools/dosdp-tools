@@ -102,7 +102,7 @@ object PrintfText {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.mapValues(_.value)
-          realVars.map(v => stringValues.get(v).map(text => if (quote) s"'$text'" else text)).sequence
+          realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
