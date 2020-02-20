@@ -26,7 +26,7 @@ object Query extends Command(description = "query an ontology for terms matching
     val sepFormat = tabularFormat
     val patternNames = batchPatterns
     val targets = if (patternNames.nonEmpty) {
-      logger.info("Running in batch mode")
+      scribe.info("Running in batch mode")
       if (!(new File(templateFile).isDirectory)) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
       if (!(outfile.isDirectory)) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
       patternNames.map { pattern =>
@@ -46,6 +46,7 @@ object Query extends Command(description = "query an ontology for terms matching
       factory <- reasonerFactoryOpt
     } yield factory.createReasoner(ontology)
     targets.foreach { target =>
+      scribe.info(s"Processing pattern ${target.templateFile}")
       val dosdp = inputDOSDPFrom(target.templateFile)
       val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
       val processedQuery = reasonerOpt match {
