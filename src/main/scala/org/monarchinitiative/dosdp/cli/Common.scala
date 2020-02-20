@@ -3,7 +3,6 @@ package org.monarchinitiative.dosdp.cli
 import java.io.{File, FileReader}
 
 import com.github.tototoshi.csv.{CSVFormat, DefaultCSVFormat, TSVFormat}
-import com.typesafe.scalalogging.LazyLogging
 import io.circe.generic.auto._
 import io.circe.yaml.parser
 import org.backuity.clist._
@@ -14,7 +13,7 @@ import org.semanticweb.owlapi.model.{IRI, OWLOntology}
 
 import scala.io.Source
 
-trait Common extends Command with LazyLogging {
+trait Common extends Command {
 
   def run(): Unit
 
@@ -43,7 +42,7 @@ trait Common extends Command with LazyLogging {
     parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
       case Right(dosdp) => dosdp
       case Left(error)  =>
-        logger.error(s"Failed to parse pattern:\n${error.getMessage}")
+        scribe.error(s"Failed to parse pattern:\n${error.getMessage}")
         throw error
     }
   }

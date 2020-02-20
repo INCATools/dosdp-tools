@@ -1,6 +1,5 @@
 package org.monarchinitiative.dosdp
 
-import com.typesafe.scalalogging.LazyLogging
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.{ManchesterOWLSyntaxClassExpressionParser, ManchesterOWLSyntaxInlineAxiomParser}
@@ -12,7 +11,7 @@ import scala.util.matching.Regex.Match
 /**
  * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
  */
-final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) extends LazyLogging {
+final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) {
 
   lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   lazy val safeChecker = new SafeOWLEntityChecker(checker)
@@ -189,7 +188,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   lazy val readableIdentifierProperties: List[OWLAnnotationProperty] = dosdp.readable_identifiers.map { identifiers =>
     identifiers.flatMap { name =>
       val prop = safeChecker.getOWLAnnotationProperty(name)
-      if (prop.isEmpty) logger.error(s"No annotation property mapping for '$name'")
+      if (prop.isEmpty) scribe.error(s"No annotation property mapping for '$name'")
       prop
     }
   }.getOrElse(RDFSLabel :: Nil)
@@ -208,7 +207,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
 }
 
-final case class ExpandedRegexSub(regexSub: RegexSub) extends LazyLogging {
+final case class ExpandedRegexSub(regexSub: RegexSub) {
 
   private val groupFinder = raw"\\(\d+)".r
 
@@ -225,7 +224,7 @@ final case class ExpandedRegexSub(regexSub: RegexSub) extends LazyLogging {
     substitutedOpt match {
       case Some(substitution) => substitution
       case None               =>
-        logger.warn(s"Regex sub '$regexSub' did not match on '$value'")
+        scribe.warn(s"Regex sub '$regexSub' did not match on '$value'")
         value
     }
   }

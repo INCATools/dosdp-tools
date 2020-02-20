@@ -2,7 +2,6 @@ package org.monarchinitiative.dosdp
 
 import java.util.UUID
 
-import com.typesafe.scalalogging.LazyLogging
 import org.apache.jena.query.ParameterizedSparqlString
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
@@ -10,7 +9,7 @@ import org.semanticweb.owlapi.model._
 
 import scala.collection.JavaConverters._
 
-object SPARQL extends LazyLogging {
+object SPARQL {
 
   def queryFor(dosdp: ExpandedDOSDP): String = {
     s"""
@@ -66,7 +65,7 @@ ORDER BY ?defined_class_label
       val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
       Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples
     case equivalentTo: OWLEquivalentClassesAxiom =>
-      if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in equivalent class axiom unexpected")
       (for {
         named <- equivalentTo.getNamedClasses.asScala.headOption
         expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
@@ -76,7 +75,7 @@ ORDER BY ?defined_class_label
         Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
       }).toSeq.flatten
     case disjointWith: OWLDisjointClassesAxiom   =>
-      if (!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) logger.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      if (!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in equivalent class axiom unexpected")
       (for {
         named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
         expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
