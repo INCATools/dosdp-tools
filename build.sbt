@@ -30,7 +30,7 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-core"             % "0.13.0",
       "io.circe"                   %% "circe-generic"          % "0.13.0",
       "io.circe"                   %% "circe-parser"           % "0.13.0",
-      "org.obolibrary.robot"       %  "robot-core"             % "1.5.0" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.obolibrary.robot"       %  "robot-core"             % "1.6.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.pathikrit"       %% "better-files"           % "3.8.0",
       "org.apache.jena"            %  "apache-jena-libs"       % "3.14.0" exclude("org.slf4j", "slf4j-log4j12"),
       "org.backuity.clist"         %% "clist-core"             % "3.5.1",
