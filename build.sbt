@@ -37,7 +37,7 @@ libraryDependencies ++= {
       "org.backuity.clist"         %% "clist-macros"           % "3.5.1" % "provided",
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.6",
       "commons-codec"              %  "commons-codec"          % "1.14",
-      "com.outr"                   %% "scribe-slf4j"           % "2.7.10",
-      "org.scalatest"              %% "scalatest"              % "3.1.1" % Test
+      "com.outr"                   %% "scribe-slf4j"           % "2.7.12",
+      "org.scalatest"              %% "scalatest"              % "3.1.0" % Test
     )
 }
