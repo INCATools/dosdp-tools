@@ -22,7 +22,7 @@ libraryDependencies ++= {
     Seq(
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.15",
       "org.phenoscape"             %% "scowl"                  % "1.3.4",
-      "org.phenoscape"             %% "owlet"                  % "1.7" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.phenoscape"             %% "owlet"                  % "1.8" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
