@@ -26,7 +26,7 @@ libraryDependencies ++= {
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
-      "io.circe"                   %% "circe-yaml"             % "0.12.0",
+      "io.circe"                   %% "circe-yaml"             % "0.13.1",
       "io.circe"                   %% "circe-core"             % "0.13.0",
       "io.circe"                   %% "circe-generic"          % "0.13.0",
       "io.circe"                   %% "circe-parser"           % "0.13.0",
