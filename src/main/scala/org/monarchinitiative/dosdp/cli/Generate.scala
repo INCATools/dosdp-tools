@@ -9,24 +9,24 @@ import org.monarchinitiative.dosdp.{Binding, ExpandedDOSDP, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
-import org.semanticweb.owlapi.model.{AxiomType, IRI, OWLAxiom, OWLOntology}
 import org.semanticweb.owlapi.model.parameters.Imports
+import org.semanticweb.owlapi.model.{AxiomType, IRI, OWLAxiom, OWLOntology}
 
-import scala.collection.JavaConverters._
 import scala.io.Source
+import scala.jdk.CollectionConverters._
 
 object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
 
-  var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
-  var restrictAxioms = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
-  var restrictAxiomsColumn = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
-  var generateDefinedClass = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
-  var addAxiomSourceAnnotation = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
-  var axiomSourceAnnotationProperty = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
+  var infile: File = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
+  var restrictAxioms: String = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
+  var restrictAxiomsColumn: Option[String] = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
+  var generateDefinedClass: Boolean = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
+  var addAxiomSourceAnnotation: Boolean = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
+  var axiomSourceAnnotationProperty: String = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
 
-  val LocalLabelProperty = IRI.create("http://example.org/TSVProvidedLabel")
+  val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run: Unit = {
+  def run(): Unit = {
     val (outputLogicalAxioms, outputAnnotationAxioms) = restrictAxioms match {
       case "all"        => (true, true)
       case "logical"    => (true, false)
@@ -37,9 +37,9 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
     val patternNames = batchPatterns
     val targets = if (patternNames.nonEmpty) {
       scribe.info("Running in batch mode")
-      if (!(new File(templateFile).isDirectory)) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
-      if (!(infile.isDirectory)) throw new UnsupportedOperationException(s"--infile must be a directory in batch mode")
-      if (!(outfile.isDirectory)) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
+      if (!new File(templateFile).isDirectory) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
+      if (!infile.isDirectory) throw new UnsupportedOperationException(s"--infile must be a directory in batch mode")
+      if (!outfile.isDirectory) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
       patternNames.map { pattern =>
         val templateFileName = s"$templateFile/$pattern.yaml"
         val dataExtension = tableFormat.toLowerCase
@@ -63,9 +63,11 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   }
 
   def readFillers(file: File, sepFormat: CSVFormat): (Set[String], Iterator[Map[String, String]]) = {
-    val cleaned = Source.fromFile(file, "utf-8").getLines().filterNot(_.trim.isEmpty).mkString("\n")
+    val source = Source.fromFile(file, "utf-8")
+    val cleaned = source.getLines().filterNot(_.trim.isEmpty).mkString("\n")
+    source.close()
     val iteratorToCheckColumns = CSVReader.open(new StringReader(cleaned))(sepFormat).iteratorWithHeaders
-    val columns = if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next.keySet else Set.empty[String]
+    val columns = if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keySet else Set.empty[String]
     val reader = new StringReader(cleaned)
     columns -> CSVReader.open(reader)(sepFormat).iteratorWithHeaders
   }
@@ -97,7 +99,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         listVars <- dosdp.list_vars.toSeq
         listVar <- listVars.keys
         filler <- row.get(listVar).flatMap(stripToOption)
-      } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
+      } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
       val dataVarBindings = (for {
         dataVars <- dosdp.data_vars.toSeq
         dataVar <- dataVars.keys
@@ -107,9 +109,9 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
         dataListVars <- dosdp.data_list_vars.toSeq
         dataListVar <- dataListVars.keys
         filler <- row.get(dataListVar).flatMap(stripToOption)
-      } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).toSet)).toMap
+      } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
       val additionalBindings = for {
-        (key, value) <- row.filterKeys(k => !knownColumns(k))
+        (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
       val definedClass = if (generateDefinedClass) {
         dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
@@ -120,8 +122,8 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
       val logicalBindings = varBindings + iriBinding
       val readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
-      val initialAnnotationBindings = varBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)) ++
-        listVarBindings.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)) ++
+      val initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
+        listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
         dataVarBindings ++
         dataListBindings +
         iriBinding
@@ -136,7 +138,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
       val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
       logicalAxioms ++ annotationAxioms
-    }).toSet.flatten
+    }).to(Set).flatten
     if (annotateAxiomSource) {
       val patternIRI = dosdp.pattern_iri.map(IRI.create).getOrElse(throw new UnsupportedOperationException("Axiom annotations require a value for pattern IRI"))
       generatedAxioms.map(_ Annotation(AxiomHasSource, patternIRI))
@@ -144,7 +146,7 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
   }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
-    val properties = dosdp.readableIdentifierProperties.toSet
+    val properties = dosdp.readableIdentifierProperties.to(Set)
     val mappings = for {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
       if properties(prop)

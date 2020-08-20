@@ -1,14 +1,14 @@
 package org.monarchinitiative.dosdp
 
 import org.apache.jena.datatypes.TypeMapper
-import org.apache.jena.rdf.model.{AnonId, ResourceFactory, Statement}
 import org.apache.jena.rdf.model.impl.ResourceImpl
+import org.apache.jena.rdf.model.{AnonId, ResourceFactory, Statement}
 import org.openrdf.model.{BNode, Literal, URI, Statement => SesameStatement}
 import org.openrdf.rio.helpers.StatementCollector
 import org.semanticweb.owlapi.model.OWLOntology
 import org.semanticweb.owlapi.rio.RioRenderer
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object SesameJena {
 

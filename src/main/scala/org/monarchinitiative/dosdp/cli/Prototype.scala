@@ -7,13 +7,13 @@ import org.openrdf.model.vocabulary.DCTERMS
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
-import org.semanticweb.owlapi.model.{IRI, OWLAxiom}
+import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty, OWLAxiom}
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object Prototype extends Command(description = "output \"prototype\" axioms using default fillers for a pattern or folder of patterns") with Common {
 
-  val DCTTitle = AnnotationProperty(DCTERMS.TITLE.stringValue)
+  val DCTTitle: OWLAnnotationProperty = AnnotationProperty(DCTERMS.TITLE.stringValue)
 
   def run(): Unit = {
     val possibleFile = File(templateFile)

@@ -3,19 +3,16 @@ package org.monarchinitiative.dosdp.cli
 import java.io.File
 import java.nio.charset.StandardCharsets
 
-import scala.collection.JavaConverters._
-
-import org.backuity.clist._
-import org.monarchinitiative.dosdp._
-import org.monarchinitiative.dosdp.ExpandedDOSDP
-
-import com.github.tototoshi.csv.CSVReader
-
 import better.files._
+import com.github.tototoshi.csv.CSVReader
+import org.backuity.clist._
+import org.monarchinitiative.dosdp.{ExpandedDOSDP, _}
+
+import scala.jdk.CollectionConverters._
 
 object Terms extends Command(description = "dump terms referenced in TSV input and a Dead Simple OWL Design Pattern") with Common {
 
-  var infile = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
+  var infile: File = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
 
   def run(): Unit = {
     val sepFormat = tabularFormat

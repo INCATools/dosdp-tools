@@ -2,6 +2,8 @@ package org.monarchinitiative.dosdp
 
 import org.semanticweb.owlapi.model.IRI
 
+import scala.annotation.tailrec
+
 object OBOPrefixes extends PartialFunction[String, String] {
 
   private val standardPrefixes = Map(
@@ -42,6 +44,7 @@ object Prefixes {
     case _                    => None
   }
 
+  @tailrec
   def nameOrVariableToIRI(name: String, mapper: Map[String, String], prefixes: PartialFunction[String, String]): Option[IRI] = name match {
     case DOSDPVariable(varName) => Option(DOSDP.variableToIRI(varName))
     case Quoted(unquoted)       => nameOrVariableToIRI(unquoted, mapper, prefixes)

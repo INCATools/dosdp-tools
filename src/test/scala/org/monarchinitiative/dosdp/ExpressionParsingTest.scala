@@ -2,7 +2,6 @@ package org.monarchinitiative.dosdp
 
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
-import org.phenoscape.scowl._
 
 class ExpressionParsingTest extends UnitSpec {
 

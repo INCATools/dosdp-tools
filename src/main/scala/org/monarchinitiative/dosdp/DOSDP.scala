@@ -1,12 +1,11 @@
 package org.monarchinitiative.dosdp
 
-import org.phenoscape.scowl._
-import org.semanticweb.owlapi.model.IRI
-import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
 import org.apache.commons.codec.digest.DigestUtils
+import org.phenoscape.scowl._
+import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty}
 
 /**
  * Basic data model for DOSDP schema, for serializing to/from JSON.
@@ -62,7 +61,7 @@ object DOSDP {
 
   val DefinedClassVariable: String = "defined_class"
 
-  def processedVariable(name: String): String = name.replaceAllLiterally(" ", "_")
+  def processedVariable(name: String): String = name.replace(" ", "_")
 
   def variableToIRI(name: String): IRI = IRI.create(variablePrefix + processedVariable(name))
 
@@ -101,7 +100,7 @@ object PrintfText {
       bindings match {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
-          val stringValues = bound.mapValues(_.value)
+          val stringValues = bound.view.mapValues(_.value).toMap
           realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
