@@ -38,6 +38,6 @@ libraryDependencies ++= {
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.6",
       "commons-codec"              %  "commons-codec"          % "1.14",
       "com.outr"                   %% "scribe-slf4j"           % "2.7.12",
-      "org.scalatest"              %% "scalatest"              % "3.1.3" % Test
+      "org.scalatest"              %% "scalatest"              % "3.2.1" % Test
     )
 }
