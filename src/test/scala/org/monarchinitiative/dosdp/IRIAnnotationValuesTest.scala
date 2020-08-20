@@ -1,8 +1,7 @@
 package org.monarchinitiative.dosdp
 
-import cli.Generate
+import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.scowl._
-import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary
 
 class IRIAnnotationValuesTest extends UnitSpec {

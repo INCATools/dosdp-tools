@@ -1,9 +1,9 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.{File, FileWriter, PrintWriter}
+import java.io.{File, PrintWriter}
 
-import scala.collection.JavaConverters._
-import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution, ResultSet}
+import com.github.tototoshi.csv.CSVWriter
+import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, ResultSet}
 import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
 import org.monarchinitiative.dosdp._
@@ -12,23 +12,22 @@ import org.semanticweb.HermiT.ReasonerFactory
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.OWLOntology
-import com.github.tototoshi.csv.CSVWriter
 import uk.ac.manchester.cs.jfact.JFactFactory
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 
 object Query extends Command(description = "query an ontology for terms matching a Dead Simple OWL Design Pattern") with Common {
 
-  var reasonerNameOpt = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.")
-  var printQuery = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
+  var reasonerNameOpt: Option[String] = opt[Option[String]](name = "reasoner", description = "Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.")
+  var printQuery: Boolean = opt[Boolean](name = "print-query", default = false, description = "Print generated query without running against ontology")
 
   def run(): Unit = {
     val sepFormat = tabularFormat
     val patternNames = batchPatterns
     val targets = if (patternNames.nonEmpty) {
       scribe.info("Running in batch mode")
-      if (!(new File(templateFile).isDirectory)) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
-      if (!(outfile.isDirectory)) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
+      if (!new File(templateFile).isDirectory) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
+      if (!outfile.isDirectory) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
       patternNames.map { pattern =>
         val templateFileName = s"$templateFile/$pattern.yaml"
         val outFileName = s"$outfile/$pattern.rq"

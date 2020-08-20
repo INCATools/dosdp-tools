@@ -1,11 +1,12 @@
 package org.monarchinitiative.dosdp
 
+import org.monarchinitiative.dosdp.AxiomType
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.{ManchesterOWLSyntaxClassExpressionParser, ManchesterOWLSyntaxInlineAxiomParser}
 import org.semanticweb.owlapi.model._
 
-import scala.collection.JavaConverters._
+import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex.Match
 
 /**
@@ -73,7 +74,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   def varExpressions: Map[String, OWLClassExpression] = {
     val vars = dosdp.vars.getOrElse(Map.empty)
-    vars.mapValues(expressionParser.parse)
+    vars.view.mapValues(expressionParser.parse).toMap
   }
 
   private def expressionFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] =

@@ -17,14 +17,14 @@ trait Common extends Command {
 
   def run(): Unit
 
-  var ontOpt = opt[Option[String]](name = "ontology", description = "OWL ontology (provide labels, query axioms)")
-  var catalogFileOpt = opt[Option[File]](name = "catalog", description = "catalog file to use for resolving ontology locations")
-  var templateFile = opt[String](name = "template", default = "dosdp.yaml", description = "DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.")
-  var prefixesFileOpt = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
-  var oboPrefixes = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
-  var outfile = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
-  var tableFormat = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV (default) or CSV")
-  var batchPatterns = opt[Seq[String]](name = "batch-patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
+  var ontOpt: Option[String] = opt[Option[String]](name = "ontology", description = "OWL ontology (provide labels, query axioms)")
+  var catalogFileOpt: Option[File] = opt[Option[File]](name = "catalog", description = "catalog file to use for resolving ontology locations")
+  var templateFile: String = opt[String](name = "template", default = "dosdp.yaml", description = "DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.")
+  var prefixesFileOpt: Option[File] = opt[Option[File]](name = "prefixes", default = None, description = "CURIE prefixes (YAML)")
+  var oboPrefixes: Boolean = opt[Boolean](name = "obo-prefixes", default = false, description = "Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio.")
+  var outfile: File = opt[File](name = "outfile", default = new File("dosdp.out"), description = "Output file (OWL or TSV)")
+  var tableFormat: String = opt[String](name = "table-format", default = "tsv", description = "Tabular format: TSV (default) or CSV")
+  var batchPatterns: Seq[String] = opt[Seq[String]](name = "batch-patterns", description = "List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)", default = Nil)
 
   def ontologyOpt: Option[OWLOntology] = ontOpt.map { ontPath =>
     val ontIRI = if (ontPath.startsWith("http")) IRI.create(ontPath) else IRI.create(new File(ontPath))
@@ -39,7 +39,7 @@ trait Common extends Command {
     val possibleFile = new File(location)
     val source = if (possibleFile.exists) Source.fromFile(possibleFile, "UTF-8")
     else Source.fromURL(location, "UTF-8")
-    parser.parse(source.mkString).right.flatMap(json => json.as[DOSDP]) match {
+    parser.parse(source.mkString).flatMap(json => json.as[DOSDP]) match {
       case Right(dosdp) => dosdp
       case Left(error)  =>
         scribe.error(s"Failed to parse pattern:\n${error.getMessage}")
@@ -50,8 +50,8 @@ trait Common extends Command {
   def prefixes: PartialFunction[String, String] = {
     val specifiedPrefixes = (for {
       prefixesFile <- prefixesFileOpt
-      prefixesJson <- parser.parse(new FileReader(prefixesFile)).right.toOption
-      prefixMap <- prefixesJson.as[Map[String, String]].right.toOption
+      prefixesJson <- parser.parse(new FileReader(prefixesFile)).toOption
+      prefixMap <- prefixesJson.as[Map[String, String]].toOption
     } yield prefixMap).getOrElse(Map.empty)
     if (oboPrefixes) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
   }
