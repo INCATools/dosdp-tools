@@ -3,7 +3,7 @@ package org.monarchinitiative.dosdp.cli
 import better.files._
 import org.backuity.clist._
 import org.monarchinitiative.dosdp._
-import org.openrdf.model.vocabulary.DCTERMS
+import org.eclipse.rdf4j.model.vocabulary.DCTERMS
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat

@@ -130,6 +130,6 @@ ORDER BY ?defined_class_label
       (node, (unionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
   }
 
-  private def genVar: String = "?" + UUID.randomUUID.toString.replaceAllLiterally("-", "")
+  private def genVar: String = "?" + UUID.randomUUID.toString.replace("-", "")
 
 }
