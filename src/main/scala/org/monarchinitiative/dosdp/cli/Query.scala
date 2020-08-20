@@ -2,7 +2,7 @@ package org.monarchinitiative.dosdp.cli
 
 import java.io.{File, PrintWriter}
 
-import com.github.tototoshi.csv.CSVWriter
+import com.github.tototoshi.csv.{CSVWriter, TSVFormat}
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, ResultSet}
 import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
@@ -30,7 +30,10 @@ object Query extends Command(description = "query an ontology for terms matching
       if (!outfile.isDirectory) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
       patternNames.map { pattern =>
         val templateFileName = s"$templateFile/$pattern.yaml"
-        val outFileName = s"$outfile/$pattern.rq"
+        val suffix = if (printQuery) "rq"
+        else if (sepFormat.isInstanceOf[TSVFormat]) "tsv"
+        else "csv"
+        val outFileName = s"$outfile/$pattern.$suffix"
         QueryTarget(templateFileName, outFileName)
       }
     } else List(QueryTarget(templateFile, outfile.toString))
