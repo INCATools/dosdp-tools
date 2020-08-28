@@ -3,7 +3,7 @@ package org.monarchinitiative.dosdp.cli
 import java.io.{File, PrintWriter}
 
 import com.github.tototoshi.csv.{CSVWriter, TSVFormat}
-import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, ResultSet}
+import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.ModelFactory
 import org.backuity.clist._
 import org.monarchinitiative.dosdp._
@@ -63,12 +63,10 @@ object Query extends Command(description = "query an ontology for terms matching
         writer.close()
       } else {
         val ont = ontologyOpt.getOrElse(throw new RuntimeException("Can't run query; no ontology provided."))
-        val results = performQuery(processedQuery, ont)
-        val columns = results.getResultVars.asScala.toList
+        val (columns, results) = performQuery(processedQuery, ont)
         val writer = CSVWriter.open(target.outputFile, "utf-8")(sepFormat)
         writer.writeRow(columns)
-        while (results.hasNext) {
-          val qs = results.next()
+        results.foreach { qs =>
           writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse("")))
         }
         writer.close()
@@ -77,7 +75,7 @@ object Query extends Command(description = "query an ontology for terms matching
     reasonerOpt.foreach(_.dispose())
   }
 
-  def performQuery(sparql: String, ont: OWLOntology): ResultSet = {
+  def performQuery(sparql: String, ont: OWLOntology): (List[String], List[QuerySolution]) = {
     val model = ModelFactory.createDefaultModel()
     val allAxioms = for {
       completeOnt <- ont.getImportsClosure.asScala
@@ -87,7 +85,12 @@ object Query extends Command(description = "query an ontology for terms matching
     val triples = SesameJena.ontologyAsTriples(manager.createOntology(allAxioms.asJava))
     model.add(triples.toList.asJava)
     val query = QueryFactory.create(sparql)
-    QueryExecutionFactory.create(query, model).execSelect()
+    val qe = QueryExecutionFactory.create(query, model)
+    val resultSet = qe.execSelect()
+    val columns = resultSet.getResultVars.asScala.toList
+    val results = resultSet.asScala.toList
+    qe.close()
+    (columns, results)
   }
 
   private final case class QueryTarget(templateFile: String, outputFile: String)
