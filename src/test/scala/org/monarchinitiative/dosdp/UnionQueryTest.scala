@@ -7,8 +7,6 @@ import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model.IRI
 
-import scala.jdk.CollectionConverters._
-
 class UnionQueryTest extends UnitSpec {
 
   val term = Class("http://purl.obolibrary.org/obo/ONT_0000001")
@@ -28,7 +26,7 @@ class UnionQueryTest extends UnitSpec {
   val ontology = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(new File("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn")))
 
   "Unions" should "be queryable" in {
-    val results = Query.performQuery(sparqlQuery, ontology).asScala.toList
+    val results = Query.performQuery(sparqlQuery, ontology)._2
     results.foreach { qs =>
       qs.getResource("defined_class").getURI shouldEqual "http://example.org#X"
       qs.getResource("item").getURI shouldEqual "http://example.org#C"
