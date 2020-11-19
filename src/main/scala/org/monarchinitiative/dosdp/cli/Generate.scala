@@ -84,7 +84,8 @@ object Generate extends Logging {
           val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
           DOSDP.computeDefinedIRI(patternIRI, bindingsForDefinedClass).toString
         }.toRight(DOSDPError("Pattern must have an IRI if generate-defined-class is requested."))
-      } else Right(row(DOSDP.DefinedClassVariable).trim)
+      } else row.get(DOSDP.DefinedClassVariable).map(_.trim)
+        .toRight(DOSDPError(s"No input column provided for ${DOSDP.DefinedClassVariable}"))
       val maybeAxioms = for {
         definedClass <- maybeDefinedClass
         iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
