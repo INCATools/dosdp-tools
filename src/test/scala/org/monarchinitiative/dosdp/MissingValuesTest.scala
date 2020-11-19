@@ -3,15 +3,22 @@ package org.monarchinitiative.dosdp
 import java.io.File
 
 import com.github.tototoshi.csv.TSVFormat
-import org.monarchinitiative.dosdp.cli.Generate
+import org.monarchinitiative.dosdp.cli.{Config, Generate}
+import zio.test.Assertion._
+import zio.test._
 
-class MissingValuesTest extends UnitSpec {
+object MissingValuesTest extends DefaultRunnableSpec {
 
-  "Missing columns and cell values" should "be handled by dropping outputs" in {
-    val dosdp = Generate.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.yaml")
-    val (_, fillers) = Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.tsv"), new TSVFormat {})
-    val axioms = Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false)
-    // No exceptions should be thrown
+  def spec = suite("Missing columns and cell values") {
+    testM("Missing columns and cell values should be handled by dropping outputs") {
+      for {
+        dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.yaml")
+        columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.tsv"), new TSVFormat {})
+        (_, fillers) = columnsAndFillers
+        // should not fail from missing values
+        axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
+      } yield assert(axioms)(isNonEmpty)
+    }
   }
 
 }

@@ -1,19 +1,23 @@
 package org.monarchinitiative.dosdp
 
-class RegexTest extends UnitSpec {
+import zio.test.Assertion._
+import zio.test._
 
-  "RegexSub" should "replace values correctly" in {
-    val definition = RegexSub("regulated_activity", "regulated_activity_munged", "(.+) activity", raw"\1")
-    val eDefinition = ExpandedRegexSub(definition)
-    eDefinition.substitute("kinase activity") shouldEqual "kinase"
-    eDefinition.substitute("foo") shouldEqual "foo"
-    eDefinition.substitute("activity kinase") shouldEqual "activity kinase"
-  }
+object RegexTest extends DefaultRunnableSpec {
 
-  "RegexSub" should "replace multiple values correctly" in {
-    val definition = RegexSub("regulated_activity", "regulated_activity_munged", "(.+) activity (.+)", raw"\2 and then \1")
-    val eDefinition = ExpandedRegexSub(definition)
-    eDefinition.substitute("kinase activity promoter") shouldEqual "promoter and then kinase"
-  }
+  def spec = suite("Missing columns and cell values")(
+    test("RegexSub should replace values correctly") {
+      val definition = RegexSub("regulated_activity", "regulated_activity_munged", "(.+) activity", raw"\1")
+      val eDefinition = ExpandedRegexSub(definition)
+      assert(eDefinition.substitute("kinase activity"))(equalTo("kinase")) &&
+        assert(eDefinition.substitute("foo"))(equalTo("foo")) &&
+        assert(eDefinition.substitute("activity kinase"))(equalTo("activity kinase"))
+    },
+    test("RegexSub should replace multiple values correctly") {
+      val definition = RegexSub("regulated_activity", "regulated_activity_munged", "(.+) activity (.+)", raw"\2 and then \1")
+      val eDefinition = ExpandedRegexSub(definition)
+      assert(eDefinition.substitute("kinase activity promoter"))(equalTo("promoter and then kinase"))
+    }
+  )
 
 }
