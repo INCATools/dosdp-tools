@@ -1,89 +1,55 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.{File, StringReader}
+import java.io.{File, IOException, StringReader}
 
 import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
-import org.backuity.clist._
-import org.monarchinitiative.dosdp.{Binding, ExpandedDOSDP, _}
+import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
-import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
+import org.semanticweb.owlapi.model._
 import org.semanticweb.owlapi.model.parameters.Imports
-import org.semanticweb.owlapi.model.{AxiomType, IRI, OWLAxiom, OWLOntology}
+import zio._
+import zio.blocking._
 
 import scala.io.Source
 import scala.jdk.CollectionConverters._
 
-object Generate extends Command(description = "generate ontology axioms for TSV input to a Dead Simple OWL Design Pattern") with Common {
-
-  var infile: File = opt[File](name = "infile", default = new File("fillers.tsv"), description = "Input file (TSV or CSV)")
-  var restrictAxioms: String = opt[String](name = "restrict-axioms-to", default = "all", description = "Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
-  var restrictAxiomsColumn: Option[String] = opt[Option[String]](name = "restrict-axioms-column", description = "Data column containing local axiom output restrictions")
-  var generateDefinedClass: Boolean = opt[Boolean](name = "generate-defined-class", description = "Computed defined class IRI from pattern IRI and variable fillers", default = false)
-  var addAxiomSourceAnnotation: Boolean = opt[Boolean](name = "add-axiom-source-annotation", description = "Add axiom annotation to generated axioms linking to pattern IRI", default = false)
-  var axiomSourceAnnotationProperty: String = opt[String](name = "axiom-source-annotation-property", description = "IRI for annotation property to use to link generated axioms to pattern IRI", default = "http://www.geneontology.org/formats/oboInOwl#source")
+object Generate extends Logging {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(): Unit = {
-    val (outputLogicalAxioms, outputAnnotationAxioms) = restrictAxioms match {
-      case "all"        => (true, true)
-      case "logical"    => (true, false)
-      case "annotation" => (false, true)
-      case other        => throw new UnsupportedOperationException(s"Invalid argument for restrict-axioms-to: $other")
-    }
-    val sepFormat = tabularFormat
-    val patternNames = batchPatterns
-    val targets = if (patternNames.nonEmpty) {
-      scribe.info("Running in batch mode")
-      if (!new File(templateFile).isDirectory) throw new UnsupportedOperationException(s"--template must be a directory in batch mode")
-      if (!infile.isDirectory) throw new UnsupportedOperationException(s"--infile must be a directory in batch mode")
-      if (!outfile.isDirectory) throw new UnsupportedOperationException(s"--outfile must be a directory in batch mode")
-      patternNames.map { pattern =>
-        val templateFileName = s"$templateFile/$pattern.yaml"
-        val dataExtension = tableFormat.toLowerCase
-        val dataFileName = s"$infile/$pattern.$dataExtension"
-        val outFileName = s"$outfile/$pattern.ofn"
-        GenerateTarget(templateFileName, dataFileName, outFileName)
+  def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] =
+    for {
+      axiomsOutput <- ZIO.fromEither(axiomsOutputChoice(config))
+      (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutput
+      ontologyOpt <- config.common.ontologyOpt
+      prefixes <- config.common.prefixesMap
+      sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
+      axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
+        .orElseFail(DOSDPError("Couldn't create IRI for axiom source annotation property."))
+      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
+      _ <- ZIO.foreach_(targets) { target =>
+        for {
+          _ <- logInfo(s"Processing pattern ${target.templateFile}")
+          dosdp <- Config.inputDOSDPFrom(target.templateFile)
+          columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
+          (columns, fillers) = columnsAndFillers
+          missingColumns = dosdp.allVars.diff(columns)
+          _ <- ZIO.foreach_(missingColumns)(c => logWarn(s"Input is missing column for pattern variable <$c>"))
+          axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool)
+          _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
+        } yield ()
       }
-    } else List(GenerateTarget(templateFile, infile.toString, outfile.toString))
-    targets.foreach { target =>
-      scribe.info(s"Processing pattern ${target.templateFile}")
-      val dosdp = inputDOSDPFrom(target.templateFile)
-      val (columns, fillers) = readFillers(new File(target.inputFile), sepFormat)
-      val missingColumns = dosdp.allVars.diff(columns)
-      missingColumns.foreach(column => scribe.warn(s"Input is missing column for pattern variable <$column>"))
-      val outputFile = new File(target.outputFile)
-      val axioms: Set[OWLAxiom] = renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumn, addAxiomSourceAnnotation)
-      val manager = OWLManager.createOWLOntologyManager()
-      val ont = manager.createOntology(axioms.asJava)
-      manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outputFile))
-    }
-  }
+    } yield ()
 
-  def readFillers(file: File, sepFormat: CSVFormat): (Set[String], Iterator[Map[String, String]]) = {
-    val source = Source.fromFile(file, "utf-8")
-    val cleaned = source.getLines().filterNot(_.trim.isEmpty).mkString("\n")
-    source.close()
-    val iteratorToCheckColumns = CSVReader.open(new StringReader(cleaned))(sepFormat).iteratorWithHeaders
-    val columns = if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keySet else Set.empty[String]
-    val reader = new StringReader(cleaned)
-    columns -> CSVReader.open(reader)(sepFormat).iteratorWithHeaders
-  }
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean): IO[DOSDPError, Set[OWLAxiom]] =
+    renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] =
-    renderPattern(dosdp, prefixes, Seq(fillers).iterator, ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource)
-
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Iterator[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean): Set[OWLAxiom] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean): IO[DOSDPError, Set[OWLAxiom]] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(eDOSDP, ont)).getOrElse(Map.empty)
-    val AxiomHasSource = Prefixes.idToIRI(axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_))
-      .getOrElse(throw new UnsupportedOperationException("Couldn't create IRI for axiom source annotation property."))
     val knownColumns = dosdp.allVars
-    val generatedAxioms: Set[OWLAxiom] = (for {
-      row <- fillers
-    } yield {
+    val generatedAxioms = ZIO.foreach(fillers) { row =>
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
@@ -113,37 +79,95 @@ object Generate extends Command(description = "generate ontology axioms for TSV 
       val additionalBindings = for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
-      val definedClass = if (generateDefinedClass) {
+      val maybeDefinedClass = if (generateDefinedClass) {
         dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
           val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
           DOSDP.computeDefinedIRI(patternIRI, bindingsForDefinedClass).toString
-        }.getOrElse(throw new UnsupportedOperationException("Pattern must have an IRI if generate-defined-class is requested."))
-      } else row(DOSDP.DefinedClassVariable).trim
-      val iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
-      val logicalBindings = varBindings + iriBinding
-      val readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
-      val initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        dataVarBindings ++
-        dataListBindings +
-        iriBinding
-      val annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings)) ++ additionalBindings
-      val (localOutputLogicalAxioms, localOutputAnnotationAxioms) = restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim).map {
-        case "all"        => (true, true)
-        case "logical"    => (true, false)
-        case "annotation" => (false, true)
-        case ""           => (outputLogicalAxioms, outputAnnotationAxioms)
-        case other        => throw new UnsupportedOperationException(s"Invalid value for restrict-axioms-column: $other")
-      }.getOrElse((outputLogicalAxioms, outputAnnotationAxioms))
-      val logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
-      val annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
-      logicalAxioms ++ annotationAxioms
-    }).to(Set).flatten
-    if (annotateAxiomSource) {
-      val patternIRI = dosdp.pattern_iri.map(IRI.create).getOrElse(throw new UnsupportedOperationException("Axiom annotations require a value for pattern IRI"))
-      generatedAxioms.map(_ Annotation(AxiomHasSource, patternIRI))
-    } else generatedAxioms
+        }.toRight(DOSDPError("Pattern must have an IRI if generate-defined-class is requested."))
+      } else row.get(DOSDP.DefinedClassVariable).map(_.trim)
+        .toRight(DOSDPError(s"No input column provided for ${DOSDP.DefinedClassVariable}"))
+      val maybeAxioms = for {
+        definedClass <- maybeDefinedClass
+        iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
+        logicalBindings = varBindings + iriBinding
+        readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
+        initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
+          listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
+          dataVarBindings ++
+          dataListBindings +
+          iriBinding
+        annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings)) ++ additionalBindings
+        localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms <- restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim).map {
+          case "all"        => Right((true, true))
+          case "logical"    => Right((true, false))
+          case "annotation" => Right((false, true))
+          case ""           => Right((outputLogicalAxioms, outputAnnotationAxioms))
+          case other        => Left(DOSDPError(s"Invalid value for restrict-axioms-column: $other"))
+        }.getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms)))
+        (localOutputLogicalAxioms, localOutputAnnotationAxioms) = localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms
+        logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
+        annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
+      } yield logicalAxioms ++ annotationAxioms
+      ZIO.fromEither(maybeAxioms)
+    }
+    generatedAxioms.flatMap { axioms =>
+      val allAxioms = axioms.to(Set).flatten
+      if (annotateAxiomSource) {
+        ZIO.fromOption {
+          dosdp.pattern_iri.map(IRI.create).map { patternIRI =>
+            allAxioms.map(_.Annotation(axiomSourceProperty, patternIRI))
+          }
+        }.orElseFail(DOSDPError("Axiom annotations require a value for pattern IRI"))
+      }
+      else ZIO.succeed(allAxioms)
+    }
   }
+
+  private def determineTargets(config: GenerateConfig): ZIO[Blocking, Throwable, List[GenerateTarget]] = {
+    val patternNames = config.common.batchPatterns.items
+    if (patternNames.nonEmpty) for {
+      _ <- logInfo("Running in batch mode")
+      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
+        ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
+      _ <- ZIO.ifM(isDirectory(config.infile))(ZIO.unit,
+        ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
+      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
+        ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+    } yield patternNames.map { pattern =>
+      val templateFileName = s"${config.common.template}/$pattern.yaml"
+      val dataExtension = config.common.tableFormat.toLowerCase
+      val dataFileName = s"${config.infile}/$pattern.$dataExtension"
+      val outFileName = s"${config.common.outfile}/$pattern.ofn"
+      GenerateTarget(templateFileName, dataFileName, outFileName)
+    }
+    else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
+  }
+
+  private def isDirectory(path: String): ZIO[Blocking, IOException, Boolean] = effectBlockingIO(new File(path).isDirectory)
+
+  def readFillers(file: File, sepFormat: CSVFormat): ZIO[Blocking, DOSDPError, (Set[String], List[Map[String, String]])] =
+    for {
+      cleaned <- effectBlockingIO(Source.fromFile(file, "utf-8")).bracketAuto { source =>
+        effectBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
+      }.mapError(e => DOSDPError("Unable to read input table", e))
+      columns <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
+        ZIO.effectTotal {
+          val iteratorToCheckColumns = reader.iteratorWithHeaders
+          if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keySet else Set.empty[String]
+        }
+      }
+      data <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
+        ZIO.effectTotal(reader.iteratorWithHeaders.toList)
+      }
+    } yield columns -> data
+
+  private def axiomsOutputChoice(config: GenerateConfig): Either[DOSDPError, (Boolean, Boolean)] =
+    config.restrictAxiomsTo match {
+      case "all"        => Right((true, true))
+      case "logical"    => Right((true, false))
+      case "annotation" => Right((false, true))
+      case other        => Left(DOSDPError(s"Invalid argument for restrict-axioms-to: $other"))
+    }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
     val properties = dosdp.readableIdentifierProperties.to(Set)

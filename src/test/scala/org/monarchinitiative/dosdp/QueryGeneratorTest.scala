@@ -1,27 +1,30 @@
 package org.monarchinitiative.dosdp
 
-import java.io.InputStreamReader
-
-import io.circe.generic.auto._
-import io.circe.yaml.parser
 import org.apache.jena.query.QueryFactory
+import org.apache.jena.sys.JenaSystem
+import org.monarchinitiative.dosdp.cli.Config
+import zio._
+import zio.test.Assertion._
+import zio.test._
 
 import scala.jdk.CollectionConverters._
 
-class QueryGeneratorTest extends UnitSpec {
+object QueryGeneratorTest extends DefaultRunnableSpec {
 
-  "Defined class" should "be first column" in {
-    val dosdp = (for {
-      json <- parser.parse(new InputStreamReader(getClass.getResourceAsStream("QueryGeneratorTest.yaml"))).toOption
-      pattern <- json.as[DOSDP].toOption
-    } yield pattern).getOrElse(???)
-    val prefixes = (for {
-      prefixesJson <- parser.parse(new InputStreamReader(getClass.getResourceAsStream("StandardPrefixes.yaml"))).toOption
-      prefixMap <- prefixesJson.as[Map[String, String]].toOption
-    } yield prefixMap).getOrElse(Map.empty)
-    val variables = QueryFactory.create(SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))).getProjectVars.asScala
-    variables(0).getVarName shouldEqual "defined_class"
-    variables(1).getVarName shouldEqual "defined_class_label"
+  private val prefixes = Map(
+    "BFO" -> "http://purl.obolibrary.org/obo/BFO_",
+    "RO" -> "http://purl.obolibrary.org/obo/RO_"
+  )
+
+  def spec = suite("Test query generator") {
+    testM("Defined class should be first column") {
+      for {
+        _ <- ZIO.effectTotal(JenaSystem.init())
+        dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorTest.yaml")
+        variables <- ZIO.effect(QueryFactory.create(SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))).getProjectVars.asScala)
+      } yield assert(variables(0).getVarName)(equalTo("defined_class")) &&
+        assert(variables(1).getVarName)(equalTo("defined_class_label"))
+    }
   }
 
 }
