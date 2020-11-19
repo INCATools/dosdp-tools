@@ -14,7 +14,7 @@ object Terms {
   def run(config: TermsConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     for {
       dosdp <- config.common.inputDOSDP
-      prefixes <- config.common.prefixes
+      prefixes <- config.common.prefixesMap
       eDOSDP = ExpandedDOSDP(dosdp, prefixes)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
       patternAxioms = eDOSDP.filledLogicalAxioms(None, None)
@@ -23,8 +23,8 @@ object Terms {
         .mapError(e => DOSDPError(s"Could not read fillers file at ${config.infile}", e))
       identifiers = rows.flatMap(identifiersForRow(_, dosdp)).to(Set)
       iris = patternTerms ++ identifiers.flatMap(Prefixes.idToIRI(_, prefixes)) //FIXME should we report failure to expand to IRI?
-      _ <- ZIO.effect(config.common.outfilePath.toFile.overwrite("").appendLines(iris.map(_.toString).toSeq: _*)(StandardCharsets.UTF_8))
-        .mapError(e => DOSDPError(s"Failed writing output file at ${config.common.outfilePath}", e))
+      _ <- ZIO.effect(config.common.outfile.toFile.overwrite("").appendLines(iris.map(_.toString).toSeq: _*)(StandardCharsets.UTF_8))
+        .mapError(e => DOSDPError(s"Failed writing output file at ${config.common.outfile}", e))
     } yield ()
   }
 

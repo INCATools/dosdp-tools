@@ -23,7 +23,7 @@ object Generate extends Logging {
       axiomsOutput <- ZIO.fromEither(axiomsOutputChoice(config))
       (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutput
       ontologyOpt <- config.common.ontologyOpt
-      prefixes <- config.common.prefixes
+      prefixes <- config.common.prefixesMap
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
       axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
         .orElseFail(DOSDPError("Couldn't create IRI for axiom source annotation property."))
@@ -36,7 +36,7 @@ object Generate extends Logging {
           (columns, fillers) = columnsAndFillers
           missingColumns = dosdp.allVars.diff(columns)
           _ <- ZIO.foreach_(missingColumns)(c => logWarn(s"Input is missing column for pattern variable <$c>"))
-          axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation, axiomSourceProperty, config.generateDefinedClass)
+          axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool)
           _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
         } yield ()
       }
@@ -123,23 +123,23 @@ object Generate extends Logging {
   }
 
   private def determineTargets(config: GenerateConfig): ZIO[Blocking, Throwable, List[GenerateTarget]] = {
-    val patternNames = config.common.batchPatterns
+    val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- logInfo("Running in batch mode")
-      _ <- ZIO.ifM(isDirectory(config.common.templateFile))(ZIO.unit,
+      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
       _ <- ZIO.ifM(isDirectory(config.infile))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.common.outfilePath))(ZIO.unit,
+      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
-      val templateFileName = s"${config.common.templateFile}/$pattern.yaml"
+      val templateFileName = s"${config.common.template}/$pattern.yaml"
       val dataExtension = config.common.tableFormat.toLowerCase
       val dataFileName = s"${config.infile}/$pattern.$dataExtension"
-      val outFileName = s"${config.common.outfilePath}/$pattern.ofn"
+      val outFileName = s"${config.common.outfile}/$pattern.ofn"
       GenerateTarget(templateFileName, dataFileName, outFileName)
     }
-    else ZIO.succeed(List(GenerateTarget(config.common.templateFile, config.infile, config.common.outfilePath)))
+    else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
   }
 
   private def isDirectory(path: String): ZIO[Blocking, IOException, Boolean] = effectBlockingIO(new File(path).isDirectory)
@@ -161,7 +161,7 @@ object Generate extends Logging {
     } yield columns -> data
 
   private def axiomsOutputChoice(config: GenerateConfig): Either[DOSDPError, (Boolean, Boolean)] =
-    config.restrictAxioms match {
+    config.restrictAxiomsTo match {
       case "all"        => Right((true, true))
       case "logical"    => Right((true, false))
       case "annotation" => Right((false, true))

@@ -20,7 +20,7 @@ import scala.jdk.CollectionConverters._
 object Query extends Logging {
 
   def run(config: QueryConfig): ZIO[ZEnv, DOSDPError, Unit] = {
-    val reasonerFactoryOptZ = ZIO.foreach(config.reasonerNameOpt) { reasonerArg =>
+    val reasonerFactoryOptZ = ZIO.foreach(config.reasoner) { reasonerArg =>
       reasonerArg.toLowerCase match {
         case "elk"    => ZIO.succeed(new ElkReasonerFactory())
         case "hermit" => ZIO.succeed(new ReasonerFactory())
@@ -53,7 +53,7 @@ object Query extends Logging {
     for {
       _ <- logInfo(s"Processing pattern ${target.templateFile}")
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
-      prefixes <- config.common.prefixes
+      prefixes <- config.common.prefixesMap
       sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
       processedQuery = reasonerOpt.map { reasoner =>
         new Owlet(reasoner).expandQueryString(sparqlQuery)
@@ -72,7 +72,7 @@ object Query extends Logging {
         .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield ()
     logInfo(s"Processing pattern ${target.templateFile}") *>
-      (if (config.printQuery) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
+      (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
 
   private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]) =
@@ -80,24 +80,24 @@ object Query extends Logging {
       ZIO.effect(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
 
-  private def determineTargets(config: QueryConfig) = {
+  private def determineTargets(config: QueryConfig): Task[List[QueryTarget]] = {
     val sepFormat = Config.tabularFormat(config.common.tableFormat)
-    val patternNames = config.common.batchPatterns
+    val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- logInfo("Running in batch mode")
-      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.templateFile).isDirectory))(ZIO.unit,
+      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.template).isDirectory))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.outfilePath).isDirectory))(ZIO.unit,
+      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.outfile).isDirectory))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
-      val templateFileName = s"${config.common.templateFile}/$pattern.yaml"
-      val suffix = if (config.printQuery) "rq"
+      val templateFileName = s"${config.common.template}/$pattern.yaml"
+      val suffix = if (config.printQuery.bool) "rq"
       else if (sepFormat.isInstanceOf[TSVFormat]) "tsv"
       else "csv"
-      val outFileName = s"${config.common.outfilePath}/$pattern.$suffix"
+      val outFileName = s"${config.common.outfile}/$pattern.$suffix"
       QueryTarget(templateFileName, outFileName)
     }
-    else ZIO.succeed(List(QueryTarget(config.common.templateFile, config.common.outfilePath)))
+    else ZIO.succeed(List(QueryTarget(config.common.template, config.common.outfile)))
   }
 
   def performQuery(sparql: String, ont: OWLOntology): Task[(List[String], List[QuerySolution])] = {

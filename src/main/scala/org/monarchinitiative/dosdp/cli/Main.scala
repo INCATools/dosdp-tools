@@ -7,6 +7,10 @@ import zio._
 
 object Main extends ZCommandApp[Config] {
 
+  override def appName: String = "dosdp-tools"
+
+  override def progName: String = "dosdp-tools"
+
   override def run(config: Config, args: RemainingArgs): ZIO[ZEnv, Nothing, ExitCode] =
     ZIO.effectTotal(JenaSystem.init()) *>
       ZIO.effectTotal(scribe.Logger.root.clearHandlers().clearModifiers().withHandler(minimumLevel = Some(Level.Info)).replace()) *>

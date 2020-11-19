@@ -14,7 +14,7 @@ object Prototype {
   private val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
   def run(config: PrototypeConfig): ZIO[ZEnv, DOSDPError, Unit] = {
-    val possibleFile = File(config.common.templateFile)
+    val possibleFile = File(config.common.template)
     for {
       isDir <- ZIO.effect(possibleFile.isDirectory).mapError(e => DOSDPError(s"Unable to read input at $possibleFile", e))
       filenames <- if (isDir) {
@@ -23,16 +23,16 @@ object Prototype {
             f.extension(false, false, true).exists(e => (e == "yaml") || (e == "yml"))
           }.map(_.toString).toSet
         }.mapError(e => DOSDPError(s"Couldn't list files in $possibleFile", e))
-      } else ZIO.succeed(Set(config.common.templateFile))
+      } else ZIO.succeed(Set(config.common.template))
       dosdps <- ZIO.foreach(filenames)(f => Config.inputDOSDPFrom(f))
       axioms <- ZIO.foreach(dosdps)(dosdp => axiomsFor(dosdp, config)).map(_.flatten)
-      _ <- Utilities.saveAxiomsToOntology(axioms, config.common.outfilePath)
+      _ <- Utilities.saveAxiomsToOntology(axioms, config.common.outfile)
     } yield ()
   }
 
   private def axiomsFor(dosdp: DOSDP, config: PrototypeConfig): ZIO[Blocking, DOSDPError, Set[OWLAxiom]] =
     for {
-      prefixes <- config.common.prefixes
+      prefixes <- config.common.prefixesMap
       ontologyOpt <- config.common.ontologyOpt
       iri <- ZIO.fromOption(dosdp.pattern_iri).orElseFail(DOSDPError("Pattern must have pattern IRI for prototype command"))
       fillers = dosdp.vars.getOrElse(Map.empty) ++
