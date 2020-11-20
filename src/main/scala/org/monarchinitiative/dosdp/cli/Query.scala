@@ -15,6 +15,7 @@ import org.semanticweb.owlapi.model.OWLOntology
 import org.semanticweb.owlapi.reasoner.{OWLReasoner, OWLReasonerFactory}
 import uk.ac.manchester.cs.jfact.JFactFactory
 import zio._
+import zio.blocking.Blocking
 
 import scala.jdk.CollectionConverters._
 
@@ -81,7 +82,7 @@ object Query extends Logging {
       ZIO.effect(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
 
-  private def determineTargets(config: QueryConfig): Task[List[QueryTarget]] = {
+  private def determineTargets(config: QueryConfig): RIO[Blocking, List[QueryTarget]] = {
     val sepFormat = Config.tabularFormat(config.common.tableFormat)
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {

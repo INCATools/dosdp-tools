@@ -1,6 +1,7 @@
 package org.monarchinitiative.dosdp
 
 import java.io.{File, IOException}
+import java.nio.file.{Files, Paths}
 
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.obolibrary.robot.CatalogXmlIRIMapper
@@ -38,6 +39,6 @@ object Utilities {
     } yield ontology
   }
 
-  def isDirectory(path: String): ZIO[Blocking, IOException, Boolean] = effectBlockingIO(new File(path).isDirectory)
+  def isDirectory(path: String): RIO[Blocking, Boolean] = effectBlocking(Files.isDirectory(Paths.get(path)))
 
 }
