@@ -5,6 +5,7 @@ import java.io.{File, PrintWriter}
 import com.github.tototoshi.csv.{CSVWriter, TSVFormat}
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.ModelFactory
+import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.{ExpandedDOSDP, SPARQL, SesameJena}
 import org.phenoscape.owlet.Owlet
 import org.semanticweb.HermiT.ReasonerFactory
@@ -85,9 +86,9 @@ object Query extends Logging {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- logInfo("Running in batch mode")
-      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.template).isDirectory))(ZIO.unit,
+      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(ZIO.effect(!new File(config.common.outfile).isDirectory))(ZIO.unit,
+      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"

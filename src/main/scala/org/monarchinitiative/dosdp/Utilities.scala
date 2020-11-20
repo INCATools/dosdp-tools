@@ -1,6 +1,6 @@
 package org.monarchinitiative.dosdp
 
-import java.io.File
+import java.io.{File, IOException}
 
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.obolibrary.robot.CatalogXmlIRIMapper
@@ -37,5 +37,7 @@ object Utilities {
         .mapError(e => DOSDPError(s"Failed loading ontology from location $location", e))
     } yield ontology
   }
+
+  def isDirectory(path: String): ZIO[Blocking, IOException, Boolean] = effectBlockingIO(new File(path).isDirectory)
 
 }

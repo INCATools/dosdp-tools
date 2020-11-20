@@ -1,9 +1,10 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.{File, IOException, StringReader}
+import java.io.{File, StringReader}
 
 import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
+import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
@@ -142,8 +143,6 @@ object Generate extends Logging {
     }
     else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
   }
-
-  private def isDirectory(path: String): ZIO[Blocking, IOException, Boolean] = effectBlockingIO(new File(path).isDirectory)
 
   def readFillers(file: File, sepFormat: CSVFormat): ZIO[Blocking, DOSDPError, (Set[String], List[Map[String, String]])] =
     for {
