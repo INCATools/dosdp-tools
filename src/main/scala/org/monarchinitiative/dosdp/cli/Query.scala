@@ -94,8 +94,7 @@ object Query extends Logging {
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
       val suffix = if (config.printQuery.bool) "rq"
-      else if (sepFormat.isInstanceOf[TSVFormat]) "tsv"
-      else "csv"
+      else config.common.tableFormat.toLowerCase
       val outFileName = s"${config.common.outfile}/$pattern.$suffix"
       QueryTarget(templateFileName, outFileName)
     }
