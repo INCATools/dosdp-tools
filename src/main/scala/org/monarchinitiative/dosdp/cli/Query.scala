@@ -56,7 +56,7 @@ object Query extends Logging {
       _ <- logInfo(s"Processing pattern ${target.templateFile}")
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
-      sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
+      sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), config.restrictAxiomsTo)
       processedQuery = reasonerOpt.map { reasoner =>
         new Owlet(reasoner).expandQueryString(sparqlQuery)
       }.getOrElse(sparqlQuery)

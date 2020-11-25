@@ -5,6 +5,7 @@ import java.io.{File, StringReader}
 import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
 import org.monarchinitiative.dosdp.Utilities.isDirectory
+import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
@@ -21,10 +22,9 @@ object Generate extends Logging {
 
   def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] =
     for {
-      axiomsOutput <- ZIO.fromEither(axiomsOutputChoice(config))
-      (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutput
       ontologyOpt <- config.common.ontologyOpt
       prefixes <- config.common.prefixesMap
+      (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutputChoice(config.restrictAxiomsTo)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
       axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
         .orElseFail(DOSDPError("Couldn't create IRI for axiom source annotation property."))
@@ -98,13 +98,10 @@ object Generate extends Logging {
           dataListBindings +
           iriBinding
         annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings)) ++ additionalBindings
-        localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms <- restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim).map {
-          case "all"        => Right((true, true))
-          case "logical"    => Right((true, false))
-          case "annotation" => Right((false, true))
-          case ""           => Right((outputLogicalAxioms, outputAnnotationAxioms))
-          case other        => Left(DOSDPError(s"Invalid value for restrict-axioms-column: $other"))
-        }.getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms)))
+        localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms <- restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim)
+          .map(Config.parseAxiomKind)
+          .map(maybeAxiomKind => maybeAxiomKind.map(axiomsOutputChoice))
+          .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))).leftMap(e => DOSDPError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
         (localOutputLogicalAxioms, localOutputAnnotationAxioms) = localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms
         logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
         annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
@@ -160,13 +157,11 @@ object Generate extends Logging {
       }
     } yield columns -> data
 
-  private def axiomsOutputChoice(config: GenerateConfig): Either[DOSDPError, (Boolean, Boolean)] =
-    config.restrictAxiomsTo match {
-      case "all"        => Right((true, true))
-      case "logical"    => Right((true, false))
-      case "annotation" => Right((false, true))
-      case other        => Left(DOSDPError(s"Invalid argument for restrict-axioms-to: $other"))
-    }
+  def axiomsOutputChoice(kind: AxiomKind): (Boolean, Boolean) = kind match {
+    case AllAxioms        => (true, true)
+    case LogicalAxioms    => (true, false)
+    case AnnotationAxioms => (false, true)
+  }
 
   private def createReadableIdentifierIndex(dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
     val properties = dosdp.readableIdentifierProperties.to(Set)
