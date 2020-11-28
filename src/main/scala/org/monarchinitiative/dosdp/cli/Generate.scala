@@ -15,7 +15,7 @@ import zio.blocking._
 import scala.io.Source
 import scala.jdk.CollectionConverters._
 
-object Generate extends Logging {
+object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
@@ -31,12 +31,12 @@ object Generate extends Logging {
       targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
       _ <- ZIO.foreach_(targets) { target =>
         for {
-          _ <- logInfo(s"Processing pattern ${target.templateFile}")
+          _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
           dosdp <- Config.inputDOSDPFrom(target.templateFile)
           columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
           (columns, fillers) = columnsAndFillers
           missingColumns = dosdp.allVars.diff(columns)
-          _ <- ZIO.foreach_(missingColumns)(c => logWarn(s"Input is missing column for pattern variable <$c>"))
+          _ <- ZIO.foreach_(missingColumns)(c => ZIO.effectTotal(scribe.warn(s"Input is missing column for pattern variable <$c>")))
           axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool)
           _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
         } yield ()
@@ -127,7 +127,7 @@ object Generate extends Logging {
   private def determineTargets(config: GenerateConfig): ZIO[Blocking, Throwable, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
-      _ <- logInfo("Running in batch mode")
+      _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
       _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
       _ <- ZIO.ifM(isDirectory(config.infile))(ZIO.unit,
