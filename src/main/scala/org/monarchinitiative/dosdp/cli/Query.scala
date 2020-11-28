@@ -19,7 +19,7 @@ import zio.blocking.Blocking
 
 import scala.jdk.CollectionConverters._
 
-object Query extends Logging {
+object Query {
 
   def run(config: QueryConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     val reasonerFactoryOptZ = ZIO.foreach(config.reasoner) { reasonerArg =>
@@ -53,7 +53,7 @@ object Query extends Logging {
 
   private def makeProcessedQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] = {
     for {
-      _ <- logInfo(s"Processing pattern ${target.templateFile}")
+      _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
       sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), config.restrictAxiomsTo)
@@ -73,7 +73,7 @@ object Query extends Logging {
       _ <- ZIO.effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
         .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield ()
-    logInfo(s"Processing pattern ${target.templateFile}") *>
+    ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
       (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
 
@@ -86,7 +86,7 @@ object Query extends Logging {
     val sepFormat = Config.tabularFormat(config.common.tableFormat)
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
-      _ <- logInfo("Running in batch mode")
+      _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
       _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
         ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
       _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
