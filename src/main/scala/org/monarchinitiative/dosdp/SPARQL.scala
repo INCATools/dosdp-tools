@@ -4,7 +4,7 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 import org.apache.jena.query.ParameterizedSparqlString
-import org.monarchinitiative.dosdp.cli.Config.{AxiomKind, LogicalAxioms}
+import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager

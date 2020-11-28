@@ -2,7 +2,7 @@ package org.monarchinitiative.dosdp.cli
 
 import java.io.{File, PrintWriter}
 
-import com.github.tototoshi.csv.{CSVWriter, TSVFormat}
+import com.github.tototoshi.csv.CSVWriter
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.ModelFactory
 import org.monarchinitiative.dosdp.Utilities.isDirectory
@@ -83,7 +83,6 @@ object Query {
     }
 
   private def determineTargets(config: QueryConfig): RIO[Blocking, List[QueryTarget]] = {
-    val sepFormat = Config.tabularFormat(config.common.tableFormat)
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))

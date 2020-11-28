@@ -8,7 +8,7 @@ import caseapp.core.argparser.{ArgParser, SimpleArgParser}
 import com.github.tototoshi.csv.{CSVFormat, DefaultCSVFormat, TSVFormat}
 import io.circe.generic.auto._
 import io.circe.yaml.parser
-import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AxiomKind, BoolValue, FalseValue, LogicalAxioms, MultiArgList, TrueValue, inputDOSDPFrom}
+import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AxiomKind, BoolValue, FalseValue, LogicalAxioms, MultiArgList, inputDOSDPFrom}
 import org.monarchinitiative.dosdp.{DOSDP, OBOPrefixes, Utilities}
 import org.semanticweb.owlapi.model.OWLOntology
 import zio._
