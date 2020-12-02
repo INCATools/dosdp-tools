@@ -36,7 +36,8 @@ object Query {
       ontologyOpt <- config.common.ontologyOpt
       _ <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
         ZIO.foreach(targets) { target =>
-          makeProcessedQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, ontologyOpt))
+          ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
+            makeProcessedQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, ontologyOpt))
         }
       }
     } yield ()
@@ -53,7 +54,6 @@ object Query {
 
   private def makeProcessedQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] = {
     for {
-      _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
       sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), config.restrictAxiomsTo)
@@ -73,8 +73,7 @@ object Query {
       _ <- ZIO.effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
         .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield ()
-    ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
-      (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
+    (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
 
   private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]) =
