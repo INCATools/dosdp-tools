@@ -4,7 +4,7 @@ import java.util.UUID
 import java.util.regex.Pattern
 
 import org.apache.jena.query.ParameterizedSparqlString
-import org.monarchinitiative.dosdp.cli.Config.AxiomKind
+import org.monarchinitiative.dosdp.cli.Config.{AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
@@ -23,7 +23,7 @@ PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT DISTINCT ${selectFor(dosdp)}
+SELECT DISTINCT ${selectFor(dosdp, axioms)}
 WHERE {
 ${triplesFor(dosdp, axioms).mkString("\n")}
 }
@@ -31,9 +31,11 @@ ORDER BY ?defined_class_label
 """
   }
 
-  def selectFor(dosdp: ExpandedDOSDP): String = {
+  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): String = {
     val axVariables = axiomVariables(dosdp)
-    val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)")
+    val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)") ++
+      (if (axioms != LogicalAxioms) axVariables.filterNot(_.startsWith(s"?${DOSDP.DefinedClassVariable}"))
+        .map(v => s"(STR(${v}__match_property) AS ${v}_match_property)") else Set.empty[String])
     if (variables.isEmpty) "*" else variables.toSeq
       .sortBy(_.replaceFirst("\\(STR\\(", "").replaceFirst(DOSDP.DefinedClassVariable, "0"))
       .mkString(" ")
@@ -126,12 +128,14 @@ ORDER BY ?defined_class_label
       val text = literal.getLiteral
       val valueRegex = DOSDPVariableIRIMatch.split(text).map(Pattern.quote).mkString("(.+)")
       val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
-      val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString("|")
+      val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
       val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
+        val predicateVar = s"${variableName}__match_property"
         val variableMatchLabel = s"${variableName}__match_label"
         List(
           s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS ?$variableMatchLabel)""",
-          s"?$variableName $predicates ?$variableMatchLabel ."
+          s"VALUES ?$predicateVar { $predicates }",
+          s"?$variableName ?$predicateVar ?$variableMatchLabel ."
         )
       }
       (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
