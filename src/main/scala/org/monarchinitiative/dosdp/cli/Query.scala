@@ -35,8 +35,7 @@ object Query {
       targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
-      ont <- ZIO.fromOption(ontologyOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
-      model <- makeModel(ont)
+      model <- makeModel(ontologyOpt)
       _ <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
         ZIO.foreach(targets) { target =>
           ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
@@ -46,9 +45,10 @@ object Query {
     } yield ()
   }
 
-  def makeModel(ont: OWLOntology): ZIO[Any, DOSDPError, Model] =
+  def makeModel(ontologyOpt: Option[OWLOntology]): ZIO[Any, DOSDPError, Option[Model]] =
     for {
       model <- ZIO.effectTotal(ModelFactory.createDefaultModel())
+      ont <- ZIO.fromOption(ontologyOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
       allAxioms = for {
         completeOnt <- ont.getImportsClosure.asScala.to(Set)
         axiom <- completeOnt.getAxioms().asScala.to(Set)
@@ -57,7 +57,7 @@ object Query {
       finalOnt <- ZIO.effectTotal(manager.createOntology(allAxioms.asJava))
       triples = SesameJena.ontologyAsTriples(finalOnt)
       _ <- ZIO.effectTotal(model.add(triples.toList.asJava))
-    } yield model
+    } yield Some(model)
 
   private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): ZManaged[Any, DOSDPError, Option[OWLReasoner]] =
     ZManaged.foreach(
@@ -88,7 +88,7 @@ object Query {
   private def processTarget(target: QueryTarget,
                             config: QueryConfig,
                             processedQuery: String,
-                            model: Model): ZIO[Any, DOSDPError, Unit] = {
+                            model: Option[Model]): ZIO[Any, DOSDPError, Unit] = {
     val doPrintQuery = ZIO
       .effect(new PrintWriter(new File(target.outputFile), "utf-8"))
       .bracketAuto(w => ZIO.effect(w.print(processedQuery)))
@@ -125,8 +125,9 @@ object Query {
     else ZIO.succeed(List(QueryTarget(config.common.template, config.common.outfile)))
   }
 
-  def performQuery(sparql: String, model: Model): Task[(List[String], List[QuerySolution])] =
+  def performQuery(sparql: String, modelOpt: Option[Model]): Task[(List[String], List[QuerySolution])] =
     for {
+      model <- ZIO.fromOption(modelOpt).orElseFail(DOSDPError("Can't use None Model"))
       query <- ZIO.effect(QueryFactory.create(sparql))
       results <- ZIO.effect(QueryExecutionFactory.create(query, model)).bracketAuto { qe =>
         ZIO.effect {
