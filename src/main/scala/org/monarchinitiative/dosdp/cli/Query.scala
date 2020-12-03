@@ -2,11 +2,12 @@ package org.monarchinitiative.dosdp.cli
 
 import java.io.{File, PrintWriter}
 
-import com.github.tototoshi.csv.{CSVWriter, TSVFormat}
+import com.github.tototoshi.csv.CSVWriter
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.ModelFactory
 import org.monarchinitiative.dosdp.Utilities.isDirectory
-import org.monarchinitiative.dosdp.{ExpandedDOSDP, SPARQL, SesameJena}
+import org.monarchinitiative.dosdp.cli.Config.AxiomKind
+import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, SPARQL, SesameJena}
 import org.phenoscape.owlet.Owlet
 import org.semanticweb.HermiT.ReasonerFactory
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
@@ -36,7 +37,8 @@ object Query {
       ontologyOpt <- config.common.ontologyOpt
       _ <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
         ZIO.foreach(targets) { target =>
-          makeProcessedQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, ontologyOpt))
+          ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
+            createQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, ontologyOpt))
         }
       }
     } yield ()
@@ -51,16 +53,17 @@ object Query {
       .toManaged(o => ZIO.effectTotal(o.dispose())))(identity)
   }
 
-  private def makeProcessedQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] = {
+  private def createQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] =
     for {
-      _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
-      sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes))
-      processedQuery = reasonerOpt.map { reasoner =>
-        new Owlet(reasoner).expandQueryString(sparqlQuery)
-      }.getOrElse(sparqlQuery)
-    } yield processedQuery
+    } yield makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt)
+
+  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): String = {
+    val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
+    reasonerOpt.map { reasoner =>
+      new Owlet(reasoner).expandQueryString(sparqlQuery)
+    }.getOrElse(sparqlQuery)
   }
 
   private def processTarget(target: QueryTarget, config: QueryConfig, processedQuery: String, ontologyOpt: Option[OWLOntology]): ZIO[Any, DOSDPError, Unit] = {
@@ -73,8 +76,7 @@ object Query {
       _ <- ZIO.effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
         .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield ()
-    ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
-      (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
+    (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
 
   private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]) =
@@ -83,7 +85,6 @@ object Query {
     }
 
   private def determineTargets(config: QueryConfig): RIO[Blocking, List[QueryTarget]] = {
-    val sepFormat = Config.tabularFormat(config.common.tableFormat)
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))

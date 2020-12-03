@@ -8,7 +8,7 @@ import caseapp.core.argparser.{ArgParser, SimpleArgParser}
 import com.github.tototoshi.csv.{CSVFormat, DefaultCSVFormat, TSVFormat}
 import io.circe.generic.auto._
 import io.circe.yaml.parser
-import org.monarchinitiative.dosdp.cli.Config.{BoolValue, FalseValue, MultiArgList, TrueValue, inputDOSDPFrom}
+import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AxiomKind, BoolValue, FalseValue, LogicalAxioms, MultiArgList, inputDOSDPFrom}
 import org.monarchinitiative.dosdp.{DOSDP, OBOPrefixes, Utilities}
 import org.semanticweb.owlapi.model.OWLOntology
 import zio._
@@ -98,7 +98,7 @@ final case class GenerateConfig(@Recurse
                                 infile: String = "fillers.tsv",
                                 @HelpMessage("Restrict generated axioms to 'logical', 'annotation', or 'all' (default)")
                                 @ValueDescription("all|logical|annotation")
-                                restrictAxiomsTo: String = "all",
+                                restrictAxiomsTo: AxiomKind = AllAxioms,
                                 @HelpMessage("Data column containing local axiom output restrictions")
                                 @ValueDescription("name")
                                 restrictAxiomsColumn: Option[String],
@@ -135,7 +135,11 @@ final case class QueryConfig(@Recurse
                              reasoner: Option[String],
                              @HelpMessage("Print generated query without running against ontology")
                              @ValueDescription("true|false")
-                             printQuery: BoolValue = FalseValue) extends Config {
+                             printQuery: BoolValue = FalseValue,
+                             @HelpMessage("Restrict queried axioms to 'logical', 'annotation', or 'all' (default)")
+                             @ValueDescription("all|logical|annotation")
+                             restrictAxiomsTo: AxiomKind = LogicalAxioms
+                            ) extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Query.run(this)
 
@@ -197,6 +201,25 @@ object Config {
     val trimmed = arg.trim
     if (trimmed.isEmpty) Left(MalformedValue("empty list input", arg))
     else Right(MultiArgList(arg.split(" ", -1).toList))
+  }
+
+  sealed trait AxiomKind
+
+  case object LogicalAxioms extends AxiomKind
+
+  case object AnnotationAxioms extends AxiomKind
+
+  case object AllAxioms extends AxiomKind
+
+  implicit val axiomKindArgParser: ArgParser[AxiomKind] = SimpleArgParser.from[AxiomKind]("axiom kind")(parseAxiomKind)
+
+  def parseAxiomKind(arg: String): Either[MalformedValue, AxiomKind] = {
+    arg.toLowerCase match {
+      case "all"        => Right(AllAxioms)
+      case "logical"    => Right(LogicalAxioms)
+      case "annotation" => Right(AnnotationAxioms)
+      case _            => Left(MalformedValue("Not a valid axiom type", arg))
+    }
   }
 
 }
