@@ -40,7 +40,7 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "apache-jena-libs"       % "3.16.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.6",
       "commons-codec"              %  "commons-codec"          % "1.15",
-      "com.outr"                   %% "scribe-slf4j"           % "3.1.3",
+      "com.outr"                   %% "scribe-slf4j"           % "3.1.6",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
       "dev.zio"                    %% "zio-test-sbt"           % zioVersion % Test
     )
