@@ -25,7 +25,6 @@ object MissingValuesTest extends DefaultRunnableSpec {
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
-        //_ = axioms.foreach(a => println(a))
       } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }
@@ -38,7 +37,6 @@ object MissingValuesTest extends DefaultRunnableSpec {
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
-        //_ = axioms.foreach(a => println(a))
       } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }
