@@ -104,8 +104,8 @@ object PrintfText {
           realVars.map(v => stringValues.get(v).map(text => text.trim()).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
-    if (text.endsWith(" ")) {
-      scribe.warn(s"template '$text' has trailing space")
+    if (text.startsWith(" ") || text.endsWith(" ")) {
+      scribe.warn(s"template '$text' has either starts or ends with space")
     }
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
