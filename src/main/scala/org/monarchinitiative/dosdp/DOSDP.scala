@@ -101,10 +101,13 @@ object PrintfText {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.view.mapValues(_.value).toMap
-          realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
+          realVars.map(v => stringValues.get(v).map(text => text.trim()).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
-    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
+    if (text.endsWith(" ")) {
+      scribe.warn(s"template '$text' has trailing space")
+    }
+    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
 
 }
