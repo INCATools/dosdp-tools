@@ -4,7 +4,7 @@ import java.io.{File, PrintWriter}
 
 import com.github.tototoshi.csv.CSVWriter
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
-import org.apache.jena.rdf.model.ModelFactory
+import org.apache.jena.rdf.model.{Model, ModelFactory}
 import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, SPARQL, SesameJena}
@@ -35,23 +35,40 @@ object Query {
       targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
+      ont <- ZIO.fromOption(ontologyOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
+      model <- makeModel(ont)
       _ <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
         ZIO.foreach(targets) { target =>
           ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
-            createQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, ontologyOpt))
+            createQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, model))
         }
       }
     } yield ()
   }
 
-  private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): ZManaged[Any, DOSDPError, Option[OWLReasoner]] = {
-    ZManaged.foreach(for {
-      ontology <- ontologyOpt
-      factory <- factoryOpt
-    } yield ZIO.effect(factory.createReasoner(ontology))
-      .mapError(e => DOSDPError(s"Failed to create reasoner for ontology $ontology", e))
-      .toManaged(o => ZIO.effectTotal(o.dispose())))(identity)
-  }
+  def makeModel(ont: OWLOntology): ZIO[Any, DOSDPError, Model] =
+    for {
+      model <- ZIO.effectTotal(ModelFactory.createDefaultModel())
+      allAxioms = for {
+        completeOnt <- ont.getImportsClosure.asScala.to(Set)
+        axiom <- completeOnt.getAxioms().asScala.to(Set)
+      } yield axiom
+      manager <- ZIO.effectTotal(OWLManager.createOWLOntologyManager())
+      finalOnt <- ZIO.effectTotal(manager.createOntology(allAxioms.asJava))
+      triples = SesameJena.ontologyAsTriples(finalOnt)
+      _ <- ZIO.effectTotal(model.add(triples.toList.asJava))
+    } yield model
+
+  private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): ZManaged[Any, DOSDPError, Option[OWLReasoner]] =
+    ZManaged.foreach(
+        for {
+          ontology <- ontologyOpt
+          factory <- factoryOpt
+        } yield ZIO
+          .effect(factory.createReasoner(ontology))
+          .mapError(e => DOSDPError(s"Failed to create reasoner for ontology $ontology", e))
+          .toManaged(o => ZIO.effectTotal(o.dispose()))
+    )(identity)
 
   private def createQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] =
     for {
@@ -61,20 +78,27 @@ object Query {
 
   def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): String = {
     val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
-    reasonerOpt.map { reasoner =>
-      new Owlet(reasoner).expandQueryString(sparqlQuery)
-    }.getOrElse(sparqlQuery)
+    reasonerOpt
+      .map { reasoner =>
+        new Owlet(reasoner).expandQueryString(sparqlQuery)
+      }
+      .getOrElse(sparqlQuery)
   }
 
-  private def processTarget(target: QueryTarget, config: QueryConfig, processedQuery: String, ontologyOpt: Option[OWLOntology]): ZIO[Any, DOSDPError, Unit] = {
-    val doPrintQuery = ZIO.effect(new PrintWriter(new File(target.outputFile), "utf-8"))
+  private def processTarget(target: QueryTarget,
+                            config: QueryConfig,
+                            processedQuery: String,
+                            model: Model): ZIO[Any, DOSDPError, Unit] = {
+    val doPrintQuery = ZIO
+      .effect(new PrintWriter(new File(target.outputFile), "utf-8"))
       .bracketAuto(w => ZIO.effect(w.print(processedQuery)))
     val doPerformQuery = for {
-      ont <- ZIO.fromOption(ontologyOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
-      (columns, results) <- performQuery(processedQuery, ont)
+      (columns, results) <- performQuery(processedQuery, model)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
-      _ <- ZIO.effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
-        .bracketAuto(w => writeQueryResults(w, columns, results))
+      _ <-
+        ZIO
+          .effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
+          .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield ()
     (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
@@ -88,31 +112,21 @@ object Query {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit, ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
+      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit, ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
-      val suffix = if (config.printQuery.bool) "rq"
-      else config.common.tableFormat.toLowerCase
+      val suffix =
+        if (config.printQuery.bool) "rq"
+        else config.common.tableFormat.toLowerCase
       val outFileName = s"${config.common.outfile}/$pattern.$suffix"
       QueryTarget(templateFileName, outFileName)
     }
     else ZIO.succeed(List(QueryTarget(config.common.template, config.common.outfile)))
   }
 
-  def performQuery(sparql: String, ont: OWLOntology): Task[(List[String], List[QuerySolution])] = {
+  def performQuery(sparql: String, model: Model): Task[(List[String], List[QuerySolution])] =
     for {
-      model <- ZIO.effectTotal(ModelFactory.createDefaultModel())
-      allAxioms = for {
-        completeOnt <- ont.getImportsClosure.asScala.to(Set)
-        axiom <- completeOnt.getAxioms().asScala.to(Set)
-      } yield axiom
-      manager <- ZIO.effectTotal(OWLManager.createOWLOntologyManager())
-      ont <- ZIO.effect(manager.createOntology(allAxioms.asJava))
-      triples = SesameJena.ontologyAsTriples(ont)
-      _ <- ZIO.effect(model.add(triples.toList.asJava))
       query <- ZIO.effect(QueryFactory.create(sparql))
       results <- ZIO.effect(QueryExecutionFactory.create(query, model)).bracketAuto { qe =>
         ZIO.effect {
@@ -123,8 +137,7 @@ object Query {
         }
       }
     } yield results
-  }
 
-  private final case class QueryTarget(templateFile: String, outputFile: String)
+  final private case class QueryTarget(templateFile: String, outputFile: String)
 
 }
