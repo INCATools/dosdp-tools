@@ -37,7 +37,7 @@ name:
     - term_name
 
 def:
-  text: "%s %s %s"
+  text: "%s %s %s "
   vars:
     - term_name
     - structure
