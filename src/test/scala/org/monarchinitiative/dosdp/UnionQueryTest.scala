@@ -32,7 +32,7 @@ object UnionQueryTest extends DefaultRunnableSpec {
     testM("Unions should be queryable") {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
-        model <- Query.makeModel(ontology)
+        model <- Query.makeModel(Some(ontology))
         columnsAndResults <- Query.performQuery(sparqlQuery, model)
         (_, results) = columnsAndResults
         tests <- ZIO.foreach(results) { qs =>

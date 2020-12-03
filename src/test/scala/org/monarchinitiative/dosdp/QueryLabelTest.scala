@@ -15,7 +15,7 @@ object QueryLabelTest extends DefaultRunnableSpec {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.yaml")
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.ofn", None)
-        model <- Query.makeModel(ontology)
+        model <- Query.makeModel(Some(ontology))
         query = Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.AnnotationAxioms, None)
         (_, results) <- Query.performQuery(query, model)
       } yield {
