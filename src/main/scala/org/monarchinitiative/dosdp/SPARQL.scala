@@ -126,16 +126,16 @@ ORDER BY ?defined_class_label
     case literal: OWLLiteral =>
       val node = genVar
       val text = literal.getLiteral
-      val valueRegex = DOSDPVariableIRIMatch.split(text).map(Pattern.quote).mkString("(.+)")
+      val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")
       val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
       val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
       val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
         val predicateVar = s"${variableName}__match_property"
-        val variableMatchLabel = s"${variableName}__match_label"
+        val variableMatchLabel = genVar
         List(
-          s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS ?$variableMatchLabel)""",
+          s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS $variableMatchLabel)""",
           s"VALUES ?$predicateVar { $predicates }",
-          s"?$variableName ?$predicateVar ?$variableMatchLabel ."
+          s"?$variableName ?$predicateVar $variableMatchLabel ."
         )
       }
       (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)

@@ -98,7 +98,7 @@ object Generate {
           dataListBindings +
           iriBinding
         annotationBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bindings, sub) => sub.expandBindings(bindings)) ++ additionalBindings
-        localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms <- restrictAxiomsColumnName.flatMap(column => row.get(column)).map(_.trim)
+        localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms <- restrictAxiomsColumnName.flatMap(column => row.get(column).flatMap(value => stripToOption(value)))
           .map(Config.parseAxiomKind)
           .map(maybeAxiomKind => maybeAxiomKind.map(axiomsOutputChoice))
           .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))).leftMap(e => DOSDPError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
