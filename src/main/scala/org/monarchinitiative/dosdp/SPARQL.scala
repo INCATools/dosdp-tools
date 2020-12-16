@@ -5,7 +5,7 @@ import java.util.regex.Pattern
 
 import org.apache.jena.query.ParameterizedSparqlString
 import org.monarchinitiative.dosdp.cli.Config.{AxiomKind, LogicalAxioms}
-import org.monarchinitiative.dosdp.cli.Generate
+import org.monarchinitiative.dosdp.cli.{DOSDPError, Generate}
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
@@ -16,32 +16,41 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): String = {
-    s"""
+  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, String] =
+    for {
+      select <- selectFor(dosdp, axioms)
+      triples <- triplesFor(dosdp, axioms)
+    } yield {
+      s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX owl: <http://www.w3.org/2002/07/owl#>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT DISTINCT ${selectFor(dosdp, axioms)}
+SELECT DISTINCT $select
 WHERE {
-${triplesFor(dosdp, axioms).mkString("\n")}
+${triples.mkString("\n")}
 }
 ORDER BY ?defined_class_label
 """
-  }
+    }
 
-  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): String = {
-    val axVariables = axiomVariables(dosdp)
-    val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)") ++
-      (if (axioms != LogicalAxioms) axVariables.filterNot(_.startsWith(s"?${DOSDP.DefinedClassVariable}"))
-        .map(v => s"(STR(${v}__match_property) AS ${v}_match_property)") else Set.empty[String])
-    if (variables.isEmpty) "*" else variables.toSeq
-      .sortBy(_.replaceFirst("\\(STR\\(", "").replaceFirst(DOSDP.DefinedClassVariable, "0"))
-      .mkString(" ")
-  }
+  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, String] =
+    for {
+      axVariables <- axiomVariables(dosdp)
+    } yield {
+      val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)") ++
+        (if (axioms != LogicalAxioms) axVariables.filterNot(_.startsWith(s"?${DOSDP.DefinedClassVariable}"))
+          .map(v => s"(STR(${v}__match_property) AS ${v}_match_property)") else Set.empty[String])
+      if (variables.isEmpty) "*" else variables.toSeq
+        .sortBy(_.replaceFirst("\\(STR\\(", "").replaceFirst(DOSDP.DefinedClassVariable, "0"))
+        .mkString(" ")
+    }
 
-  private def axiomVariables(dosdp: ExpandedDOSDP): Set[String] = dosdp.filledLogicalAxioms(None, None).flatMap(selectVariables)
+  private def axiomVariables(dosdp: ExpandedDOSDP): Either[DOSDPError, Set[String]] =
+    for {
+      filledAxioms <- dosdp.filledLogicalAxioms(None, None)
+    } yield filledAxioms.flatMap(selectVariables)
 
   private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
 
@@ -52,7 +61,7 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Seq[String] = {
+  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, Seq[String]] = {
     val props = dosdp.readableIdentifierProperties.to(Set)
     val logicalBindings = dosdp.dosdp.vars.map { vars =>
       vars.keys.map { key =>
@@ -60,10 +69,19 @@ ORDER BY ?defined_class_label
       }.toMap
     }
     val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
-    val annotationTriples = if (queryAnnotations) dosdp.filledAnnotationAxioms(logicalBindings, None).toSeq.flatMap(ax => triples(ax, props))
-    else Nil
-    val axiomTriples = if (queryLogical) dosdp.filledLogicalAxioms(None, None).toSeq.flatMap(ax => triples(ax, props))
-    else Nil
+    val maybeAnnotationTriples =
+      if (queryAnnotations)
+        for {
+          annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
+        } yield annotationAxioms.to(Seq).flatMap(triples(_, props))
+      else Right(Nil)
+    val maybeAxiomTriples =
+      if (queryLogical) {
+        for {
+          filledAxioms <- dosdp.filledLogicalAxioms(None, None)
+        } yield filledAxioms.to(Seq).flatMap(ax => triples(ax, props))
+      }
+      else Right(Nil)
     val variableTriples = dosdp.varExpressions.toSeq.flatMap {
       case (_, Thing)                  => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
       case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
@@ -73,8 +91,16 @@ ORDER BY ?defined_class_label
         val sanitizedExpression = pss.toString
         Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
     }
-    val labelTriples = axiomVariables(dosdp).map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
-    annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
+    val maybeLabelTriples = {
+      for {
+        variables <- axiomVariables(dosdp)
+      } yield variables.map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
+    }
+    for {
+      annotationTriples <- maybeAnnotationTriples
+      axiomTriples <- maybeAxiomTriples
+      labelTriples <- maybeLabelTriples
+    } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
   def triples(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): Seq[String] = axiom match {

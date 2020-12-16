@@ -26,13 +26,13 @@ object UnionQueryTest extends DefaultRunnableSpec {
     )),
     vars = Some(Map("item" -> "'thing'")),
     equivalentTo = Some(PrintfOWLConvenience(None, "'classA' or 'classB' or %s", Some(List("item")))))
-  val sparqlQuery: String = SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms)
 
   def spec = suite("Union query test") {
     testM("Unions should be queryable") {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
         model <- Query.makeModel(ontology)
+        sparqlQuery <- ZIO.fromEither(SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms))
         columnsAndResults <- Query.performQuery(sparqlQuery, model)
         (_, results) = columnsAndResults
         tests <- ZIO.foreach(results) { qs =>

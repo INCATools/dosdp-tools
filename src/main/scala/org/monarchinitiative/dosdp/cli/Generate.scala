@@ -103,8 +103,12 @@ object Generate {
           .map(maybeAxiomKind => maybeAxiomKind.map(axiomsOutputChoice))
           .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))).leftMap(e => DOSDPError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
         (localOutputLogicalAxioms, localOutputAnnotationAxioms) = localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms
-        logicalAxioms = if (localOutputLogicalAxioms) eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings)) else Set.empty
-        annotationAxioms = if (localOutputAnnotationAxioms) eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings)) else Set.empty
+        logicalAxioms <- if (localOutputLogicalAxioms)
+          eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings))
+        else Right(Set.empty)
+        annotationAxioms <- if (localOutputAnnotationAxioms)
+          eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings))
+        else Right(Set.empty)
       } yield logicalAxioms ++ annotationAxioms
       ZIO.fromEither(maybeAxioms)
     }

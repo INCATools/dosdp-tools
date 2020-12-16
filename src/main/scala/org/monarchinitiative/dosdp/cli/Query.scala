@@ -60,28 +60,33 @@ object Query {
 
   private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): ZManaged[Any, DOSDPError, Option[OWLReasoner]] =
     ZManaged.foreach(
-        for {
-          ontology <- ontologyOpt
-          factory <- factoryOpt
-        } yield ZIO
-          .effect(factory.createReasoner(ontology))
-          .mapError(e => DOSDPError(s"Failed to create reasoner for ontology $ontology", e))
-          .toManaged(o => ZIO.effectTotal(o.dispose()))
+      for {
+        ontology <- ontologyOpt
+        factory <- factoryOpt
+      } yield ZIO
+        .effect(factory.createReasoner(ontology))
+        .mapError(e => DOSDPError(s"Failed to create reasoner for ontology $ontology", e))
+        .toManaged(o => ZIO.effectTotal(o.dispose()))
     )(identity)
 
   private def createQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] =
     for {
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
-    } yield makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt)
+      query <- ZIO.fromEither(makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt))
+    } yield query
 
-  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): String = {
-    val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
-    reasonerOpt
-      .map { reasoner =>
-        new Owlet(reasoner).expandQueryString(sparqlQuery)
-      }
-      .getOrElse(sparqlQuery)
+  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): Either[DOSDPError, String] = {
+    val maybeSparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
+    for {
+      sparqlQuery <- maybeSparqlQuery
+    } yield {
+      reasonerOpt
+        .map { reasoner =>
+          new Owlet(reasoner).expandQueryString(sparqlQuery)
+        }
+        .getOrElse(sparqlQuery)
+    }
   }
 
   private def processTarget(target: QueryTarget,
