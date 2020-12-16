@@ -17,7 +17,7 @@ object Terms {
       prefixes <- config.common.prefixesMap
       eDOSDP = ExpandedDOSDP(dosdp, prefixes)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
-      patternAxioms = eDOSDP.filledLogicalAxioms(None, None)
+      patternAxioms <- ZIO.fromEither(eDOSDP.filledLogicalAxioms(None, None))
       patternTerms = patternAxioms.flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith("urn:dosdp:")))
       rows <- ZIO.effect(CSVReader.open(config.infile, "utf-8")(sepFormat)).bracketAuto(csvReader => ZIO.effect(csvReader.iteratorWithHeaders.toList))
         .mapError(e => DOSDPError(s"Could not read fillers file at ${config.infile}", e))

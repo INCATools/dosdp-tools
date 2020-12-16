@@ -3,6 +3,7 @@ package org.monarchinitiative.dosdp
 import org.apache.jena.query.QuerySolution
 import org.apache.jena.sys.JenaSystem
 import org.monarchinitiative.dosdp.cli.{Config, Query}
+import zio.ZIO
 import zio.test.Assertion._
 import zio.test._
 
@@ -16,7 +17,7 @@ object QueryLabelTest extends DefaultRunnableSpec {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.yaml")
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.ofn", None)
         model <- Query.makeModel(ontology)
-        query = Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.AnnotationAxioms, None)
+        query <- ZIO.fromEither(Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.AnnotationAxioms, None))
         (_, results) <- Query.performQuery(query, model)
       } yield {
         // Should match on any readable identifier (either label or synonym)
