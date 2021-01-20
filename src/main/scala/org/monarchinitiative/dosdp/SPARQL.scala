@@ -135,7 +135,7 @@ ORDER BY ?defined_class_label
       Seq(s"$subject $property $value .") ++ subjecTriples ++ valueTriples
   }
 
-  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\S+)\\b".r
+  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\w+)\\b".r
 
   private def escape(text: String): String = {
     val pss = new ParameterizedSparqlString()
