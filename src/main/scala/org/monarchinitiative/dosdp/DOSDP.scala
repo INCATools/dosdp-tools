@@ -15,6 +15,7 @@ final case class DOSDP(
                         pattern_iri: Option[String] = None,
                         base_IRI: Option[String] = None,
                         description: Option[String] = None,
+                        contributors: Option[List[String]] = None,
                         readable_identifiers: Option[List[String]] = None,
                         classes: Option[Map[String, String]] = None,
                         relations: Option[Map[String, String]] = None,
