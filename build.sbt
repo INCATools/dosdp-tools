@@ -4,7 +4,7 @@ organization  := "org.monarchinitiative"
 
 name          := "dosdp-tools"
 
-version       := "0.16-SNAPSHOT"
+version       := "0.16"
 
 scalaVersion  := "2.13.3"
 
