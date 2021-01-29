@@ -1,19 +1,18 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.File
-
 import caseapp._
 import caseapp.core.Error.MalformedValue
 import caseapp.core.argparser.{ArgParser, SimpleArgParser}
 import com.github.tototoshi.csv.{CSVFormat, DefaultCSVFormat, TSVFormat}
 import io.circe.generic.auto._
 import io.circe.yaml.parser
-import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AxiomKind, BoolValue, FalseValue, LogicalAxioms, MultiArgList, inputDOSDPFrom}
+import org.monarchinitiative.dosdp.cli.Config.{inputDOSDPFrom, AllAxioms, AxiomKind, BoolValue, FalseValue, LogicalAxioms, MultiArgList}
 import org.monarchinitiative.dosdp.{DOSDP, OBOPrefixes, Utilities}
 import org.semanticweb.owlapi.model.OWLOntology
 import zio._
 import zio.blocking.Blocking
 
+import java.io.File
 import scala.io.Source
 
 @AppName("dosdp-tools")
@@ -25,32 +24,32 @@ sealed trait Config {
 }
 
 final case class CommonOptions(
-                                @HelpMessage("OWL ontology (provide labels, query axioms)")
-                                @ValueDescription("file or URI")
-                                ontology: Option[String],
-                                @HelpMessage("A catalog XML file to use for resolving mapping ontology IRIs to URLs")
-                                @ValueDescription("file")
-                                @Name("catalog")
-                                catalog: Option[String],
-                                @HelpMessage("DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.")
-                                @ValueDescription("file")
-                                template: String,
-                                @HelpMessage("CURIE prefixes (YAML)")
-                                @ValueDescription("file")
-                                prefixes: Option[String],
-                                @HelpMessage("Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio")
-                                @ValueDescription("true|false")
-                                oboPrefixes: BoolValue = FalseValue,
-                                @HelpMessage("Output file (OWL or TSV)")
-                                @ValueDescription("file")
-                                outfile: String = "dosdp.out",
-                                @HelpMessage("Tabular format: TSV (default) or CSV")
-                                @ValueDescription("tsv|csv")
-                                tableFormat: String = "tsv",
-                                @HelpMessage("List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)")
-                                @ValueDescription("names")
-                                batchPatterns: MultiArgList = MultiArgList(Nil)
-                              ) {
+    @HelpMessage("OWL ontology (provide labels, query axioms)")
+    @ValueDescription("file or URI")
+    ontology: Option[String],
+    @HelpMessage("A catalog XML file to use for resolving mapping ontology IRIs to URLs")
+    @ValueDescription("file")
+    @Name("catalog")
+    catalog: Option[String],
+    @HelpMessage("DOSDP file (YAML). If a local file is not found at the given path, the path will be attempted as a URL.")
+    @ValueDescription("file")
+    template: String,
+    @HelpMessage("CURIE prefixes (YAML)")
+    @ValueDescription("file")
+    prefixes: Option[String],
+    @HelpMessage("Assume prefixes are OBO ontologies; predefine rdf, rdfs, owl, dc, dct, skos, obo, and oio")
+    @ValueDescription("true|false")
+    oboPrefixes: BoolValue = FalseValue,
+    @HelpMessage("Output file (OWL or TSV)")
+    @ValueDescription("file")
+    outfile: String = "dosdp.out",
+    @HelpMessage("Tabular format: TSV (default) or CSV")
+    @ValueDescription("tsv|csv")
+    tableFormat: String = "tsv",
+    @HelpMessage("List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)")
+    @ValueDescription("names")
+    batchPatterns: MultiArgList = MultiArgList(Nil)
+) {
 
   def inputDOSDP: IO[DOSDPError, DOSDP] = inputDOSDPFrom(template)
 
@@ -58,12 +57,19 @@ final case class CommonOptions(
     val possiblePrefixMap = prefixes.map { prefixesPath =>
       val prefixesFile = new File(prefixesPath)
       for {
-        prefixesText <- ZIO.effect(Source.fromFile(prefixesFile, "UTF-8")).bracketAuto(s => ZIO.effect(s.mkString))
-          .mapError(e => DOSDPError(s"Could not read prefixes file at $prefixesPath", e))
-        prefixesJson <- ZIO.fromEither(parser.parse(prefixesText))
-          .mapError(e => DOSDPError(s"Invalid JSON format for prefixes file at $prefixesPath", e))
-        prefixMap <- ZIO.fromEither(prefixesJson.as[Map[String, String]])
-          .mapError(e => DOSDPError(s"JSON for prefixes file at $prefixesPath should be a simple map of strings", e))
+        prefixesText <-
+          ZIO
+            .effect(Source.fromFile(prefixesFile, "UTF-8"))
+            .bracketAuto(s => ZIO.effect(s.mkString))
+            .mapError(e => DOSDPError(s"Could not read prefixes file at $prefixesPath", e))
+        prefixesJson <-
+          ZIO
+            .fromEither(parser.parse(prefixesText))
+            .mapError(e => DOSDPError(s"Invalid JSON format for prefixes file at $prefixesPath", e))
+        prefixMap <-
+          ZIO
+            .fromEither(prefixesJson.as[Map[String, String]])
+            .mapError(e => DOSDPError(s"JSON for prefixes file at $prefixesPath should be a simple map of strings", e))
       } yield prefixMap
     }
     for {
@@ -83,9 +89,20 @@ final case class TermsConfig(@Recurse
                              common: CommonOptions,
                              @HelpMessage("Input file (TSV or CSV)")
                              @ValueDescription("file")
-                             infile: String = "fillers.tsv") extends Config {
+                             infile: String = "fillers.tsv")
+    extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Terms.run(this)
+
+}
+
+@CommandName("markdown")
+@HelpMessage("dump terms referenced in TSV input and a Dead Simple OWL Design Pattern")
+final case class MarkdownConfig(@Recurse
+                                common: CommonOptions)
+    extends Config {
+
+  override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Markdown.run(this)
 
 }
 
@@ -110,8 +127,8 @@ final case class GenerateConfig(@Recurse
                                 addAxiomSourceAnnotation: BoolValue = FalseValue,
                                 @HelpMessage("IRI for annotation property to use to link generated axioms to pattern IRI")
                                 @ValueDescription("IRI")
-                                axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source"
-                               ) extends Config {
+                                axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source")
+    extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Generate.run(this)
 
@@ -119,8 +136,10 @@ final case class GenerateConfig(@Recurse
 
 @CommandName("prototype")
 @HelpMessage("output \"prototype\" axioms using default fillers for a pattern or folder of patterns")
-final case class PrototypeConfig(@Recurse
-                                 common: CommonOptions) extends Config {
+final case class PrototypeConfig(
+    @Recurse
+    common: CommonOptions)
+    extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Prototype.run(this)
 
@@ -138,8 +157,8 @@ final case class QueryConfig(@Recurse
                              printQuery: BoolValue = FalseValue,
                              @HelpMessage("Restrict queried axioms to 'logical', 'annotation', or 'all' (default)")
                              @ValueDescription("all|logical|annotation")
-                             restrictAxiomsTo: AxiomKind = LogicalAxioms
-                            ) extends Config {
+                             restrictAxiomsTo: AxiomKind = LogicalAxioms)
+    extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Query.run(this)
 
@@ -157,16 +176,18 @@ object Config {
     for {
       file <- ZIO.effectTotal(new File(location))
       fileExists <- ZIO.effect(file.exists).mapError(e => DOSDPError(s"Could not read pattern file at $location", e))
-      sourceZ = if (fileExists) ZIO.effect(Source.fromFile(file, "UTF-8")) else
-        ZIO.effect(Source.fromURL(location, "UTF-8"))
+      sourceZ =
+        if (fileExists) ZIO.effect(Source.fromFile(file, "UTF-8"))
+        else
+          ZIO.effect(Source.fromURL(location, "UTF-8"))
       dosdpText <- sourceZ.bracketAuto(s => ZIO.effect(s.mkString)).mapError(e => DOSDPError(s"Could not read pattern file at $location", e))
       json <- ZIO.fromEither(parser.parse(dosdpText)).mapError(e => DOSDPError(s"Invalid JSON format for pattern file at $location", e))
       dosdp <- ZIO.fromEither(json.as[DOSDP]).mapError(e => DOSDPError(s"JSON does not conform to DOS-DP schema for pattern file at $location", e))
     } yield dosdp
 
   /**
-   * This works around some confusing behavior in case-app boolean parsing
-   */
+    * This works around some confusing behavior in case-app boolean parsing
+    */
   sealed trait BoolValue {
 
     def bool: Boolean
@@ -213,14 +234,13 @@ object Config {
 
   implicit val axiomKindArgParser: ArgParser[AxiomKind] = SimpleArgParser.from[AxiomKind]("axiom kind")(parseAxiomKind)
 
-  def parseAxiomKind(arg: String): Either[MalformedValue, AxiomKind] = {
+  def parseAxiomKind(arg: String): Either[MalformedValue, AxiomKind] =
     arg.toLowerCase match {
       case "all"        => Right(AllAxioms)
       case "logical"    => Right(LogicalAxioms)
       case "annotation" => Right(AnnotationAxioms)
       case _            => Left(MalformedValue("Not a valid axiom type", arg))
     }
-  }
 
 }
 
