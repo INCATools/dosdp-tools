@@ -19,7 +19,7 @@ object Main extends ZCommandApp[Config] {
           scribe.Logger.root
             .clearHandlers()
             .clearModifiers()
-            .withModifier(select(packageName(DOSDP.getClass.getPackageName)).include(level >= Level.Info))
+            .withModifier(select(packageName(DOSDP.getClass.getPackage.getName)).include(level >= Level.Info))
             .withHandler(minimumLevel = Some(Level.Warn))
             .replace()
       ) *>
