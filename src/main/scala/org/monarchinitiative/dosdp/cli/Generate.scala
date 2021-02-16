@@ -1,18 +1,19 @@
 package org.monarchinitiative.dosdp.cli
 
 import java.io.{File, StringReader}
-
 import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
-import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
 import org.semanticweb.owlapi.model.parameters.Imports
 import zio._
+import zio.console._
 import zio.blocking._
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths}
 import scala.io.Source
 import scala.jdk.CollectionConverters._
 
@@ -20,15 +21,15 @@ object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] =
-    for {
+  def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] = {
+    val program = for {
       ontologyOpt <- config.common.ontologyOpt
       prefixes <- config.common.prefixesMap
       (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutputChoice(config.restrictAxiomsTo)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
       axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
         .orElseFail(DOSDPError("Couldn't create IRI for axiom source annotation property."))
-      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
+      targets <- determineTargets(config)
       _ <- ZIO.foreach_(targets) { target =>
         for {
           _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
@@ -42,6 +43,8 @@ object Generate {
         } yield ()
       }
     } yield ()
+    program.catchSome { case msg: DOSDPError => ZIO.effectTotal(scribe.error(msg.msg)) }.catchAllCause(cause => putStrLn(cause.untraced.prettyPrint))
+  }
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean): IO[DOSDPError, Set[OWLAxiom]] =
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass)
@@ -125,16 +128,18 @@ object Generate {
     }
   }
 
-  private def determineTargets(config: GenerateConfig): ZIO[Blocking, Throwable, List[GenerateTarget]] = {
+  private def determineTargets(config: GenerateConfig): ZIO[Blocking, DOSDPError, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.infile))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+      _ <- ZIO.foreach(patternNames) { pattern =>
+        for {
+          _ <- ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern doesn't exist: $pattern")))
+        } yield ZIO.succeed()
+      }
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
       val dataExtension = config.common.tableFormat.toLowerCase
@@ -147,7 +152,7 @@ object Generate {
 
   def readFillers(file: File, sepFormat: CSVFormat): ZIO[Blocking, DOSDPError, (Set[String], List[Map[String, String]])] =
     for {
-      cleaned <- effectBlockingIO(Source.fromFile(file, "utf-8")).bracketAuto { source =>
+      cleaned <- effectBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).bracketAuto { source =>
         effectBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
       }.mapError(e => DOSDPError("Unable to read input table", e))
       columns <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>

@@ -39,6 +39,4 @@ object Utilities {
     } yield ontology
   }
 
-  def isDirectory(path: String): RIO[Blocking, Boolean] = effectBlocking(Files.isDirectory(Paths.get(path)))
-
 }
