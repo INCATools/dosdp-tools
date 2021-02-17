@@ -119,11 +119,7 @@ object Query {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.foreach(patternNames) { pattern =>
-          for {
-            _ <- ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern doesn't exist: $pattern")))
-          } yield ()
-      }
+      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern doesn't exist: $pattern"))))
       _ <- ZIO.when(!Files.exists(Paths.get(config.common.template)))(ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
       _ <- ZIO.when(!Files.exists(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
