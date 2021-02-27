@@ -21,8 +21,8 @@ object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] = {
-    val program = for {
+  def run(config: GenerateConfig): ZIO[ZEnv, DOSDPError, Unit] =
+    for {
       ontologyOpt <- config.common.ontologyOpt
       prefixes <- config.common.prefixesMap
       (outputLogicalAxioms, outputAnnotationAxioms) = axiomsOutputChoice(config.restrictAxiomsTo)
@@ -43,8 +43,6 @@ object Generate {
         } yield ()
       }
     } yield ()
-    program.catchSome { case msg: DOSDPError => ZIO.effectTotal(scribe.error(msg.msg)) }.catchAllCause(cause => putStrLn(cause.untraced.prettyPrint))
-  }
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean): IO[DOSDPError, Set[OWLAxiom]] =
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass)
