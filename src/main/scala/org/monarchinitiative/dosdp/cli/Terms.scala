@@ -11,8 +11,8 @@ import scala.jdk.CollectionConverters._
 
 object Terms {
 
-  def run(config: TermsConfig): ZIO[ZEnv, DOSDPError, Unit] = {
-    val program = for {
+  def run(config: TermsConfig): ZIO[ZEnv, DOSDPError, Unit] =
+    for {
       dosdp <- config.common.inputDOSDP
       prefixes <- config.common.prefixesMap
       eDOSDP = ExpandedDOSDP(dosdp, prefixes)
@@ -26,8 +26,6 @@ object Terms {
       _ <- ZIO.effect(config.common.outfile.toFile.overwrite("").appendLines(iris.map(_.toString).toSeq: _*)(StandardCharsets.UTF_8))
         .mapError(e => DOSDPError(s"Failed writing output file at ${config.common.outfile}", e))
     } yield ()
-    program.catchSome { case msg: DOSDPError => ZIO.effectTotal(scribe.error(msg.msg)) }.catchAllCause(cause => putStrLn(cause.untraced.prettyPrint))
-  }
 
   private def identifiersForRow(row: Map[String, String], dosdp: DOSDP): Set[String] = {
     val varFillers = for {
