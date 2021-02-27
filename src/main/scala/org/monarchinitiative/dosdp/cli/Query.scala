@@ -32,8 +32,8 @@ object Query {
         case other    => ZIO.fail(DOSDPError(s"Reasoner $other not supported. Options are ELK, HermiT, or JFact"))
       }
     }
-    val program = for {
-      targets <- determineTargets(config)
+    for {
+      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
       modelOpt <- ZIO.foreach(ontologyOpt)(makeModel)
@@ -44,7 +44,6 @@ object Query {
         }
       }
     } yield ()
-    program.catchSome { case msg: DOSDPError => ZIO.effectTotal(scribe.error(msg.msg)) }.catchAllCause(cause => putStrLn(cause.untraced.prettyPrint))
   }
 
   def makeModel(ont: OWLOntology): ZIO[Any, DOSDPError, Model] =
