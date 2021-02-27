@@ -2,7 +2,9 @@ package org.monarchinitiative.dosdp.cli
 
 import caseapp._
 import org.apache.jena.sys.JenaSystem
+import org.monarchinitiative.dosdp.DOSDP
 import scribe.Level
+import scribe.filter.{level, packageName, select}
 import zio._
 import zio.console.putStrLn
 
@@ -24,7 +26,13 @@ object Main extends ZCommandApp[Config] {
     val program = for {
       start <- clock.currentTime(TimeUnit.MILLISECONDS)
       _ <- ZIO.effectTotal(JenaSystem.init()) *> ZIO.effectTotal(
-        scribe.Logger.root.clearHandlers().clearModifiers().withHandler(minimumLevel = Some(Level.Info)).replace())
+        scribe.Logger.root
+          .clearHandlers()
+          .clearModifiers()
+          .withModifier(select(packageName(DOSDP.getClass.getPackage.getName)).include(level >= Level.Info))
+          .withHandler(minimumLevel = Some(Level.Warn))
+          .replace()
+      )
       exitCode <- config.run.exitCode
       end <- clock.currentTime(TimeUnit.MILLISECONDS)
       duration = toHumanReadableDateDiff(start, end)
