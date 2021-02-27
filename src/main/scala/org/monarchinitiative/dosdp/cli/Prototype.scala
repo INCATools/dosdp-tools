@@ -16,7 +16,7 @@ object Prototype {
 
   def run(config: PrototypeConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     val possibleFile = File(config.common.template)
-    val program = for {
+    for {
       isDir <- ZIO.effect(possibleFile.isDirectory).mapError(e => DOSDPError(s"Unable to read input at $possibleFile", e))
       filenames <- if (isDir) {
         ZIO.effect {
@@ -29,7 +29,6 @@ object Prototype {
       axioms <- ZIO.foreach(dosdps)(dosdp => axiomsFor(dosdp, config)).map(_.flatten)
       _ <- Utilities.saveAxiomsToOntology(axioms, config.common.outfile)
     } yield ()
-    program.catchSome { case msg: DOSDPError => ZIO.effectTotal(scribe.error(msg.msg)) }.catchAllCause(cause => putStrLn(cause.untraced.prettyPrint))
   }
 
   private def axiomsFor(dosdp: DOSDP, config: PrototypeConfig): ZIO[Blocking, DOSDPError, Set[OWLAxiom]] =
