@@ -3,13 +3,8 @@ package org.monarchinitiative.dosdp.cli
 import caseapp._
 import org.apache.jena.sys.JenaSystem
 import org.monarchinitiative.dosdp.DOSDP
-<<<<<<< HEAD
-import scribe.Level
-import scribe.filter.{level, packageName, select}
-=======
 import scribe._
 import scribe.filter._
->>>>>>> d7de38ddbad52e0d9f1b9eb8041a20c48ec0768a
 import zio._
 import zio.console.putStrLn
 
