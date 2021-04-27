@@ -1,0 +1,34 @@
+pattern_name: query_label
+
+classes:
+  Thing: owl:Thing
+
+relations:
+  part of: BFO:0000050
+  inheres in: RO:0000052
+
+vars:
+  attribute: "'Thing'"
+  entity: "'Thing'"
+
+readable_identifiers:
+  - rdfs:label
+  - http://example.org/synonym
+
+name:
+  text: "%s %s"
+  vars:
+    - entity
+    - attribute
+
+def:
+  text: "The %s of a %s."
+  vars:
+    - attribute
+    - entity
+
+equivalentTo:
+  text: "%s and 'inheres in' some %s"
+  vars:
+    - attribute
+    - entity

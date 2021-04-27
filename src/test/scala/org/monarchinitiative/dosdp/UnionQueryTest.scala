@@ -1,7 +1,7 @@
 package org.monarchinitiative.dosdp
 
 import org.apache.jena.sys.JenaSystem
-import org.monarchinitiative.dosdp.cli.Query
+import org.monarchinitiative.dosdp.cli.{Config, Query}
 import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLClass, OWLObjectProperty}
 import zio._
@@ -10,6 +10,8 @@ import zio.test._
 
 
 object UnionQueryTest extends DefaultRunnableSpec {
+
+  JenaSystem.init()
 
   val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
   val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
@@ -24,14 +26,14 @@ object UnionQueryTest extends DefaultRunnableSpec {
     )),
     vars = Some(Map("item" -> "'thing'")),
     equivalentTo = Some(PrintfOWLConvenience(None, "'classA' or 'classB' or %s", Some(List("item")))))
-  val sparqlQuery: String = SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes))
 
   def spec = suite("Union query test") {
     testM("Unions should be queryable") {
       for {
-        _ <- ZIO.effectTotal(JenaSystem.init())
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
-        columnsAndResults <- Query.performQuery(sparqlQuery, ontology)
+        model <- Query.makeModel(ontology)
+        sparqlQuery <- ZIO.fromEither(SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms))
+        columnsAndResults <- Query.performQuery(sparqlQuery, model)
         (_, results) = columnsAndResults
         tests <- ZIO.foreach(results) { qs =>
           for {
