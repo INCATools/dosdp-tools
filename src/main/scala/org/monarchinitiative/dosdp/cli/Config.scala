@@ -126,6 +126,21 @@ final case class PrototypeConfig(@Recurse
 
 }
 
+@CommandName("docs")
+@HelpMessage("output Markdown documentation for patterns")
+final case class DocsConfig(@Recurse
+                            common: CommonOptions,
+                            @HelpMessage("Input file (TSV or CSV)")
+                            @ValueDescription("file")
+                            infile: String = "fillers.tsv",
+                            @HelpMessage("URL prefix for linking to data files")
+                            @ValueDescription("URL")
+                            dataLocationPrefix: String = "http://example.org/") extends Config {
+
+  override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Docs.run(this)
+
+}
+
 @CommandName("query")
 @HelpMessage("query an ontology for terms matching a Dead Simple OWL Design Pattern")
 final case class QueryConfig(@Recurse
