@@ -43,7 +43,6 @@ object Docs {
       columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
       (columns, rows) = columnsAndFillers
       prefixes <- config.common.prefixesMap
-      ontologyOpt <- config.common.ontologyOpt
       iri <- ZIO.fromOption(dosdp.pattern_iri).orElseFail(DOSDPError("Pattern must have pattern IRI for document command"))
       fillers = dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
         dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
@@ -53,7 +52,7 @@ object Docs {
       variableReadableIdentifiers = (dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
         dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" }).map(e => IRI.create(e._2) -> s"`{${e._1}}`")
       renderer = objectRenderer(ontology, variableReadableIdentifiers)
-      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
+      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
       patternIRI = IRI.create(iri)
       docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
       data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
