@@ -1,45 +1,47 @@
 package org.monarchinitiative.dosdp.cli
 
 import better.files._
-import org.backuity.clist._
-import org.monarchinitiative.dosdp._
 import org.eclipse.rdf4j.model.vocabulary.DCTERMS
+import org.monarchinitiative.dosdp.{DOSDP, Utilities}
 import org.phenoscape.scowl._
-import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
-import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty, OWLAxiom}
+import org.semanticweb.owlapi.model.{OWLAnnotationProperty, OWLAxiom}
+import zio._
+import zio.blocking.Blocking
 
-import scala.jdk.CollectionConverters._
+object Prototype {
 
-object Prototype extends Command(description = "output \"prototype\" axioms using default fillers for a pattern or folder of patterns") with Common {
+  private val DCTTitle: OWLAnnotationProperty = AnnotationProperty(DCTERMS.TITLE.stringValue)
+  val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
-  val DCTTitle: OWLAnnotationProperty = AnnotationProperty(DCTERMS.TITLE.stringValue)
-
-  def run(): Unit = {
-    val possibleFile = File(templateFile)
-    val filenames = if (possibleFile.isDirectory) {
-      possibleFile.list.filter { f =>
-        f.extension(false, false, true).exists(e => (e == "yaml") || (e == "yml"))
-      }.map(_.toString).toSet
-    } else Set(templateFile)
-    val dosdps = filenames.map(inputDOSDPFrom)
-    val axioms = for {
-      dosdp <- dosdps
-      axiom <- axiomsFor(dosdp)
-    } yield axiom
-    val manager = OWLManager.createOWLOntologyManager()
-    val ont = manager.createOntology(axioms.asJava)
-    manager.saveOntology(ont, new FunctionalSyntaxDocumentFormat(), IRI.create(outfile))
+  def run(config: PrototypeConfig): ZIO[ZEnv, DOSDPError, Unit] = {
+    val possibleFile = File(config.common.template)
+    for {
+      isDir <- ZIO.effect(possibleFile.isDirectory).mapError(e => DOSDPError(s"Unable to read input at $possibleFile", e))
+      filenames <- if (isDir) {
+        ZIO.effect {
+          possibleFile.list.filter { f =>
+            f.extension(false, false, true).exists(e => (e == "yaml") || (e == "yml"))
+          }.map(_.toString).toSet
+        }.mapError(e => DOSDPError(s"Couldn't list files in $possibleFile", e))
+      } else ZIO.succeed(Set(config.common.template))
+      dosdps <- ZIO.foreach(filenames)(f => Config.inputDOSDPFrom(f))
+      axioms <- ZIO.foreach(dosdps)(dosdp => axiomsFor(dosdp, config)).map(_.flatten)
+      _ <- Utilities.saveAxiomsToOntology(axioms, config.common.outfile)
+    } yield ()
   }
 
-  private def axiomsFor(dosdp: DOSDP): Set[OWLAxiom] =
-    dosdp.pattern_iri.map { iri =>
-      val fillers = dosdp.vars.getOrElse(Map.empty) ++
+  private def axiomsFor(dosdp: DOSDP, config: PrototypeConfig): ZIO[Blocking, DOSDPError, Set[OWLAxiom]] =
+    for {
+      prefixes <- config.common.prefixesMap
+      ontologyOpt <- config.common.ontologyOpt
+      iri <- ZIO.fromOption(dosdp.pattern_iri).orElseFail(DOSDPError("Pattern must have pattern IRI for prototype command"))
+      fillers = dosdp.vars.getOrElse(Map.empty) ++
         dosdp.list_vars.getOrElse(Map.empty) ++
         dosdp.data_vars.getOrElse(Map.empty) ++
         dosdp.data_list_vars.getOrElse(Map.empty) +
         (DOSDP.DefinedClassVariable -> iri)
-      Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false) ++ dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
-    }.toSet.flatten
+      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false, Map.empty)
+      maybeTitleAxiom = dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
+    } yield axioms ++ maybeTitleAxiom
 
 }

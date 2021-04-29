@@ -14,6 +14,7 @@ final case class DOSDP(
                         pattern_name: Option[String] = None,
                         pattern_iri: Option[String] = None,
                         base_IRI: Option[String] = None,
+                        contributors: Option[List[String]] = None,
                         description: Option[String] = None,
                         readable_identifiers: Option[List[String]] = None,
                         classes: Option[Map[String, String]] = None,
@@ -104,7 +105,10 @@ object PrintfText {
           realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
-    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.format(fillers: _*))
+    if (text.startsWith(" ") || text.endsWith(" ")) {
+      scribe.warn(s"template '$text' either starts or ends with space")
+    }
+    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
 
 }

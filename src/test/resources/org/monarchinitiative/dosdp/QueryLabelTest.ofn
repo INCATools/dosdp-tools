@@ -1,0 +1,73 @@
+Prefix(:=<http://example.org#>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<http://example.org>
+
+Declaration(Class(<http://example.org/A>))
+Declaration(Class(<http://example.org/B>))
+Declaration(Class(<http://example.org/C>))
+Declaration(Class(<http://example.org/D>))
+Declaration(Class(<http://example.org/E>))
+Declaration(Class(<http://example.org/F>))
+Declaration(Class(<http://example.org/G>))
+Declaration(Class(<http://example.org/H>))
+Declaration(Class(<http://example.org/I>))
+Declaration(Class(<http://example.org/anatomical_entity>))
+Declaration(Class(<http://example.org/quality>))
+Declaration(Class(<http://example.org/trait>))
+Declaration(AnnotationProperty(<http://example.org/synonym>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+############################
+#   Annotation Properties
+############################
+
+# Annotation Property: <http://purl.obolibrary.org/obo/IAO_0000115> (definition)
+
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/IAO_0000115> "definition")
+
+
+
+############################
+#   Classes
+############################
+
+# Class: <http://example.org/A> (femur head shape)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://example.org/A> "The shape of a femur head."^^xsd:string)
+AnnotationAssertion(rdfs:label <http://example.org/A> "femur head shape"^^xsd:string)
+SubClassOf(<http://example.org/A> <http://example.org/trait>)
+
+# Class: <http://example.org/B> (head of femur)
+
+AnnotationAssertion(<http://example.org/synonym> <http://example.org/B> "femur head"^^xsd:string)
+AnnotationAssertion(rdfs:label <http://example.org/B> "head of femur"^^xsd:string)
+SubClassOf(<http://example.org/B> <http://example.org/anatomical_entity>)
+
+# Class: <http://example.org/C> (shape)
+
+AnnotationAssertion(rdfs:label <http://example.org/C> "shape"^^xsd:string)
+SubClassOf(<http://example.org/C> <http://example.org/quality>)
+
+# Class: <http://example.org/G> (limb length)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://example.org/G> "The length of a limb.")
+AnnotationAssertion(rdfs:label <http://example.org/G> "limb length")
+SubClassOf(<http://example.org/G> <http://example.org/trait>)
+
+# Class: <http://example.org/H> (length)
+
+AnnotationAssertion(rdfs:label <http://example.org/H> "length"^^xsd:string)
+SubClassOf(<http://example.org/H> <http://example.org/quality>)
+
+# Class: <http://example.org/I> (limb)
+
+AnnotationAssertion(rdfs:label <http://example.org/I> "limb")
+SubClassOf(<http://example.org/I> <http://example.org/anatomical_entity>)
+
+
+)

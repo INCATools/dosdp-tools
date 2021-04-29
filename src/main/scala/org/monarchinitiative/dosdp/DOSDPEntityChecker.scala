@@ -9,7 +9,8 @@ class DOSDPEntityChecker(dosdp: DOSDP, prefixes: PartialFunction[String, String]
   private val factory = OWLManager.getOWLDataFactory
 
   def getOWLAnnotationProperty(name: String): OWLAnnotationProperty = {
-    val properties = dosdp.annotationProperties.getOrElse(Map.empty)
+    val properties = dosdp.annotationProperties.getOrElse(Map.empty) ++
+      dosdp.readable_identifiers.toList.flatten.map(id => id -> id).toMap
     nameToIRI(name, properties).map(factory.getOWLAnnotationProperty).orNull
   }
 

@@ -1,19 +1,28 @@
 package org.monarchinitiative.dosdp.cli
 
+import caseapp._
 import org.apache.jena.sys.JenaSystem
-import org.backuity.clist._
-import scribe.Level
+import org.monarchinitiative.dosdp.DOSDP
+import scribe._
+import scribe.filter._
+import zio._
 
-object Main extends App {
+object Main extends ZCommandApp[Config] {
 
-  JenaSystem.init()
-  try {
-    scribe.Logger.root.clearHandlers().clearModifiers().withHandler(minimumLevel = Some(Level.Info)).replace()
-    Cli.parse(args).withProgramName("dosdp-tools").withCommands(Generate, Query, Terms, Prototype).foreach(_.run())
-  } catch {
-    case e: Exception =>
-      println(e.getMessage)
-      throw e
-  }
+  override def appName: String = "dosdp-tools"
+
+  override def progName: String = "dosdp-tools"
+
+  override def run(config: Config, args: RemainingArgs): ZIO[ZEnv, Nothing, ExitCode] =
+    ZIO.effectTotal(JenaSystem.init()) *>
+      ZIO.effectTotal(
+          scribe.Logger.root
+            .clearHandlers()
+            .clearModifiers()
+            .withModifier(select(packageName(DOSDP.getClass.getPackage.getName)).include(level >= Level.Info))
+            .withHandler(minimumLevel = Some(Level.Warn))
+            .replace()
+      ) *>
+      config.run.exitCode
 
 }

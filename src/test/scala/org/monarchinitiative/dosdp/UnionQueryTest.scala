@@ -1,19 +1,23 @@
 package org.monarchinitiative.dosdp
 
-import java.io.File
+import org.apache.jena.sys.JenaSystem
+import org.monarchinitiative.dosdp.cli.{Config, Query}
+import org.phenoscape.scowl.{not => _, _}
+import org.semanticweb.owlapi.model.{OWLClass, OWLObjectProperty}
+import zio._
+import zio.test.Assertion._
+import zio.test._
 
-import org.monarchinitiative.dosdp.cli.Query
-import org.phenoscape.scowl._
-import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.model.IRI
 
-class UnionQueryTest extends UnitSpec {
+object UnionQueryTest extends DefaultRunnableSpec {
 
-  val term = Class("http://purl.obolibrary.org/obo/ONT_0000001")
-  val item = Class("http://purl.obolibrary.org/obo/ONT_0000002")
-  val partOf = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
+  JenaSystem.init()
 
-  val dosdp = DOSDP.empty.copy(
+  val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
+  val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
+  val partOf: OWLObjectProperty = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
+
+  val dosdp: DOSDP = DOSDP.empty.copy(
     pattern_name = Some("test_unions_pattern"),
     classes = Some(Map(
       "thing" -> "owl:Thing",
@@ -22,16 +26,24 @@ class UnionQueryTest extends UnitSpec {
     )),
     vars = Some(Map("item" -> "'thing'")),
     equivalentTo = Some(PrintfOWLConvenience(None, "'classA' or 'classB' or %s", Some(List("item")))))
-  val sparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes))
-  val ontology = OWLManager.createOWLOntologyManager().loadOntology(IRI.create(new File("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn")))
 
-  "Unions" should "be queryable" in {
-    val results = Query.performQuery(sparqlQuery, ontology)._2
-    results.foreach { qs =>
-      qs.getResource("defined_class").getURI shouldEqual "http://example.org#X"
-      qs.getResource("item").getURI shouldEqual "http://example.org#C"
+  def spec = suite("Union query test") {
+    testM("Unions should be queryable") {
+      for {
+        ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
+        model <- Query.makeModel(ontology)
+        sparqlQuery <- ZIO.fromEither(SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms))
+        columnsAndResults <- Query.performQuery(sparqlQuery, model)
+        (_, results) = columnsAndResults
+        tests <- ZIO.foreach(results) { qs =>
+          for {
+            definedClass <- ZIO.effect(qs.getResource("defined_class").getURI)
+            item <- ZIO.effect(qs.getResource("item").getURI)
+          } yield assert(definedClass)(equalTo("http://example.org#X")) &&
+            assert(item)(equalTo("http://example.org#C"))
+        }
+      } yield tests.reduce(_ && _)
     }
   }
-
 
 }
