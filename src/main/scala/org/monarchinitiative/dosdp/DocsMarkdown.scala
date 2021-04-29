@@ -25,7 +25,10 @@ object DocsMarkdown {
 
 ## Description
 
-${dosdp.description.getOrElse("_No description_")}
+${dosdp.description.getOrElse("*No description*")}
+
+${if (dosdp.contributors.nonEmpty) "## Contributors\n" else ""}
+${dosdp.contributors.getOrElse(Nil).map(c => s"- $c").mkString("\n")}
 
 ## Variables
 
