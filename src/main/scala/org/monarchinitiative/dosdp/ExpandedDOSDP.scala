@@ -113,6 +113,11 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     vars.view.mapValues(expressionParser.parse).toMap
   }
 
+  def listVarExpressions: Map[String, OWLClassExpression] = {
+    val vars = dosdp.list_vars.getOrElse(Map.empty)
+    vars.view.mapValues(expressionParser.parse).toMap
+  }
+
   private def expressionFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] =
     template.replaced(bindings).map(expressionParser.parse)
 

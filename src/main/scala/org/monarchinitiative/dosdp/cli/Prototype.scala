@@ -11,7 +11,7 @@ import zio.blocking.Blocking
 object Prototype {
 
   private val DCTTitle: OWLAnnotationProperty = AnnotationProperty(DCTERMS.TITLE.stringValue)
-  private val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
+  val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
   def run(config: PrototypeConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     val possibleFile = File(config.common.template)
@@ -40,7 +40,7 @@ object Prototype {
         dosdp.data_vars.getOrElse(Map.empty) ++
         dosdp.data_list_vars.getOrElse(Map.empty) +
         (DOSDP.DefinedClassVariable -> iri)
-      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false)
+      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false, Map.empty)
       maybeTitleAxiom = dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
     } yield axioms ++ maybeTitleAxiom
 
