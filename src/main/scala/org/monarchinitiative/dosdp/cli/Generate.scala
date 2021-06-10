@@ -77,12 +77,18 @@ object Generate {
         dataListVar <- dataListVars.keys
         filler <- row.get(dataListVar).flatMap(stripToOption)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
+      val internalVarBindings = (for {
+        internalVars <- dosdp.internal_vars.toSeq
+        internalVar <- internalVars
+        function <- internalVar.apply.toSeq
+      } yield internalVar.var_name ->  SingleValue(function.apply(Option(dataListBindings.getOrElse(internalVar.var_name,
+        listVarBindings.getOrElse(internalVar.var_name, MultiValue(Set.empty[String])   ) )) )) ).toMap
       val additionalBindings = for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
       val maybeDefinedClass = if (generateDefinedClass) {
         dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
-          val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
+          val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings ++ internalVarBindings
           DOSDP.computeDefinedIRI(patternIRI, bindingsForDefinedClass).toString
         }.toRight(DOSDPError("Pattern must have an IRI if generate-defined-class is requested."))
       } else row.get(DOSDP.DefinedClassVariable).map(_.trim)
@@ -94,6 +100,7 @@ object Generate {
         readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
         initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
+          internalVarBindings ++
           dataVarBindings ++
           dataListBindings +
           iriBinding

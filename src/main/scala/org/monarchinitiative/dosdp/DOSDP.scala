@@ -3,6 +3,7 @@ package org.monarchinitiative.dosdp
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
+import cats.syntax.functor._
 import org.apache.commons.codec.digest.DigestUtils
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty}
@@ -26,6 +27,7 @@ final case class DOSDP(
                         list_vars: Option[Map[String, String]] = None,
                         data_vars: Option[Map[String, String]] = None,
                         data_list_vars: Option[Map[String, String]] = None,
+                        internal_vars: Option[List[InternalVariable]] = None,
                         substitutions: Option[List[RegexSub]] = None,
                         annotations: Option[List[Annotations]] = None,
                         logical_axioms: Option[List[PrintfOWL]] = None,
@@ -81,13 +83,13 @@ object DOSDP {
 
 trait PrintfText {
 
-  def text: String
+  def text: Option[String]
 
   def vars: Option[List[String]]
 
   def annotations: Option[List[Annotations]]
 
-  def replaced(bindings: Option[Map[String, SingleValue]]): Option[String] = PrintfText.replaced(this.text, this.vars, bindings, shouldQuote)
+  def replaced(bindings: Option[Map[String, SingleValue]]): Option[String] = PrintfText.replaced(this.text, this.vars, None, bindings, shouldQuote)
 
   def shouldQuote: Boolean
 
@@ -95,28 +97,53 @@ trait PrintfText {
 
 object PrintfText {
 
-  def replaced(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+  def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+    println("innn:" + text.getOrElse("No text") + "   " + multi_clause.getOrElse("No multi_clause"))
+    if(text.isDefined) {
+      val result = replace_text(text, vars, bindings, quote)
+      println("result:-"+result+"-")
+      return result
+    } else if (multi_clause.isDefined) {
+      val replaced_texts = for {
+        multi_clauses <- multi_clause.toSeq
+        printf_clauses <- multi_clauses.clauses.toSeq
+        printf_clause <- printf_clauses
+        printf_clause_text <- replaced(Some(printf_clause.text), printf_clause.vars, None, bindings, quote)
+        _ = println("printf_clause_text-"+printf_clause_text+"-")
+        sub_clauses = printf_clause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
+        sub_clauses_texts = sub_clauses.map(mc => replaced(None, None, Some(mc), bindings, quote)).flatten
+        _ = println("sub_clauses_texts-" + sub_clauses + "-")
+        _ = println("merged-" + (printf_clause_text :: sub_clauses_texts) + "-")
+        clause_text = (printf_clause_text :: sub_clauses_texts).mkString(multi_clauses.sep.getOrElse(" "))
+        _ = println("clause_text-" + clause_text + "-")
+      } yield clause_text
+      println("replaced text: " + replaced_texts)
+      return Some(replaced_texts.filter(_.nonEmpty).mkString(multi_clause.get.sep.getOrElse(" ")))
+    }
+    None
+  }
+
+  private def replace_text(text: Option[String], vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean) = {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
-        case None        => Some(realVars.map(name => "'$" + name + "'"))
+        case None => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.view.mapValues(_.value).toMap
           realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
-    if (text.startsWith(" ") || text.endsWith(" ")) {
+    if (text.getOrElse("").startsWith(" ") || text.getOrElse("").endsWith(" ")) {
       scribe.warn(s"template '$text' either starts or ends with space")
     }
-    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
+    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.getOrElse("").trim().format(fillers: _*))
   }
-
 }
 
 final case class PrintfOWL(
                             annotations: Option[List[Annotations]],
                             axiom_type: AxiomType,
-                            text: String,
+                            text: Option[String],
                             vars: Option[List[String]]) extends PrintfText {
 
   val shouldQuote = true
@@ -125,7 +152,7 @@ final case class PrintfOWL(
 
 final case class PrintfOWLConvenience(
                                        annotations: Option[List[Annotations]],
-                                       text: String,
+                                       text: Option[String],
                                        vars: Option[List[String]]) extends PrintfText {
 
   val shouldQuote = true
@@ -167,7 +194,7 @@ sealed trait Annotations extends AnnotationLike {
 final case class PrintfAnnotation(
                                    annotations: Option[List[Annotations]],
                                    annotationProperty: String,
-                                   text: String,
+                                   text: Option[String],
                                    vars: Option[List[String]],
                                    `override`: Option[String])
   extends Annotations with PrintfText {
@@ -205,8 +232,9 @@ sealed trait OBOAnnotations
 final case class PrintfAnnotationOBO(
                                       annotations: Option[List[Annotations]],
                                       xrefs: Option[String],
-                                      text: String,
-                                      vars: Option[List[String]]) extends PrintfText with AnnotationLike with OBOAnnotations {
+                                      text: Option[String],
+                                      vars: Option[List[String]],
+                                      multi_clause: Option[MultiClausePrintf]) extends PrintfText with AnnotationLike with OBOAnnotations {
 
   val shouldQuote = false
 
@@ -251,3 +279,53 @@ final case class OPA(
                       edge: List[String], //TODO require length of 3
                       annotations: Option[List[Annotations]],
                       not: Option[Boolean])
+
+final case class MultiClausePrintf(
+                                   sep: Option[String],
+                                   clauses: Option[List[PrintfClause]])
+
+final case class PrintfClause(
+                               text: String,
+                               vars: Option[List[String]],
+                               sub_clauses: Option[List[MultiClausePrintf]])
+
+final case class InternalVariable(
+                                 var_name: String,
+                                 apply: Option[Function],
+                                 input: String,
+                                 )
+
+sealed trait Function {
+  def apply(input_var:Option[Binding]): String
+}
+
+object Function {
+
+  implicit val decodeFunction: Decoder[Function] = Decoder[JoinFunction].map[Function](identity).or(Decoder[RegexFunction].map[Function](identity))
+  implicit val encodeFunction: Encoder[Function] = Encoder.instance {
+    case join @ JoinFunction(_) => join.asJson
+    case regex @ RegexFunction(_) => regex.asJson
+  }
+
+}
+
+final case class JoinFunction(join: Join) extends Function {
+  override def apply(input_var:Option[Binding]): String =
+    input_var.getOrElse(MultiValue(Set.empty[String])).asInstanceOf[MultiValue].value.mkString(join.sep)
+}
+
+final case class RegexFunction(regex: RegexSub) extends Function {
+  override def apply(input_var:Option[Binding]): String = {
+    val applied_value = input_var.getOrElse(SingleValue("")).asInstanceOf[SingleValue].value
+//    if(regex.sub.nonEmpty){
+//
+//    }else if (regex.`match`.nonEmpty){
+//
+//    }
+    applied_value
+  }
+}
+
+final case class Join(sep: String)
+
+
