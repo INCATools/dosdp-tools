@@ -98,26 +98,18 @@ trait PrintfText {
 object PrintfText {
 
   def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
-    println("innn:" + text.getOrElse("No text") + "   " + multi_clause.getOrElse("No multi_clause"))
     if(text.isDefined) {
-      val result = replace_text(text, vars, bindings, quote)
-      println("result:-"+result+"-")
-      return result
+      return replace_text(text, vars, bindings, quote)
     } else if (multi_clause.isDefined) {
       val replaced_texts = for {
         multi_clauses <- multi_clause.toSeq
         printf_clauses <- multi_clauses.clauses.toSeq
         printf_clause <- printf_clauses
         printf_clause_text <- replaced(Some(printf_clause.text), printf_clause.vars, None, bindings, quote)
-        _ = println("printf_clause_text-"+printf_clause_text+"-")
         sub_clauses = printf_clause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
-        sub_clauses_texts = sub_clauses.map(mc => replaced(None, None, Some(mc), bindings, quote)).flatten
-        _ = println("sub_clauses_texts-" + sub_clauses + "-")
-        _ = println("merged-" + (printf_clause_text :: sub_clauses_texts) + "-")
+        sub_clauses_texts = sub_clauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
         clause_text = (printf_clause_text :: sub_clauses_texts).mkString(multi_clauses.sep.getOrElse(" "))
-        _ = println("clause_text-" + clause_text + "-")
       } yield clause_text
-      println("replaced text: " + replaced_texts)
       return Some(replaced_texts.filter(_.nonEmpty).mkString(multi_clause.get.sep.getOrElse(" ")))
     }
     None
