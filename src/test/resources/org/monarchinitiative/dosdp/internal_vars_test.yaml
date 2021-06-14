@@ -1,0 +1,115 @@
+pattern_name: cardinalityTestPattern
+pattern_iri: http://purl.obolibrary.org/obo/odk/brainCellRegionMinimalMarkers.yaml
+
+description: 'Sample pattern to test cardinality.'
+
+relations:
+  part_of: "BFO:0000050"
+  bearer_of: "RO:0002162"
+  expresses: "RO:0002100"
+
+vars:
+  gross_cell_type: "'Thing'"
+#  gross_cell_type: "'cell'"
+  taxon: "'Vertebrata <vertebrates>'"
+  brain_region: "'regional part of brain'"
+  proj_type: "'projection type'"
+
+data_vars:
+  layer_comment: "xsd:string"
+  Allen_marker_comment: "xsd:string"
+
+data_list_vars:
+  layer_pubs: "xsd:string"
+  Allen_marker_pubs: "xsd:string"
+
+classes:
+  "sequence_feature": "SO:0000110"
+  "layer of neocortex": "UBERON:0002301"
+  "cell": "CL:0000000"
+  "projection type": "PATO:..."
+
+list_vars:
+  minimal_markers: "'sequence_feature'"
+  allen_markers: "'sequence_feature'"
+  layers: "'layer of neocortex'"
+  gross_cell_types: "'cell'"
+
+internal_vars:
+  - var_name: minimal_markers_cat
+    input: minimal_markers
+    apply:
+      join:
+        sep: ', '
+  - var_name: allen_makers_cat
+    input: allen_markers
+    apply:
+      join:
+        sep: ', '
+  - var_name: cortical_layer_cat
+    input: layers
+    apply:
+      join:
+        sep: ' or '
+  - var_name: gross_cell_type_cat
+    input: gross_cell_types
+    apply:
+      join:
+        sep: ' or '
+
+comment:
+  text: "Entity label expansion test: %s."
+  vars:
+    - gross_cell_type_cat
+
+name:
+  text: 'Sample name with type list: %s.'
+  vars:
+    - gross_cell_type_cat
+
+def:
+  multi_clause:
+    sep: " "
+    clauses:
+      - text: 'A %s of the %s %s. These cells can be distinguished from other cells in the %s by their expression of %s.'
+        vars:
+          - gross_cell_type
+          - taxon
+          - brain_region
+          - brain_region
+          - minimal_markers_cat
+        sub_clauses:
+          - sep: ' '
+          - clauses:
+              - text: 'These cells also express %s.'
+                vars:
+                  - allen_makers_cat
+              - text: 'These cells have projection type %s.'
+                vars:
+                  - proj_type
+              - text: 'The soma of these cells in located in: %s.'
+                vars:
+                  -  cortical_layer_cat
+
+logical_axioms:
+  - axiom_type: subClassOf
+    text: "'expresses' some %s"
+    vars:
+        - allen_markers
+  - axiom_type: subClassOf
+    text: "'expresses' some %s"
+    vars:
+        - minimal_markers
+  - axiom_type: subClassOf
+    text: "%s"
+    vars:
+      - specific_class
+  - axiom_type: subClassOf
+    text: "%s"
+    vars:
+      - gross_class
+  - axiom_type: subClassOf
+    text: "'bearer_of' some %s"
+    vars:
+      - proj_type
+                                               

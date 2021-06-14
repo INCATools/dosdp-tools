@@ -81,8 +81,9 @@ object Generate {
         internalVars <- dosdp.internal_vars.toSeq
         internalVar <- internalVars
         function <- internalVar.apply.toSeq
-      } yield internalVar.var_name ->  SingleValue(function.apply(Option(dataListBindings.getOrElse(internalVar.var_name,
-        listVarBindings.getOrElse(internalVar.var_name, MultiValue(Set.empty[String])   ) )) )) ).toMap
+        value = function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
+        if value.isDefined
+      } yield internalVar.var_name ->  SingleValue(value.get) ).toMap
       val additionalBindings = for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
@@ -100,7 +101,7 @@ object Generate {
         readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
         initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-          internalVarBindings ++
+          internalVarBindings.view.mapValues(v => resolveIrisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           dataVarBindings ++
           dataListBindings +
           iriBinding
@@ -186,6 +187,17 @@ object Generate {
   private def irisToLabels(binding: Binding, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = binding match {
     case SingleValue(value) => SingleValue(Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(iri, dosdp, index)).getOrElse(value))
     case MultiValue(values) => MultiValue(values.map(value => Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(iri, dosdp, index)).getOrElse(value)))
+  }
+
+  private def resolveIrisToLabels(binding: SingleValue, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = {
+    val CURIEList = "([^ :]*):([^ ,]*)".r
+    val CURIEListEmbed = CURIEList.unanchored
+    val value = binding.value
+    var resolvedValue = value
+    if (CURIEListEmbed.matches(value)) {
+      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri => resolvedValue = resolvedValue.replaceFirst(matching.group(1)+":"+matching.group(2), readableIdentifierForIRI(IRI.create(uri+matching.group(2)), dosdp, index))))
+    }
+    SingleValue(resolvedValue)
   }
 
   private def readableIdentifierForIRI(iri: IRI, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): String = {

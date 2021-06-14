@@ -110,7 +110,9 @@ object PrintfText {
         sub_clauses_texts = sub_clauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
         clause_text = (printf_clause_text :: sub_clauses_texts).mkString(multi_clauses.sep.getOrElse(" "))
       } yield clause_text
-      return Some(replaced_texts.filter(_.nonEmpty).mkString(multi_clause.get.sep.getOrElse(" ")))
+      val result = replaced_texts.filter(_.nonEmpty).mkString(multi_clause.get.sep.getOrElse(" "))
+      val trimmed = result.trim
+      if (trimmed.isEmpty) return None else return Some(trimmed)
     }
     None
   }
@@ -288,7 +290,7 @@ final case class InternalVariable(
                                  )
 
 sealed trait Function {
-  def apply(input_var:Option[Binding]): String
+  def apply(input_var:Option[Binding]): Option[String]
 }
 
 object Function {
@@ -302,19 +304,21 @@ object Function {
 }
 
 final case class JoinFunction(join: Join) extends Function {
-  override def apply(input_var:Option[Binding]): String =
-    input_var.getOrElse(MultiValue(Set.empty[String])).asInstanceOf[MultiValue].value.mkString(join.sep)
+  override def apply(input_var:Option[Binding]): Option[String] = {
+    val joined_values = input_var.getOrElse(MultiValue(Set.empty[String])).asInstanceOf[MultiValue].value.mkString(join.sep)
+    if (joined_values.isEmpty) None else Some(joined_values)
+  }
 }
 
 final case class RegexFunction(regex: RegexSub) extends Function {
-  override def apply(input_var:Option[Binding]): String = {
+  override def apply(input_var:Option[Binding]): Option[String] = {
     val applied_value = input_var.getOrElse(SingleValue("")).asInstanceOf[SingleValue].value
 //    if(regex.sub.nonEmpty){
 //
 //    }else if (regex.`match`.nonEmpty){
 //
 //    }
-    applied_value
+    Some(applied_value)
   }
 }
 
