@@ -98,26 +98,13 @@ trait PrintfText {
 object PrintfText {
 
   def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
-    if(text.isDefined) {
-      return replace_text(text, vars, bindings, quote)
-    } else if (multi_clause.isDefined) {
-      val replaced_texts = for {
-        multi_clauses <- multi_clause.toSeq
-        printf_clauses <- multi_clauses.clauses.toSeq
-        printf_clause <- printf_clauses
-        printf_clause_text <- replaced(Some(printf_clause.text), printf_clause.vars, None, bindings, quote)
-        sub_clauses = printf_clause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
-        sub_clauses_texts = sub_clauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
-        clause_text = (printf_clause_text :: sub_clauses_texts).mkString(multi_clauses.sep.getOrElse(" "))
-      } yield clause_text
-      val result = replaced_texts.filter(_.nonEmpty).mkString(multi_clause.get.sep.getOrElse(" "))
-      val trimmed = result.trim
-      if (trimmed.isEmpty) return None else return Some(trimmed)
-    }
-    None
+    val replacedText = text.flatMap(content => replaceText(content, vars, bindings, quote))
+    val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote))
+    val replacedPrintf = replacedText ++ replacedClause
+    if (replacedPrintf.isEmpty) None else replacedPrintf.headOption
   }
 
-  private def replace_text(text: Option[String], vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean) = {
+  private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
@@ -127,11 +114,26 @@ object PrintfText {
           realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
-    if (text.getOrElse("").startsWith(" ") || text.getOrElse("").endsWith(" ")) {
+    if (text.startsWith(" ") || text.endsWith(" ")) {
       scribe.warn(s"template '$text' either starts or ends with space")
     }
-    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.getOrElse("").trim().format(fillers: _*))
+    fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
+
+  private def replaceMultiClause(multi_clause: MultiClausePrintf, bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+    val replacedTexts = for {
+      printfClauses <- multi_clause.clauses.toSeq
+      printfClause <- printfClauses
+      printfClauseText <- replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote)
+      subClauses = printfClause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
+      subClausesTexts = subClauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
+      clauseText = (printfClauseText :: subClausesTexts).mkString(multi_clause.sep.getOrElse(" "))
+    } yield clauseText
+    val result = replacedTexts.filter(_.nonEmpty).mkString(multi_clause.sep.getOrElse(" "))
+    val trimmed = result.trim
+    if (trimmed.isEmpty) None else Some(trimmed)
+  }
+
 }
 
 final case class PrintfOWL(
@@ -305,20 +307,22 @@ object Function {
 
 final case class JoinFunction(join: Join) extends Function {
   override def apply(input_var:Option[Binding]): Option[String] = {
-    val joined_values = input_var.getOrElse(MultiValue(Set.empty[String])).asInstanceOf[MultiValue].value.mkString(join.sep)
-    if (joined_values.isEmpty) None else Some(joined_values)
+    val multiValue = input_var.collect { case a: MultiValue => a }.getOrElse(MultiValue(Set.empty[String]))
+    val joinedValues = multiValue.value.mkString(join.sep)
+    if (joinedValues.isEmpty) None else Some(joinedValues)
   }
 }
 
 final case class RegexFunction(regex: RegexSub) extends Function {
   override def apply(input_var:Option[Binding]): Option[String] = {
-    val applied_value = input_var.getOrElse(SingleValue("")).asInstanceOf[SingleValue].value
+    val singleValue = input_var.collect { case a: SingleValue => a }.getOrElse(SingleValue(""))
+    val appliedValue = singleValue.value
 //    if(regex.sub.nonEmpty){
 //
 //    }else if (regex.`match`.nonEmpty){
 //
 //    }
-    Some(applied_value)
+    Some(appliedValue)
   }
 }
 

@@ -81,9 +81,8 @@ object Generate {
         internalVars <- dosdp.internal_vars.toSeq
         internalVar <- internalVars
         function <- internalVar.apply.toSeq
-        value = function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
-        if value.isDefined
-      } yield internalVar.var_name ->  SingleValue(value.get) ).toMap
+        value <- function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
+      } yield internalVar.var_name ->  SingleValue(value)).toMap
       val additionalBindings = for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
@@ -195,7 +194,9 @@ object Generate {
     val value = binding.value
     var resolvedValue = value
     if (CURIEListEmbed.matches(value)) {
-      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri => resolvedValue = resolvedValue.replaceFirst(matching.group(1)+":"+matching.group(2), readableIdentifierForIRI(IRI.create(uri+matching.group(2)), dosdp, index))))
+      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri =>
+        resolvedValue = resolvedValue.replaceFirst(matching.group(1)+":"+matching.group(2),
+          readableIdentifierForIRI(IRI.create(uri+matching.group(2)), dosdp, index))))
     }
     SingleValue(resolvedValue)
   }
