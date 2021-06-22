@@ -4,12 +4,15 @@ Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
 Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
 Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
 Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(ensembl:=<http://identifiers.org/ensembl/>)
 
 
 Ontology(<http://purl.obolibrary.org/obo/>
 
 Declaration(Class(:CL_0011005))
 Declaration(Class(:CL_0000679))
+Declaration(Class(ensembl:ENSMUSG00000025537))
+Declaration(Class(ensembl:ENSMUSG00000030235))
 
 
 ############################
@@ -23,6 +26,14 @@ AnnotationAssertion(rdfs:label :CL_0011005 "MyEntity1_Label")
 # Class: :CL_0000679 (MyEntity2_Label)
 
 AnnotationAssertion(rdfs:label :CL_0000679 "MyEntity2_Label")
+
+# Class: ensembl:ENSMUSG00000025537 (Phkg1)
+
+AnnotationAssertion(rdfs:label ensembl:ENSMUSG00000025537 "Phkg1")
+
+# Class: ensembl:ENSMUSG00000030235 (MyEntity2_Label)
+
+AnnotationAssertion(rdfs:label ensembl:ENSMUSG00000030235 "Slco1c1")
 
 
 )

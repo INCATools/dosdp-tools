@@ -40,7 +40,7 @@ internal_vars:
     input: minimal_markers
     apply:
       join:
-        sep: ', '
+        sep: ','
   - var_name: allen_makers_cat
     input: allen_markers
     apply:

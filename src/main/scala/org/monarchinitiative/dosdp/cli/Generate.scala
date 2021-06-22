@@ -189,7 +189,7 @@ object Generate {
   }
 
   private def resolveIrisToLabels(binding: SingleValue, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = {
-    val CURIEList = "([^ :]*):([^ ,]*)".r
+    val CURIEList = "([^ ,:]*):([^ ,]*)".r
     val CURIEListEmbed = CURIEList.unanchored
     val value = binding.value
     var resolvedValue = value
