@@ -12,7 +12,7 @@ object InternalVarsTest extends DefaultRunnableSpec {
 
   val oboIAO115: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/IAO_0000115")
 
-  def spec = suite("Internal vars and multi_value clauses test") (
+  def spec = suite("Internal vars and multi_value clauses test")(
     testM("Utilize internal_vars join function with data_list_vars correctly.") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/internal_vars_test.yaml")

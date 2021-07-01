@@ -181,13 +181,13 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         if trimmed.nonEmpty
       } yield trimmed).orElse(PrintfText.replaced(text, vars, multi_clause, annotationBindings.map(singleValueBindings), false))
       valueOpt.toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
-    case NormalizedListAnnotation(prop, value, subAnnotations)                           =>
+    case NormalizedListAnnotation(prop, value, subAnnotations)                                         =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
       val listValueOpt = bindingsMap.get(value)
       listValueOpt.toSet[MultiValue].flatMap(listValue => listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, v)))
-    case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)                        =>
+    case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)                                      =>
       val maybeIRIValue = logicalBindings.map { actualBindings =>
         for {
           SingleValue(value) <- actualBindings.get(varr)
@@ -205,7 +205,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
-      } yield NormalizedPrintfAnnotation(prop, text, vars, multi_clause=None, overrideColumn, annotations.to(Set))
+      } yield NormalizedPrintfAnnotation(prop, text, vars, multi_clause = None, overrideColumn, annotations.to(Set))
     case ListAnnotation(anns, ap, value)                        =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
@@ -224,7 +224,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         NormalizedPrintfAnnotation(property, text, vars, multi_clause, overrideColumn,
           annotations.to(Set) ++ xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)))
       }
-    case ListAnnotationOBO(value, xrefs)              => Right(
+    case ListAnnotationOBO(value, xrefs)                            => Right(
       NormalizedListAnnotation(
         property,
         value,

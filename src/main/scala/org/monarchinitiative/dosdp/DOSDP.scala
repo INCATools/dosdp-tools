@@ -108,7 +108,7 @@ object PrintfText {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
-        case None => Some(realVars.map(name => "'$" + name + "'"))
+        case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.view.mapValues(_.value).toMap
           realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
@@ -277,8 +277,8 @@ final case class OPA(
                       not: Option[Boolean])
 
 final case class MultiClausePrintf(
-                                   sep: Option[String],
-                                   clauses: Option[List[PrintfClause]])
+                                    sep: Option[String],
+                                    clauses: Option[List[PrintfClause]])
 
 final case class PrintfClause(
                                text: String,
@@ -286,27 +286,27 @@ final case class PrintfClause(
                                sub_clauses: Option[List[MultiClausePrintf]])
 
 final case class InternalVariable(
-                                 var_name: String,
-                                 apply: Option[Function],
-                                 input: String,
+                                   var_name: String,
+                                   apply: Option[Function],
+                                   input: String,
                                  )
 
 sealed trait Function {
-  def apply(input_var:Option[Binding]): Option[String]
+  def apply(input_var: Option[Binding]): Option[String]
 }
 
 object Function {
 
   implicit val decodeFunction: Decoder[Function] = Decoder[JoinFunction].map[Function](identity).or(Decoder[RegexFunction].map[Function](identity))
   implicit val encodeFunction: Encoder[Function] = Encoder.instance {
-    case join @ JoinFunction(_) => join.asJson
+    case join @ JoinFunction(_)   => join.asJson
     case regex @ RegexFunction(_) => regex.asJson
   }
 
 }
 
 final case class JoinFunction(join: Join) extends Function {
-  override def apply(input_var:Option[Binding]): Option[String] = {
+  override def apply(input_var: Option[Binding]): Option[String] = {
     val multiValue = input_var.collect { case a: MultiValue => a }.getOrElse(MultiValue(Set.empty[String]))
     val joinedValues = multiValue.value.mkString(join.sep)
     if (joinedValues.isEmpty) None else Some(joinedValues)
@@ -314,14 +314,9 @@ final case class JoinFunction(join: Join) extends Function {
 }
 
 final case class RegexFunction(regex: RegexSub) extends Function {
-  override def apply(input_var:Option[Binding]): Option[String] = {
+  override def apply(input_var: Option[Binding]): Option[String] = {
     val singleValue = input_var.collect { case a: SingleValue => a }.getOrElse(SingleValue(""))
     val appliedValue = singleValue.value
-//    if(regex.sub.nonEmpty){
-//
-//    }else if (regex.`match`.nonEmpty){
-//
-//    }
     Some(appliedValue)
   }
 }
