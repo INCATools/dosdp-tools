@@ -28,8 +28,9 @@ object ExpressionParsingTest extends DefaultRunnableSpec {
       val dosdp = DOSDP.empty
       val checker = new DOSDPEntityChecker(dosdp, OBOPrefixes)
       val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
-      val expressionOpt = PrintfText.replaced("%s and %s",
+      val expressionOpt = PrintfText.replaced(Some("%s and %s"),
         Some(List("thing", "nothing")),
+        None,
         Some(Map(
           "thing" -> SingleValue("http://www.w3.org/2002/07/owl#Thing"),
           "nothing" -> SingleValue("http://www.w3.org/2002/07/owl#Nothing"))), true)

@@ -77,12 +77,18 @@ object Generate {
         dataListVar <- dataListVars.keys
         filler <- row.get(dataListVar).flatMap(stripToOption)
       } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
+      val internalVarBindings = (for {
+        internalVars <- dosdp.internal_vars.toSeq
+        internalVar <- internalVars
+        function <- internalVar.apply.toSeq
+        value <- function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
+      } yield internalVar.var_name -> SingleValue(value)).toMap
       val additionalBindings = for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
       } yield key -> SingleValue(value.trim)
       val maybeDefinedClass = if (generateDefinedClass) {
         dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
-          val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
+          val bindingsForDefinedClass = varBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings ++ internalVarBindings
           DOSDP.computeDefinedIRI(patternIRI, bindingsForDefinedClass).toString
         }.toRight(DOSDPError("Pattern must have an IRI if generate-defined-class is requested."))
       } else row.get(DOSDP.DefinedClassVariable).map(_.trim)
@@ -94,6 +100,7 @@ object Generate {
         readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
         initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
+          internalVarBindings.view.mapValues(v => resolveIrisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           dataVarBindings ++
           dataListBindings +
           iriBinding
@@ -179,6 +186,19 @@ object Generate {
   private def irisToLabels(binding: Binding, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = binding match {
     case SingleValue(value) => SingleValue(Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(iri, dosdp, index)).getOrElse(value))
     case MultiValue(values) => MultiValue(values.map(value => Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(iri, dosdp, index)).getOrElse(value)))
+  }
+
+  private def resolveIrisToLabels(binding: SingleValue, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = {
+    val CURIEList = "([^ ,:]*):([^ ,]*)".r
+    val CURIEListEmbed = CURIEList.unanchored
+    val value = binding.value
+    var resolvedValue = value
+    if (CURIEListEmbed.matches(value)) {
+      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri =>
+        resolvedValue = resolvedValue.replaceFirst(matching.group(1) + ":" + matching.group(2),
+          readableIdentifierForIRI(IRI.create(uri + matching.group(2)), dosdp, index))))
+    }
+    SingleValue(resolvedValue)
   }
 
   private def readableIdentifierForIRI(iri: IRI, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): String = {
