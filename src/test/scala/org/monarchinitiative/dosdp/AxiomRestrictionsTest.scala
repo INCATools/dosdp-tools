@@ -18,8 +18,8 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
     classes = Some(Map("thing" -> "owl:Thing")),
     relations = Some(Map("part_of" -> "BFO:0000050")),
     vars = Some(Map("item" -> "'thing'")),
-    name = Some(PrintfAnnotationOBO(None, None, "%s item", Some(List("item")))),
-    subClassOf = Some(PrintfOWLConvenience(None, "'part_of' some %s", Some(List("item")))))
+    name = Some(PrintfAnnotationOBO(None, None, Some("%s item"), Some(List("item")), None)),
+    subClassOf = Some(PrintfOWLConvenience(None, Some("'part_of' some %s"), Some(List("item")))))
 
   val annotationAxiom: OWLAnnotationAssertionAxiom = term Annotation(RDFSLabel, "http://purl.obolibrary.org/obo/ONT_0000002 item")
   val logicalAxiom: OWLSubClassOfAxiom = term SubClassOf (partOf some item)
