@@ -42,7 +42,7 @@ libraryDependencies ++= {
         exclude("org.geneontology", "whelk-owlapi_2.12")
         exclude("org.geneontology", "owl-diff_2.12"),
       "com.github.pathikrit"       %% "better-files"           % "3.9.1",
-      "org.apache.jena"            %  "apache-jena-libs"       % "3.17.0" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.apache.jena"            %  "apache-jena-libs"       % "4.1.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.8",
       "commons-codec"              %  "commons-codec"          % "1.15",
       "com.outr"                   %% "scribe-slf4j"           % "3.5.5",
