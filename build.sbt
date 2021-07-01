@@ -33,10 +33,10 @@ libraryDependencies ++= {
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
       "org.geneontology"           %% "owl-diff"               % "1.2.2",
       "io.circe"                   %% "circe-yaml"             % "0.14.0",
-      "io.circe"                   %% "circe-core"             % "0.14.1",
-      "io.circe"                   %% "circe-generic"          % "0.14.1",
-      "io.circe"                   %% "circe-parser"           % "0.14.1",
-      "org.obolibrary.robot"       %  "robot-core"             % "1.7.2"
+      "io.circe"                   %% "circe-core"             % "0.13.0",
+      "io.circe"                   %% "circe-generic"          % "0.13.0",
+      "io.circe"                   %% "circe-parser"           % "0.13.0",
+      "org.obolibrary.robot"       %  "robot-core"             % "1.8.1"
         exclude("org.slf4j", "slf4j-log4j12")
         exclude("org.geneontology", "whelk_2.12")
         exclude("org.geneontology", "whelk-owlapi_2.12")
