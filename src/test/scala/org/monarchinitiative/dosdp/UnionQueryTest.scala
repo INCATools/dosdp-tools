@@ -25,7 +25,7 @@ object UnionQueryTest extends DefaultRunnableSpec {
       "classB" -> "http://example.org#B"
     )),
     vars = Some(Map("item" -> "'thing'")),
-    equivalentTo = Some(PrintfOWLConvenience(None, "'classA' or 'classB' or %s", Some(List("item")))))
+    equivalentTo = Some(PrintfOWLConvenience(None, Some("'classA' or 'classB' or %s"), Some(List("item")))))
 
   def spec = suite("Union query test") {
     testM("Unions should be queryable") {
