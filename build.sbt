@@ -25,7 +25,7 @@ libraryDependencies ++= {
       "dev.zio"                    %% "zio"                    % zioVersion,
       "dev.zio"                    %% "zio-streams"            % zioVersion,
       "com.github.alexarchambault" %% "case-app"               % "2.0.6",
-      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.19",
+      "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "5.1.18",
       "org.phenoscape"             %% "scowl"                  % "1.4.0",
       "org.phenoscape"             %% "owlet"                  % "1.8.1" exclude("org.slf4j", "slf4j-log4j12"),
       "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
