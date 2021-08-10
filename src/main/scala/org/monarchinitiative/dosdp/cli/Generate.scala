@@ -97,6 +97,7 @@ object Generate {
         definedClass <- maybeDefinedClass
         iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
         logicalBindings = varBindings + iriBinding
+        logicalBindingsExtended = logicalBindings ++ listVarBindings
         readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
         initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
           listVarBindings.view.mapValues(v => irisToLabels(v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
@@ -111,10 +112,10 @@ object Generate {
           .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))).leftMap(e => DOSDPError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
         (localOutputLogicalAxioms, localOutputAnnotationAxioms) = localOutputLogicalAxiomsWithLocalOutputAnnotationAxioms
         logicalAxioms <- if (localOutputLogicalAxioms)
-          eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings))
+          eDOSDP.filledLogicalAxioms(Some(logicalBindingsExtended), Some(annotationBindings))
         else Right(Set.empty)
         annotationAxioms <- if (localOutputAnnotationAxioms)
-          eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings))
+          eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindingsExtended))
         else Right(Set.empty)
       } yield logicalAxioms ++ annotationAxioms
       ZIO.fromEither(maybeAxioms)
