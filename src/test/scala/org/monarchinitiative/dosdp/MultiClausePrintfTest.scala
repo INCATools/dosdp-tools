@@ -2,7 +2,7 @@ package org.monarchinitiative.dosdp
 
 import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.scowl.{not => _, _}
-import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom, OWLObjectUnionOf}
+import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom, OWLAxiom}
 import zio.test.Assertion._
 import zio.test._
 
@@ -224,6 +224,34 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002|ONT:0000003", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(logicalAxiom1))
+    },
+    testM("SubClassOf with annotation should be replaced correctly.") {
+      val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
+      val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
+      val partOf: OWLObjectProperty = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
+      val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
+      val rdfsComment: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#comment")
+
+//      val annotations = Some(List(PrintfAnnotation(None, "rdfsComment", Some("%s"), Some(List("comment_var")), None, None)))
+      val exp_clause = PrintfClause("%s", Some(List("comment_var")), None)
+      val exp_printf = MultiClausePrintf(Some(" and "), Some(List(exp_clause)))
+      val annotations = Some(List(PrintfAnnotation(None, "rdfsComment", None, None, None, Some(exp_printf))))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("test_restrictions_pattern"),
+        classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
+        annotationProperties = Some(Map("rdfsComment" -> "rdfs:comment")),
+        vars = Some(Map("item" -> "'thing'")),
+        data_list_vars = Some(Map("comment_var" -> "xsd:string")),
+        subClassOf = Some(PrintfOWLConvenience(annotations, Some("%s"), Some(List("item")), None))
+      )
+
+      val logicalAxiom1: OWLSubClassOfAxiom = term SubClassOf item
+      val annotationAxiom1: OWLAxiom = logicalAxiom1 Annotation(rdfsComment, "My comment1.")
+
+      for {
+        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all", "comment_var" -> "My comment1.")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
+        _ = println(axioms)
+      } yield assert(axioms)(contains(annotationAxiom1))
     },
     testM("Annotation should be replaced correctly. Tests the default behaviour (without multiClauses and multiValues).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
