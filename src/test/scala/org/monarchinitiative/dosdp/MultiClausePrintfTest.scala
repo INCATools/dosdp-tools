@@ -5,6 +5,7 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom, OWLAxiom}
 import zio.test.Assertion._
 import zio.test._
+import zio._
 
 object MultiClausePrintfTest extends DefaultRunnableSpec {
 
@@ -187,7 +188,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
       val exp_clause = PrintfClause("'part_of' some %s", Some(List("item")), None)
-      val exp_printf = MultiClausePrintf(Some(" "), Some(List(exp_clause)))
+      val exp_printf = MultiClausePrintf(Some(" and "), Some(List(exp_clause)))
       val dosdp: DOSDP = DOSDP.empty.copy(
         pattern_name = Some("test_restrictions_pattern"),
         classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
@@ -297,10 +298,28 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
 //        _ <- Utilities.saveAxiomsToOntology(axioms, "./dummy.owl")
       } yield assert(axioms)(contains(annotationAxiom1)) &&
         assert(axioms)(contains(annotationAxiom2))
-    }
+    },
 
-    // TODO: test: exceptional cases: single multiVar per multiClause, axiom sep normalization (only allow and or), GCI axiomFor testing
+    // TODO: test: exceptional cases: single multiVar per multiClause, no nesting in axioms, axiom sep normalization (only allow and or), GCI axiomFor testing
 
+    testM("Logical axiom separators should be validated. Only and, or allowed for logical expressions.") {
+      var exceptionOccurred = false
+
+      try {
+      val exp_clause = PrintfClause("'part_of' some %s", Some(List("item")), None)
+      val exp_printf = MultiClausePrintf(Some(" BAD_SEPARATOR "), Some(List(exp_clause)))
+      DOSDP.empty.copy(
+        pattern_name = Some("test_restrictions_pattern"),
+        classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
+        relations = Some(Map("part_of" -> "BFO:0000050")),
+        list_vars = Some(Map("item" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(exp_printf)))
+      )
+      } catch {
+        case e: IllegalArgumentException => exceptionOccurred = true
+      }
+      assertM(ZIO.effect(exceptionOccurred))(isTrue)
+    },
   )
 
 }

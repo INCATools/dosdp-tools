@@ -3,7 +3,6 @@ package org.monarchinitiative.dosdp
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
-import cats.syntax.functor._
 import org.apache.commons.codec.digest.DigestUtils
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty}
@@ -176,6 +175,13 @@ final case class PrintfOWLConvenience(
                                        multi_clause: Option[MultiClausePrintf] = None) extends PrintfText {
 
   val shouldQuote = true
+
+  val allowedLogicalConnectors = List(" and ", " or ")
+
+  require(multi_clause.forall(mc => allowedLogicalConnectors.contains(mc.sep.getOrElse(""))),
+    "Only %s can be used as separator of logical expressions, but found '%s'.".format(
+      allowedLogicalConnectors.mkString("'", "', '", "'"),
+      multi_clause.flatMap(mc => mc.sep).getOrElse("")))
 
 }
 
