@@ -229,11 +229,9 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
     testM("SubClassOf with annotation should be replaced correctly.") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
-      val partOf: OWLObjectProperty = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
       val rdfsComment: OWLAnnotationProperty = AnnotationProperty("http://www.w3.org/2000/01/rdf-schema#comment")
 
-//      val annotations = Some(List(PrintfAnnotation(None, "rdfsComment", Some("%s"), Some(List("comment_var")), None, None)))
       val exp_clause = PrintfClause("%s", Some(List("comment_var")), None)
       val exp_printf = MultiClausePrintf(Some(" and "), Some(List(exp_clause)))
       val annotations = Some(List(PrintfAnnotation(None, "rdfsComment", None, None, None, Some(exp_printf))))
@@ -275,8 +273,6 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
     },
     testM("Annotations should be replaced correctly with list values (two values in it).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
-      val item1: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
-      val item2: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000003")
       val exacySynonym: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/hasExactSynonym")
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
@@ -299,9 +295,6 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       } yield assert(axioms)(contains(annotationAxiom1)) &&
         assert(axioms)(contains(annotationAxiom2))
     },
-
-    // TODO: test: exceptional cases: single multiVar per multiClause, no nesting in axioms, axiom sep normalization (only allow and or), GCI axiomFor testing
-
     testM("Logical axiom separators should be validated. Only and, or allowed for logical expressions.") {
       var exceptionOccurred = false
 
