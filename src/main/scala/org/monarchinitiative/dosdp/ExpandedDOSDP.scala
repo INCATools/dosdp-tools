@@ -27,7 +27,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
-  def equivalentToExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
+  def equivalentToExpression(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
     val result = for {
       eq <- dosdp.equivalentTo
       ce <- expressionFor(eq, logicalBindings)
@@ -37,7 +37,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     result.sequence
   }
 
-  def subClassOfExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
+  def subClassOfExpression(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
     val result = for {
       sco <- dosdp.subClassOf
       ce <- expressionFor(sco, logicalBindings)
@@ -47,7 +47,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     result.sequence
   }
 
-  def disjointWithExpression(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
+  def disjointWithExpression(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] = {
     val result = for {
       dw <- dosdp.disjointWith
       ce <- expressionFor(dw, logicalBindings)
@@ -57,7 +57,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     result.sequence
   }
 
-  def gciAxiom(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLAxiom, Set[OWLAnnotation])]] =
+  def gciAxiom(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Option[(OWLAxiom, Set[OWLAnnotation])]] =
     (for {
       gci <- dosdp.GCI
       ax <- axiomFor(gci, logicalBindings)
@@ -67,7 +67,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       case None                              => Right(None)
     }
 
-  def logicalAxioms(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Set[OWLAxiom]] = {
+  def logicalAxioms(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Set[OWLAxiom]] = {
     val axioms = for {
       axiomDefs <- dosdp.logical_axioms.toList
       axiomDef <- axiomDefs
@@ -86,13 +86,13 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
 
-  private def definedTerm(bindings: Option[Map[String, SingleValue]]): OWLClass = (for {
+  private def definedTerm(bindings: Option[Map[String, Binding]]): OWLClass = (for {
     actualBindings <- bindings
-    defClass <- actualBindings.get(DOSDP.DefinedClassVariable)
+    defClass <- actualBindings.collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }.get(DOSDP.DefinedClassVariable)
     iri <- Prefixes.idToIRI(defClass.value, prefixes)
   } yield Class(iri)).getOrElse(term)
 
-  def filledLogicalAxioms(logicalBindings: Option[Map[String, SingleValue]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Set[OWLAxiom]] = {
+  def filledLogicalAxioms(logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): Either[DOSDPError, Set[OWLAxiom]] = {
     val theDefinedTerm = definedTerm(logicalBindings)
     for {
       gciAxiomOpt <- gciAxiom(logicalBindings, annotationBindings)
@@ -118,10 +118,10 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     vars.view.mapValues(expressionParser.parse).toMap
   }
 
-  private def expressionFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): Option[OWLClassExpression] =
+  private def expressionFor(template: PrintfText, bindings: Option[Map[String, Binding]]): Option[OWLClassExpression] =
     template.replaced(bindings).map(expressionParser.parse)
 
-  private def axiomFor(template: PrintfText, bindings: Option[Map[String, SingleValue]]): Option[OWLAxiom] =
+  private def axiomFor(template: PrintfText, bindings: Option[Map[String, Binding]]): Option[OWLAxiom] =
     template.replaced(bindings).map(axiomParser.parse)
 
   private def annotationsFor(element: PrintfText, annotationBindings: Option[Map[String, Binding]], logicalBindings: Option[Map[String, Binding]]): Either[DOSDPError, Set[OWLAnnotation]] = {
@@ -173,14 +173,14 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
     case NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumnOpt, subAnnotations) =>
-      val valueOpt = (for {
+      val valueOpts = (for {
         column <- overrideColumnOpt
         bindings <- annotationBindings
         SingleValue(binding) <- bindings.get(column)
         trimmed = binding.trim
         if trimmed.nonEmpty
-      } yield trimmed).orElse(PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), false))
-      valueOpt.toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
+      } yield Seq(trimmed)).orElse(Some(printAnnotation(text, vars, multiClause, annotationBindings)))
+      valueOpts.getOrElse(Seq.empty).toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
     case NormalizedListAnnotation(prop, value, subAnnotations)                                        =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
@@ -200,18 +200,51 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         iriValue))
   }
 
+  /**
+   * PrintfText tend to build concatenated text from multiValue bindings. But printing an annotation requires printing
+   * a distinct text per multiValue item. This method enables calling PrintfText.replaced for each multiValue clause.
+   *
+   * @param text               annotation text
+   * @param vars               annotation variables
+   * @param multiClause        annotation multiClauses
+   * @param annotationBindings variable bindings
+   * @return a sequence of printed and replaced annotation texts
+   */
+  def printAnnotation(text: Option[String], vars: Option[List[String]], multiClause: Option[MultiClausePrintf], annotationBindings: Option[Bindings]): Seq[String] = {
+    val clauseVars = for {
+      mc <- multiClause.toList
+      clauses <- mc.clauses.toList
+      clause <- clauses
+      vars <- clause.vars
+    } yield vars
+    val variables = vars.getOrElse(List.empty) ++ clauseVars.flatten
+    val annotationRelatedMultiValueBindings = annotationBindings.getOrElse(Map.empty[String, Binding])
+      .view.filterKeys(variables.contains(_)).collectFirst { case (key, MultiValue(value)) => (key, value) }
+    val singleValBindings = annotationBindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
+    annotationRelatedMultiValueBindings match {
+      case None                 =>
+        PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), quote = false).toSeq
+      case Some(multiValuePair) =>
+        val multiValueText = for {
+          value <- multiValuePair._2
+          multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
+        } yield multiText
+        multiValueText.toSeq
+    }
+  }
+
   private def normalizeAnnotation(annotation: Annotations): Either[DOSDPError, NormalizedAnnotation] = annotation match {
-    case PrintfAnnotation(anns, ap, text, vars, overrideColumn) =>
+    case PrintfAnnotation(anns, ap, text, vars, overrideColumn, multiClause) =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
-      } yield NormalizedPrintfAnnotation(prop, text, vars, multiClause = None, overrideColumn, annotations.to(Set))
-    case ListAnnotation(anns, ap, value)                        =>
+      } yield NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumn, annotations.to(Set))
+    case ListAnnotation(anns, ap, value)                                     =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
       } yield NormalizedListAnnotation(prop, value, annotations.to(Set))
-    case IRIValueAnnotation(anns, ap, varr)                     =>
+    case IRIValueAnnotation(anns, ap, varr)                                  =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
