@@ -135,21 +135,21 @@ object PrintfText {
     if (trimmed.isEmpty) None else Some(trimmed)
   }
 
-  private def replaceClause(printfClause: PrintfClause,bindings: Option[Map[String, Binding]], quote: Boolean): Seq[String] = {
+  private def replaceClause(printfClause: PrintfClause, bindings: Option[Map[String, Binding]], quote: Boolean): Seq[String] = {
     val singleValueBindings = bindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
     val clauseMultiValueBinding = bindings.getOrElse(Map.empty[String, Binding])
-          .view.filterKeys(printfClause.vars.getOrElse(List.empty).contains(_))
-          .collectFirst { case (key, MultiValue(value)) => (key, value) }
+      .view.filterKeys(printfClause.vars.getOrElse(List.empty).contains(_))
+      .collectFirst { case (key, MultiValue(value)) => (key, value) }
 
     clauseMultiValueBinding match {
-      case None        =>
+      case None                 =>
         // unpack clause to text and replace
         replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote).toSeq
       case Some(multiValuePair) =>
         // unpack clause and first multi value (only one per clause supported)
         val multiValueText = for {
           value <- multiValuePair._2
-          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings  + (multiValuePair._1 -> SingleValue(value))), quote)
+          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings + (multiValuePair._1 -> SingleValue(value))), quote)
         } yield multiText
         multiValueText.toSeq
     }
@@ -247,8 +247,8 @@ object Annotations {
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[PrintfAnnotation].map[Annotations](identity).or(Decoder[ListAnnotation].map[Annotations](identity)).or(Decoder[IRIValueAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
     case pfa @ PrintfAnnotation(_, _, _, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _, _)          => la.asJson
-    case iva @ IRIValueAnnotation(_, _, _)     => iva.asJson
+    case la @ ListAnnotation(_, _, _)             => la.asJson
+    case iva @ IRIValueAnnotation(_, _, _)        => iva.asJson
   }
 
 }

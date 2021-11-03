@@ -180,7 +180,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         trimmed = binding.trim
         if trimmed.nonEmpty
       } yield Seq(trimmed)).orElse(Some(printAnnotation(text, vars, multiClause, annotationBindings)))
-        valueOpts.getOrElse(Seq.empty).toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
+      valueOpts.getOrElse(Seq.empty).toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
     case NormalizedListAnnotation(prop, value, subAnnotations)                                        =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
@@ -203,9 +203,10 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   /**
    * PrintfText tend to build concatenated text from multiValue bindings. But printing an annotation requires printing
    * a distinct text per multiValue item. This method enables calling PrintfText.replaced for each multiValue clause.
-   * @param text annotation text
-   * @param vars annotation variables
-   * @param multiClause annotation multiClauses
+   *
+   * @param text               annotation text
+   * @param vars               annotation variables
+   * @param multiClause        annotation multiClauses
    * @param annotationBindings variable bindings
    * @return a sequence of printed and replaced annotation texts
    */
@@ -221,12 +222,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       .view.filterKeys(variables.contains(_)).collectFirst { case (key, MultiValue(value)) => (key, value) }
     val singleValBindings = annotationBindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
     annotationRelatedMultiValueBindings match {
-      case None =>
-        PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), quote=false).toSeq
+      case None                 =>
+        PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), quote = false).toSeq
       case Some(multiValuePair) =>
         val multiValueText = for {
           value <- multiValuePair._2
-          multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote=false)
+          multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
         } yield multiText
         multiValueText.toSeq
     }
@@ -238,12 +239,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
       } yield NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumn, annotations.to(Set))
-    case ListAnnotation(anns, ap, value)                        =>
+    case ListAnnotation(anns, ap, value)                                     =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence
       } yield NormalizedListAnnotation(prop, value, annotations.to(Set))
-    case IRIValueAnnotation(anns, ap, varr)                     =>
+    case IRIValueAnnotation(anns, ap, varr)                                  =>
       for {
         prop <- safeChecker.getOWLAnnotationProperty(ap).toRight(DOSDPError(s"No annotation property binding: $ap"))
         annotations <- anns.to(List).flatten.map(normalizeAnnotation).sequence

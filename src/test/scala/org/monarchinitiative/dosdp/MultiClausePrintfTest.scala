@@ -2,14 +2,14 @@ package org.monarchinitiative.dosdp
 
 import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.scowl.{not => _, _}
-import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom, OWLAxiom}
+import org.semanticweb.owlapi.model._
+import zio._
 import zio.test.Assertion._
 import zio.test._
-import zio._
 
 object MultiClausePrintfTest extends DefaultRunnableSpec {
 
-  def spec: Spec[_root_.zio.test.environment.TestEnvironment, TestFailure[Any], TestSuccess] = suite("Print simple text")(
+  def spec = suite("Print simple text")(
     test("Text should be replaced correctly") {
       val replacedText = PrintfText.replaced(Some("These cells also express %s."), Some(List("allen_makers_cat")), None, Some(Map("allen_makers_cat" -> SingleValue("my_value"))), quote = true).getOrElse("")
       assert(replacedText)(equalTo("These cells also express 'my_value'."))
@@ -34,7 +34,6 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       assert(replacedText)(equalTo("These cells also express 'my_value'._These cells have projection type 'my_value2'."))
     },
     test("Multi_clause with three clauses, only two should replaced correctly") {
-      val test = List().mkString("z")
       val simple_clause1 = PrintfClause("These cells also express %s.", Some(List("allen_makers_cat")), None)
       val simple_clause2 = PrintfClause("These cells have projection type %s.", Some(List("not_existing_var")), None)
       val simple_clause3 = PrintfClause("These cells have some location %s.", Some(List("soma_location")), None)
@@ -291,7 +290,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
 
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "disease" -> "ONT:0000002|ONT:0000003")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
-//        _ <- Utilities.saveAxiomsToOntology(axioms, "./dummy.owl")
+        //        _ <- Utilities.saveAxiomsToOntology(axioms, "./dummy.owl")
       } yield assert(axioms)(contains(annotationAxiom1)) &&
         assert(axioms)(contains(annotationAxiom2))
     },
@@ -299,15 +298,15 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       var exceptionOccurred = false
 
       try {
-      val exp_clause = PrintfClause("'part_of' some %s", Some(List("item")), None)
-      val exp_printf = MultiClausePrintf(Some(" BAD_SEPARATOR "), Some(List(exp_clause)))
-      DOSDP.empty.copy(
-        pattern_name = Some("test_restrictions_pattern"),
-        classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
-        relations = Some(Map("part_of" -> "BFO:0000050")),
-        list_vars = Some(Map("item" -> "'thing'")),
-        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(exp_printf)))
-      )
+        val exp_clause = PrintfClause("'part_of' some %s", Some(List("item")), None)
+        val exp_printf = MultiClausePrintf(Some(" BAD_SEPARATOR "), Some(List(exp_clause)))
+        DOSDP.empty.copy(
+          pattern_name = Some("test_restrictions_pattern"),
+          classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
+          relations = Some(Map("part_of" -> "BFO:0000050")),
+          list_vars = Some(Map("item" -> "'thing'")),
+          subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(exp_printf)))
+        )
       } catch {
         case e: IllegalArgumentException => exceptionOccurred = true
       }
