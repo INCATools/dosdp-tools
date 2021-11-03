@@ -99,11 +99,10 @@ trait PrintfText {
 object PrintfText {
 
   def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, Binding]], quote: Boolean): Option[String] = {
-    val singleValueBindings = bindings.map( x => x.collect { case (key, SingleValue(value)) => (key, SingleValue(value)) })
+    val singleValueBindings = bindings.map(x => x.collect { case (key, SingleValue(value)) => (key, SingleValue(value)) })
     val replacedText = text.flatMap(content => replaceText(content, vars, singleValueBindings, quote))
     val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote))
-    val replacedPrintf = replacedText ++ replacedClause
-    replacedPrintf.headOption
+    replacedText.orElse(replacedClause)
   }
 
   private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
