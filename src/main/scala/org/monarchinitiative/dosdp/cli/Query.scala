@@ -4,7 +4,6 @@ import com.github.tototoshi.csv.CSVWriter
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.{Model, ModelFactory}
 import org.apache.jena.vocabulary.DCTerms
-import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, SPARQL, SesameJena}
 import org.phenoscape.owlet.Owlet
@@ -20,6 +19,8 @@ import zio._
 import zio.blocking.Blocking
 
 import java.io.{File, PrintWriter}
+import java.nio.charset.StandardCharsets
+import java.nio.file._
 import scala.jdk.CollectionConverters._
 
 object Query {
@@ -36,7 +37,7 @@ object Query {
       }
     }
     for {
-      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
+      targets <- determineTargets(config)
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
       modelOpt <- ZIO.foreach(ontologyOpt)(makeModel)
@@ -104,7 +105,7 @@ object Query {
                             modelOpt: Option[Model],
                             patternIRIOpt: Option[String]): IO[DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
     val doPrintQuery = ZIO
-      .effect(new PrintWriter(new File(target.outputFile), "utf-8"))
+      .effect(new PrintWriter(new File(target.outputFile), StandardCharsets.UTF_8.name()))
       .bracketAuto(w => ZIO.effect(w.print(processedQuery)))
     val doPerformQuery = for {
       model <- ZIO.fromOption(modelOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
@@ -118,7 +119,7 @@ object Query {
       }
       _ <-
         ZIO
-          .effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
+          .effect(CSVWriter.open(target.outputFile, StandardCharsets.UTF_8.name())(sepFormat))
           .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield conformanceAnnotations.toList.flatten.to(Set)
     (if (config.printQuery.bool) doPrintQuery.as(Set.empty[OWLAnnotationAssertionAxiom]) else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
@@ -129,12 +130,13 @@ object Query {
       ZIO.effect(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
 
-  private def determineTargets(config: QueryConfig): RIO[Blocking, List[QueryTarget]] = {
+  private def determineTargets(config: QueryConfig): ZIO[Blocking, DOSDPError, List[QueryTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit, ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit, ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern file doesn't exist: $pattern"))))
+      _ <- ZIO.when(!Files.exists(Paths.get(config.common.template)))(ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
+      _ <- ZIO.when(!Files.exists(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
       val suffix =
