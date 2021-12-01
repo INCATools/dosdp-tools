@@ -20,6 +20,8 @@ import scala.io.Source
 @ProgName("dosdp-tools")
 sealed trait Config {
 
+  def common: CommonOptions
+
   def run: ZIO[ZEnv, DOSDPError, Unit]
 
 }
@@ -49,7 +51,8 @@ final case class CommonOptions(
                                 tableFormat: String = "tsv",
                                 @HelpMessage("List of patterns (without file extension) to process in batch (space separated, enclose list in quotes)")
                                 @ValueDescription("names")
-                                batchPatterns: MultiArgList = MultiArgList(Nil)
+                                batchPatterns: MultiArgList = MultiArgList(Nil),
+                                verbose: Boolean = false
                               ) {
 
   def inputDOSDP: IO[DOSDPError, DOSDP] = inputDOSDPFrom(template)

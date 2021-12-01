@@ -37,7 +37,7 @@ object Query {
       }
     }
     for {
-      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
+      targets <- determineTargets(config)
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
       modelOpt <- ZIO.foreach(ontologyOpt)(makeModel)
@@ -130,7 +130,7 @@ object Query {
       ZIO.effect(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
 
-  private def determineTargets(config: QueryConfig): RIO[Blocking, List[QueryTarget]] = {
+  private def determineTargets(config: QueryConfig): ZIO[Blocking, DOSDPError, List[QueryTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))

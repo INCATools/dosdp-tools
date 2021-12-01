@@ -7,7 +7,6 @@ import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.{OWLAnnotationProperty, OWLAxiom}
 import zio._
 import zio.blocking.Blocking
-import zio.console.putStrLn
 
 object Prototype {
 
