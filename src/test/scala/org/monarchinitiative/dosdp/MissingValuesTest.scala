@@ -24,7 +24,7 @@ object MissingValuesTest extends DefaultRunnableSpec {
         columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.tsv"), new TSVFormat {})
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
-        axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
+        axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }
@@ -36,7 +36,7 @@ object MissingValuesTest extends DefaultRunnableSpec {
         columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/missing_values_test.csv"), new DefaultCSVFormat {})
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
-        axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
+        axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }

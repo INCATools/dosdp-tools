@@ -25,7 +25,7 @@ object IRIAnnotationValuesTest extends DefaultRunnableSpec {
 
   def spec = suite("IRI valued annotation") {
     testM("Axioms should contain IRI valued annotation") {
-      val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002")), None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false)
+      val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002")), None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       assertM(axioms1)(contains(annotationAxiom))
     }
   }

@@ -126,11 +126,26 @@ final case class PrototypeConfig(@Recurse
 
 }
 
+@CommandName("docs")
+@HelpMessage("output Markdown documentation for patterns")
+final case class DocsConfig(@Recurse
+                            common: CommonOptions,
+                            @HelpMessage("Input file (TSV or CSV)")
+                            @ValueDescription("file")
+                            infile: String = "fillers.tsv",
+                            @HelpMessage("URL prefix for linking to data files")
+                            @ValueDescription("URL")
+                            dataLocationPrefix: String = "http://example.org/") extends Config {
+
+  override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Docs.run(this)
+
+}
+
 @CommandName("query")
 @HelpMessage("query an ontology for terms matching a Dead Simple OWL Design Pattern")
 final case class QueryConfig(@Recurse
                              common: CommonOptions,
-                             @HelpMessage("Reasoner to use for expanding variable constraints. Valid options are ELK, HermiT, or JFact.")
+                             @HelpMessage("Reasoner to use for expanding variable ranges (only used for complex anonymous expressions besides intersections or unions of named classes). Valid options are ELK, HermiT, or JFact.")
                              @ValueDescription("elk|hermit|jfact")
                              reasoner: Option[String],
                              @HelpMessage("Print generated query without running against ontology")
@@ -138,7 +153,13 @@ final case class QueryConfig(@Recurse
                              printQuery: BoolValue = FalseValue,
                              @HelpMessage("Restrict queried axioms to 'logical', 'annotation', or 'all' (default)")
                              @ValueDescription("all|logical|annotation")
-                             restrictAxiomsTo: AxiomKind = LogicalAxioms
+                             restrictAxiomsTo: AxiomKind = LogicalAxioms,
+                             @HelpMessage("Path to output file of OWL annotation assertions linking classes to matching patterns")
+                             @ValueDescription("path")
+                             outputConformance: Option[String],
+                             @HelpMessage("Number of batch query operations to run in parallel")
+                             @ValueDescription("positive integer")
+                             parallelism: Int = 1
                             ) extends Config {
 
   override def run: ZIO[zio.ZEnv, DOSDPError, Unit] = Query.run(this)

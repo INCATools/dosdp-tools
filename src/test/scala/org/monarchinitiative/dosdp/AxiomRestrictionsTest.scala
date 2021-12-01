@@ -18,8 +18,8 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
     classes = Some(Map("thing" -> "owl:Thing")),
     relations = Some(Map("part_of" -> "BFO:0000050")),
     vars = Some(Map("item" -> "'thing'")),
-    name = Some(PrintfAnnotationOBO(None, None, "%s item", Some(List("item")))),
-    subClassOf = Some(PrintfOWLConvenience(None, "'part_of' some %s", Some(List("item")))))
+    name = Some(PrintfAnnotationOBO(None, None, Some("%s item"), Some(List("item")), None)),
+    subClassOf = Some(PrintfOWLConvenience(None, Some("'part_of' some %s"), Some(List("item")))))
 
   val annotationAxiom: OWLAnnotationAssertionAxiom = term Annotation(RDFSLabel, "http://purl.obolibrary.org/obo/ONT_0000002 item")
   val logicalAxiom: OWLSubClassOfAxiom = term SubClassOf (partOf some item)
@@ -27,13 +27,13 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
   def spec = suite("Axiom filters") {
     testM("Axiom filters should filter correctly") {
       for {
-        axioms1 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, None, false, OboInOwlSource, false)
-        axioms2 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false)
-        axioms3 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "logical")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false)
-        axioms4 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false)
-        axioms5 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, false, false, Some("axiom_filter"), false, OboInOwlSource, false)
-        axioms6 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "")), None, true, false, Some("axiom_filter"), false, OboInOwlSource, false)
-        axioms7 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "blah")), None, true, false, Some("axiom_filter"), false, OboInOwlSource, false).either
+        axioms1 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, None, false, OboInOwlSource, false, Map.empty)
+        axioms2 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
+        axioms3 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "logical")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
+        axioms4 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
+        axioms5 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "annotation")), None, false, false, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
+        axioms6 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "")), None, true, false, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
+        axioms7 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "blah")), None, true, false, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty).either
       } yield assert(axioms1)(contains(annotationAxiom)) &&
         assert(axioms1)(contains(logicalAxiom)) &&
         assert(axioms2)(contains(annotationAxiom)) &&

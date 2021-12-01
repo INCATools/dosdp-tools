@@ -9,6 +9,7 @@ import org.monarchinitiative.dosdp.cli.{DOSDPError, Generate}
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
+import org.phenoscape.scowl._
 
 import scala.jdk.CollectionConverters._
 
@@ -83,9 +84,16 @@ ORDER BY ?defined_class_label
       }
       else Right(Nil)
     val variableTriples = dosdp.varExpressions.toSeq.flatMap {
-      case (_, Thing)                  => Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
-      case (variable, named: OWLClass) => Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
-      case (variable, expression)      =>
+      case (_, Thing)                                                               =>
+        Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
+      case (variable, named: OWLClass)                                              =>
+        Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
+      case (variable, ObjectUnionOf(operands)) if operands.forall(_.isNamed)        =>
+        Seq(operands.map(named => s"{ ?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . }")
+          .mkString(" UNION "))
+      case (variable, ObjectIntersectionOf(operands)) if operands.forall(_.isNamed) =>
+        operands.map(named => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . ")
+      case (variable, expression)                                                   =>
         val pss = new ParameterizedSparqlString()
         pss.appendNode(expression.asOMN)
         val sanitizedExpression = pss.toString
@@ -119,7 +127,7 @@ ORDER BY ?defined_class_label
         Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
       }).toSeq.flatten
     case disjointWith: OWLDisjointClassesAxiom            =>
-      if (!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      if (!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in disjointness axiom unexpected")
       (for {
         named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
         expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
@@ -189,15 +197,15 @@ ORDER BY ?defined_class_label
         s"$node owl:allValuesFrom $filler .") ++ fillerTriples)
     case and: OWLObjectIntersectionOf =>
       val node = genVar
-      val (intersectionTriples, operandTriplesList, operands) = and.getOperands.asScala.map { o =>
+      val (intersectionTriples, operandTriplesList, operands) = and.getOperands.iterator().asScala.toList.map { o =>
         val (operand, operandTriples) = triples(o)
         (s"$node owl:intersectionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }.unzip3
-      val filters = operands.toSeq.combinations(2).map { pair =>
+      val filters = operands.combinations(2).map { pair =>
         s"FILTER(${pair.head} != ${pair.last})"
       }
       val listLengthTriple = s"$node owl:intersectionOf/${and.getOperands.asScala.toSeq.map(_ => "rdf:rest").mkString("/")} rdf:nil ."
-      (node, (intersectionTriples.toSeq :+ listLengthTriple) ++ operandTriplesList.toSeq.flatten ++ filters)
+      (node, listLengthTriple :: intersectionTriples ::: operandTriplesList.flatten ::: filters.toList)
     case or: OWLObjectUnionOf         =>
       val node = genVar
       val (unionTriples, operandTriplesList, operands) = or.getOperands.asScala.map { o =>
