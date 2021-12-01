@@ -1,26 +1,30 @@
 package org.monarchinitiative.dosdp.cli
 
-import java.io.{File, PrintWriter}
-
 import com.github.tototoshi.csv.CSVWriter
 import org.apache.jena.query.{QueryExecutionFactory, QueryFactory, QuerySolution}
 import org.apache.jena.rdf.model.{Model, ModelFactory}
+import org.apache.jena.vocabulary.DCTerms
 import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, SPARQL, SesameJena}
 import org.phenoscape.owlet.Owlet
+import org.phenoscape.scowl._
 import org.semanticweb.HermiT.ReasonerFactory
 import org.semanticweb.elk.owlapi.ElkReasonerFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
-import org.semanticweb.owlapi.model.OWLOntology
+import org.semanticweb.owlapi.formats.TurtleDocumentFormat
+import org.semanticweb.owlapi.model.{IRI, OWLAnnotationAssertionAxiom, OWLAxiom, OWLOntology}
 import org.semanticweb.owlapi.reasoner.{OWLReasoner, OWLReasonerFactory}
 import uk.ac.manchester.cs.jfact.JFactFactory
 import zio._
 import zio.blocking.Blocking
 
+import java.io.{File, PrintWriter}
 import scala.jdk.CollectionConverters._
 
 object Query {
+
+  private val ConformsTo = AnnotationProperty(DCTerms.conformsTo.getURI)
 
   def run(config: QueryConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     val reasonerFactoryOptZ = ZIO.foreach(config.reasoner) { reasonerArg =>
@@ -36,16 +40,21 @@ object Query {
       reasonerFactoryOpt <- reasonerFactoryOptZ
       ontologyOpt <- config.common.ontologyOpt
       modelOpt <- ZIO.foreach(ontologyOpt)(makeModel)
-      _ <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
-        ZIO.foreach(targets) { target =>
-          ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}")) *>
-            createQuery(target, config, reasonerOpt).flatMap(processTarget(target, config, _, modelOpt))
-        }
+      allConformanceAnnotations <- makeOptionalReasoner(ontologyOpt, reasonerFactoryOpt).use { reasonerOpt =>
+        ZIO.foreachParN(config.parallelism)(targets) { target =>
+          for {
+            _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
+            queryAndOptionalPatternIRI <- createQueryWithPatternIRI(target, config, reasonerOpt)
+            (queryString, patternIRIOpt) = queryAndOptionalPatternIRI
+            conformanceAnnotations <- processTarget(target, config, queryString, modelOpt, patternIRIOpt)
+          } yield conformanceAnnotations
+        }.map(_.to(Set).flatten)
       }
+      _ <- ZIO.foreach_(config.outputConformance)(writeConformanceFile(_, allConformanceAnnotations))
     } yield ()
   }
 
-  def makeModel(ont: OWLOntology): ZIO[Any, DOSDPError, Model] =
+  def makeModel(ont: OWLOntology): IO[DOSDPError, Model] =
     for {
       model <- ZIO.effectTotal(ModelFactory.createDefaultModel())
       allAxioms = for {
@@ -58,7 +67,7 @@ object Query {
       _ <- ZIO.effectTotal(model.add(triples.toList.asJava))
     } yield model
 
-  private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): ZManaged[Any, DOSDPError, Option[OWLReasoner]] =
+  private def makeOptionalReasoner(ontologyOpt: Option[OWLOntology], factoryOpt: Option[OWLReasonerFactory]): Managed[DOSDPError, Option[OWLReasoner]] =
     ZManaged.foreach(
       for {
         ontology <- ontologyOpt
@@ -69,12 +78,12 @@ object Query {
         .toManaged(o => ZIO.effectTotal(o.dispose()))
     )(identity)
 
-  private def createQuery(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] =
+  private def createQueryWithPatternIRI(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): IO[DOSDPError, (String, Option[String])] =
     for {
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
       query <- ZIO.fromEither(makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt))
-    } yield query
+    } yield (query, dosdp.pattern_iri)
 
   def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): Either[DOSDPError, String] = {
     val maybeSparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
@@ -83,7 +92,7 @@ object Query {
     } yield {
       reasonerOpt
         .map { reasoner =>
-          new Owlet(reasoner).expandQueryString(sparqlQuery)
+          new Owlet(reasoner).expandQueryString(sparqlQuery, asValues = true)
         }
         .getOrElse(sparqlQuery)
     }
@@ -92,7 +101,8 @@ object Query {
   private def processTarget(target: QueryTarget,
                             config: QueryConfig,
                             processedQuery: String,
-                            modelOpt: Option[Model]): ZIO[Any, DOSDPError, Unit] = {
+                            modelOpt: Option[Model],
+                            patternIRIOpt: Option[String]): IO[DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
     val doPrintQuery = ZIO
       .effect(new PrintWriter(new File(target.outputFile), "utf-8"))
       .bracketAuto(w => ZIO.effect(w.print(processedQuery)))
@@ -100,15 +110,21 @@ object Query {
       model <- ZIO.fromOption(modelOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
       (columns, results) <- performQuery(processedQuery, model)
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
+      conformanceAnnotations <- ZIO.foreach(patternIRIOpt) { patternIRI =>
+        val pattern = IRI.create(patternIRI)
+        ZIO.effect(results.map(_.get(DOSDP.DefinedClassVariable)).map(_.asResource().getURI).map(IRI.create)).map { matchingDefinedClasses =>
+          matchingDefinedClasses.map(AnnotationAssertion(ConformsTo, _, pattern))
+        }
+      }
       _ <-
         ZIO
           .effect(CSVWriter.open(target.outputFile, "utf-8")(sepFormat))
           .bracketAuto(w => writeQueryResults(w, columns, results))
-    } yield ()
-    (if (config.printQuery.bool) doPrintQuery else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
+    } yield conformanceAnnotations.toList.flatten.to(Set)
+    (if (config.printQuery.bool) doPrintQuery.as(Set.empty[OWLAnnotationAssertionAxiom]) else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
   }
 
-  private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]) =
+  private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]): IO[Throwable, List[Unit]] =
     ZIO.effect(writer.writeRow(columns)) *> ZIO.foreach(results) { qs =>
       ZIO.effect(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
@@ -142,6 +158,13 @@ object Query {
         }
       }
     } yield results
+
+  def writeConformanceFile(path: String, annotations: Set[OWLAnnotationAssertionAxiom]): IO[DOSDPError, Unit] =
+    (for {
+      manager <- ZIO.effect(OWLManager.createOWLOntologyManager())
+      ont <- ZIO.effect(manager.createOntology(annotations.toSet[OWLAxiom].asJava))
+      _ <- ZIO.effect(manager.saveOntology(ont, new TurtleDocumentFormat(), IRI.create(new File(path))))
+    } yield ()).mapError(DOSDPError(s"Failed to write pattern conformance file to path $path", _))
 
   final private case class QueryTarget(templateFile: String, outputFile: String)
 
