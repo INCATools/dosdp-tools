@@ -10,9 +10,7 @@ scalaVersion  := "2.13.7"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
-scalacOptions in Test ++= Seq("-Yrangepos")
-
-mainClass in Compile := Some("org.monarchinitiative.dosdp.cli.Main")
+Compile / mainClass := Some("org.monarchinitiative.dosdp.cli.Main")
 
 javaOptions += "-Xmx8G"
 
