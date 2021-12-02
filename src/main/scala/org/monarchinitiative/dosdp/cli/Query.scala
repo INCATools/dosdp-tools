@@ -17,8 +17,9 @@ import org.semanticweb.owlapi.reasoner.{OWLReasoner, OWLReasonerFactory}
 import uk.ac.manchester.cs.jfact.JFactFactory
 import zio._
 import zio.blocking.Blocking
+import zio.console.{Console, putStrLn}
 
-import java.io.{File, PrintWriter}
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file._
 import scala.jdk.CollectionConverters._
@@ -103,10 +104,9 @@ object Query {
                             config: QueryConfig,
                             processedQuery: String,
                             modelOpt: Option[Model],
-                            patternIRIOpt: Option[String]): IO[DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
-    val doPrintQuery = ZIO
-      .effect(new PrintWriter(new File(target.outputFile), StandardCharsets.UTF_8.name()))
-      .bracketAuto(w => ZIO.effect(w.print(processedQuery)))
+                            patternIRIOpt: Option[String]): ZIO[Console, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
+    val doPrintQuery = (putStrLn(s"**** SPARQL query for ${target.templateFile} ****") *> putStrLn(processedQuery))
+      .mapError(DOSDPError(s"Failure printing SPARQL query for ${target.templateFile}", _))
     val doPerformQuery = for {
       model <- ZIO.fromOption(modelOpt).orElseFail(DOSDPError("Can't run query; no ontology provided."))
       (columns, results) <- performQuery(processedQuery, model)
@@ -122,7 +122,8 @@ object Query {
           .effect(CSVWriter.open(target.outputFile, StandardCharsets.UTF_8.name())(sepFormat))
           .bracketAuto(w => writeQueryResults(w, columns, results))
     } yield conformanceAnnotations.toList.flatten.to(Set)
-    (if (config.printQuery.bool) doPrintQuery.as(Set.empty[OWLAnnotationAssertionAxiom]) else doPerformQuery).mapError(e => DOSDPError("Failure performing query command", e))
+    doPrintQuery.when(config.printQuery.bool) *>
+      doPerformQuery.mapError(e => DOSDPError("Failure performing query command", e))
   }
 
   private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]): IO[Throwable, List[Unit]] =
@@ -139,9 +140,7 @@ object Query {
       _ <- ZIO.when(!Files.exists(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
-      val suffix =
-        if (config.printQuery.bool) "rq"
-        else config.common.tableFormat.toLowerCase
+      val suffix = config.common.tableFormat.toLowerCase
       val outFileName = s"${config.common.outfile}/$pattern.$suffix"
       QueryTarget(templateFileName, outFileName)
     }
