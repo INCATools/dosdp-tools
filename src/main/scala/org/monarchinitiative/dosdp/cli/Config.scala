@@ -151,7 +151,7 @@ final case class QueryConfig(@Recurse
                              @HelpMessage("Reasoner to use for expanding variable ranges (only used for complex anonymous expressions besides intersections or unions of named classes). Valid options are ELK, HermiT, or JFact.")
                              @ValueDescription("elk|hermit|jfact")
                              reasoner: Option[String],
-                             @HelpMessage("Print generated query without running against ontology")
+                             @HelpMessage("Print generated SPARQL query to console while running match")
                              @ValueDescription("true|false")
                              printQuery: BoolValue = FalseValue,
                              @HelpMessage("Restrict queried axioms to 'logical', 'annotation', or 'all' (default)")
