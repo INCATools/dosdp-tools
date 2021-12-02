@@ -65,7 +65,9 @@ object Docs {
 
   private def writeIndex(targets: List[DocsTarget], outpath: String) = {
     for {
-      dosdpsAndOutfiles <- ZIO.foreach(targets)(target => Config.inputDOSDPFrom(target.templateFile).map(_ -> new File(target.outputFile).getName))
+      dosdpsAndOutfiles <- ZIO.foreach(targets) { target =>
+        Config.inputDOSDPFrom(target.templateFile).map(_ -> new File(target.outputFile).getName)
+      }
       markdown = DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
       _ <- effectBlockingIO(new PrintWriter(s"$outpath/index.md", "utf-8")).bracketAuto { writer =>
         effectBlockingIO(writer.print(markdown))
