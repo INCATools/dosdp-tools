@@ -41,7 +41,7 @@ libraryDependencies ++= {
         exclude("org.geneontology", "owl-diff_2.12"),
       "com.github.pathikrit"       %% "better-files"           % "3.9.1",
       "org.apache.jena"            %  "apache-jena-libs"       % "4.2.0" exclude("org.slf4j", "slf4j-log4j12"),
-      "com.github.tototoshi"       %% "scala-csv"              % "1.3.8",
+      "com.github.tototoshi"       %% "scala-csv"              % "1.3.9",
       "commons-codec"              %  "commons-codec"          % "1.15",
       "com.outr"                   %% "scribe-slf4j"           % "3.6.3",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
