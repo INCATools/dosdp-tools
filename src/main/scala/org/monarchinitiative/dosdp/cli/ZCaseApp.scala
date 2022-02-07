@@ -139,37 +139,40 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
 
   def progName: String = Help[D].progName
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
-    commandParser.withHelp.detailedParse(args.toVector)(beforeCommandParser.withHelp) match {
-      case Left(err)                                                =>
-        error(err).orDie
-      case Right((WithHelp(true, _, _), _, _))                      =>
-        usageAsked().orDie
-      case Right((WithHelp(_, true, _), _, _))                      =>
-        helpAsked().orDie
-      case Right((WithHelp(false, false, Left(err)), _, _))         =>
-        error(err).orDie
-      case Right((WithHelp(false, false, Right(d)), dArgs, optCmd)) =>
-        beforeCommand(d, dArgs).flatMap {
-          case Some(exitCode) => IO.succeed(exitCode)
-          case None           =>
-            optCmd
-              .map {
-                case Left(err)                                  =>
-                  error(err).orDie
-                case Right((c, WithHelp(true, _, _), _))        =>
-                  commandUsageAsked(c).orDie
-                case Right((c, WithHelp(_, true, _), _))        =>
-                  commandHelpAsked(c).orDie
-                case Right((_, WithHelp(_, _, t), commandArgs)) =>
-                  t.fold(
-                    error(_).orDie,
-                    run(_, commandArgs)
-                  )
-              }
-              .getOrElse(ZIO.succeed(ExitCode.success))
-        }.orDie
-    }
+  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] = {
+    if (args == List("--version")) ZIO.succeed(println(org.monarchinitiative.dosdp.cli.BuildInfo.toString)).exitCode
+    else
+      commandParser.withHelp.detailedParse(args.toVector)(beforeCommandParser.withHelp) match {
+        case Left(err)                                                =>
+          error(err).orDie
+        case Right((WithHelp(true, _, _), _, _))                      =>
+          usageAsked().orDie
+        case Right((WithHelp(_, true, _), _, _))                      =>
+          helpAsked().orDie
+        case Right((WithHelp(false, false, Left(err)), _, _))         =>
+          error(err).orDie
+        case Right((WithHelp(false, false, Right(d)), dArgs, optCmd)) =>
+          beforeCommand(d, dArgs).flatMap {
+            case Some(exitCode) => IO.succeed(exitCode)
+            case None           =>
+              optCmd
+                .map {
+                  case Left(err)                                  =>
+                    error(err).orDie
+                  case Right((c, WithHelp(true, _, _), _))        =>
+                    commandUsageAsked(c).orDie
+                  case Right((c, WithHelp(_, true, _), _))        =>
+                    commandHelpAsked(c).orDie
+                  case Right((_, WithHelp(_, _, t), commandArgs)) =>
+                    t.fold(
+                      error(_).orDie,
+                      run(_, commandArgs)
+                    )
+                }
+                .getOrElse(ZIO.succeed(ExitCode.success))
+          }.orDie
+      }
+  }
 
 }
 
