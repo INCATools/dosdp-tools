@@ -1,4 +1,6 @@
 enablePlugins(JavaAppPackaging)
+enablePlugins(BuildInfoPlugin)
+enablePlugins(GitVersioning)
 
 organization  := "org.monarchinitiative"
 
@@ -15,6 +17,14 @@ Compile / mainClass := Some("org.monarchinitiative.dosdp.cli.Main")
 javaOptions += "-Xmx8G"
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+
+val gitCommitString = SettingKey[String]("gitCommit")
+
+gitCommitString := git.gitHeadCommit.value.getOrElse("Not Set")
+
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, gitCommitString)
+
+buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
 val zioVersion = "1.0.12"
 
