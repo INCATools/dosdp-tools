@@ -1,4 +1,6 @@
 enablePlugins(JavaAppPackaging)
+enablePlugins(BuildInfoPlugin)
+enablePlugins(GitVersioning)
 
 organization  := "org.monarchinitiative"
 
@@ -6,7 +8,7 @@ name          := "dosdp-tools"
 
 version       := "0.18"
 
-scalaVersion  := "2.13.7"
+scalaVersion  := "2.13.8"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -15,6 +17,14 @@ Compile / mainClass := Some("org.monarchinitiative.dosdp.cli.Main")
 javaOptions += "-Xmx8G"
 
 testFrameworks += new TestFramework("zio.test.sbt.ZTestFramework")
+
+val gitCommitString = SettingKey[String]("gitCommit")
+
+gitCommitString := git.gitHeadCommit.value.getOrElse("Not Set")
+
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, gitCommitString)
+
+buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
 val zioVersion = "1.0.12"
 
@@ -34,16 +44,16 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-core"             % "0.13.0",
       "io.circe"                   %% "circe-generic"          % "0.13.0",
       "io.circe"                   %% "circe-parser"           % "0.13.0",
-      "org.obolibrary.robot"       %  "robot-core"             % "1.8.1"
+      "org.obolibrary.robot"       %  "robot-core"             % "1.8.3"
         exclude("org.slf4j", "slf4j-log4j12")
         exclude("org.geneontology", "whelk_2.12")
         exclude("org.geneontology", "whelk-owlapi_2.12")
         exclude("org.geneontology", "owl-diff_2.12"),
       "com.github.pathikrit"       %% "better-files"           % "3.9.1",
-      "org.apache.jena"            %  "apache-jena-libs"       % "4.2.0" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.apache.jena"            %  "apache-jena-libs"       % "4.4.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.10",
       "commons-codec"              %  "commons-codec"          % "1.15",
-      "com.outr"                   %% "scribe-slf4j"           % "3.6.3",
+      "com.outr"                   %% "scribe-slf4j"           % "3.6.10",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
       "dev.zio"                    %% "zio-test-sbt"           % zioVersion % Test
     )
