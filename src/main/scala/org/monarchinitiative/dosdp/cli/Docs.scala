@@ -3,7 +3,6 @@ package org.monarchinitiative.dosdp.cli
 import com.github.tototoshi.csv.CSVFormat
 import org.geneontology.owl.differ.ManchesterSyntaxOWLObjectRenderer
 import org.geneontology.owl.differ.shortform.MarkdownLinkShortFormProvider
-import org.monarchinitiative.dosdp.Utilities.isDirectory
 import org.monarchinitiative.dosdp.cli.Generate.readFillers
 import org.monarchinitiative.dosdp.cli.Prototype.OboInOwlSource
 import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ExpandedDOSDP, Prefixes}
@@ -16,6 +15,7 @@ import zio._
 import zio.blocking._
 
 import java.io.{File, PrintWriter}
+import java.nio.file.{Files, Paths}
 import scala.jdk.CollectionConverters._
 
 object Docs {
@@ -26,7 +26,7 @@ object Docs {
   def run(config: DocsConfig): ZIO[ZEnv, DOSDPError, Unit] = {
     for {
       sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
-      targets <- determineTargets(config).mapError(e => DOSDPError("Failure to configure input or output", e))
+      targets <- determineTargets(config)
       ontologyOpt <- config.common.ontologyOpt
       ontology = ontologyOpt.getOrElse(OWLManager.createOWLOntologyManager().createOntology())
       _ <- ZIO.foreach_(targets)(processTarget(_, sepFormat, config, ontology))
@@ -65,7 +65,9 @@ object Docs {
 
   private def writeIndex(targets: List[DocsTarget], outpath: String) = {
     for {
-      dosdpsAndOutfiles <- ZIO.foreach(targets)(target => Config.inputDOSDPFrom(target.templateFile).map(_ -> new File(target.outputFile).getName))
+      dosdpsAndOutfiles <- ZIO.foreach(targets) { target =>
+        Config.inputDOSDPFrom(target.templateFile).map(_ -> new File(target.outputFile).getName)
+      }
       markdown = DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
       _ <- effectBlockingIO(new PrintWriter(s"$outpath/index.md", "utf-8")).bracketAuto { writer =>
         effectBlockingIO(writer.print(markdown))
@@ -73,16 +75,14 @@ object Docs {
     } yield DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
   }
 
-  private def determineTargets(config: DocsConfig): ZIO[Blocking, Throwable, List[DocsTarget]] = {
+  private def determineTargets(config: DocsConfig): ZIO[Blocking, DOSDPError, List[DocsTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.ifM(isDirectory(config.common.template))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.infile))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
-      _ <- ZIO.ifM(isDirectory(config.common.outfile))(ZIO.unit,
-        ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern doesn't exist: $pattern"))))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
       val dataExtension = config.common.tableFormat.toLowerCase

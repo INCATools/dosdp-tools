@@ -1,8 +1,5 @@
 package org.monarchinitiative.dosdp
 
-import java.io.{File, IOException}
-import java.nio.file.{Files, Paths}
-
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.obolibrary.robot.CatalogXmlIRIMapper
 import org.semanticweb.owlapi.apibinding.OWLManager
@@ -11,6 +8,7 @@ import org.semanticweb.owlapi.model.{IRI, OWLAxiom, OWLOntology}
 import zio._
 import zio.blocking.{Blocking, effectBlocking, effectBlockingIO}
 
+import java.io.File
 import scala.jdk.CollectionConverters._
 
 object Utilities {
@@ -31,14 +29,12 @@ object Utilities {
         for {
           iriMapper <- effectBlockingIO(new CatalogXmlIRIMapper(catalog))
             .mapError(e => DOSDPError(s"Failed reading ontology catalog file at path $catalog", e))
-          _ <- ZIO.effectTotal(manager.addIRIMapper(iriMapper))
+          _ <- ZIO.effectTotal(manager.getIRIMappers.add(iriMapper))
         } yield ()
       }
-      ontology <- ZIO.effect(manager.loadOntology(ontIRI))
+      ontology <- effectBlocking(manager.loadOntology(ontIRI))
         .mapError(e => DOSDPError(s"Failed loading ontology from location $location", e))
     } yield ontology
   }
-
-  def isDirectory(path: String): RIO[Blocking, Boolean] = effectBlocking(Files.isDirectory(Paths.get(path)))
 
 }
