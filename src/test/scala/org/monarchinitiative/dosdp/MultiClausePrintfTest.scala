@@ -6,6 +6,7 @@ import org.semanticweb.owlapi.model._
 import zio._
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 object MultiClausePrintfTest extends DefaultRunnableSpec {
 
@@ -312,6 +313,6 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       }
       assertM(ZIO.effect(exceptionOccurred))(isTrue)
     },
-  )
+  ).provideCustomLayer(Logging.consoleErr())
 
 }

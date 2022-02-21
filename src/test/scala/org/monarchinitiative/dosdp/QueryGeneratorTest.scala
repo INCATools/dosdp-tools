@@ -6,6 +6,7 @@ import org.monarchinitiative.dosdp.cli.Config
 import zio._
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 import scala.jdk.CollectionConverters._
 
@@ -22,11 +23,11 @@ object QueryGeneratorTest extends DefaultRunnableSpec {
     testM("Defined class should be first column") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorTest.yaml")
-        query <- ZIO.fromEither(SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), Config.LogicalAxioms))
+        query <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), Config.LogicalAxioms)
         variables <- ZIO.effect(QueryFactory.create(query).getProjectVars.asScala)
       } yield assert(variables(0).getVarName)(equalTo("defined_class")) &&
         assert(variables(1).getVarName)(equalTo("defined_class_label"))
     }
-  }
+  }.provideCustomLayer(Logging.consoleErr())
 
 }

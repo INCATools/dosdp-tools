@@ -45,6 +45,7 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-generic"          % "0.13.0",
       "io.circe"                   %% "circe-parser"           % "0.13.0",
       "org.obolibrary.robot"       %  "robot-core"             % "1.8.3"
+        exclude("ch.qos.logback", "logback-classic")
         exclude("org.slf4j", "slf4j-log4j12")
         exclude("org.geneontology", "whelk_2.12")
         exclude("org.geneontology", "whelk-owlapi_2.12")
@@ -53,7 +54,8 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "apache-jena-libs"       % "4.4.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.10",
       "commons-codec"              %  "commons-codec"          % "1.15",
-      "com.outr"                   %% "scribe-slf4j"           % "3.7.1",
+      "dev.zio"                    %% "zio-logging"            % "0.5.14",
+      "dev.zio"                    %% "zio-logging-slf4j-bridge" % "0.5.14",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
       "dev.zio"                    %% "zio-test-sbt"           % zioVersion % Test
     )

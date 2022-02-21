@@ -3,7 +3,9 @@ package org.monarchinitiative.dosdp.cli
 import com.github.tototoshi.csv.CSVFormat
 import org.geneontology.owl.differ.ManchesterSyntaxOWLObjectRenderer
 import org.geneontology.owl.differ.shortform.MarkdownLinkShortFormProvider
+import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.cli.Generate.readFillers
+import org.monarchinitiative.dosdp.cli.Main.loggingContext
 import org.monarchinitiative.dosdp.cli.Prototype.OboInOwlSource
 import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ExpandedDOSDP, Prefixes}
 import org.phenoscape.scowl._
@@ -13,6 +15,7 @@ import org.semanticweb.owlapi.model._
 import org.semanticweb.owlapi.util.AnnotationValueShortFormProvider
 import zio._
 import zio.blocking._
+import zio.logging._
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, Paths}
@@ -23,45 +26,48 @@ object Docs {
   private val Definition = AnnotationProperty("http://purl.obolibrary.org/obo/IAO_0000115")
   private val Special = Set(RDFSLabel, Definition)
 
-  def run(config: DocsConfig): ZIO[ZEnv, DOSDPError, Unit] = {
-    for {
-      sepFormat <- ZIO.fromEither(Config.tabularFormat(config.common.tableFormat))
-      targets <- determineTargets(config)
-      ontologyOpt <- config.common.ontologyOpt
-      ontology = ontologyOpt.getOrElse(OWLManager.createOWLOntologyManager().createOntology())
-      _ <- ZIO.foreach_(targets)(processTarget(_, sepFormat, config, ontology))
-      _ <- writeIndex(targets, config.common.outfile).when(config.common.batchPatterns.items.nonEmpty)
-    } yield ()
+  def run(config: DocsConfig): ZIO[ZEnv with Logging, DOSDPError, Unit] = {
+    log.locally(_.annotate(loggingContext, Map("command" -> "docs"))) {
+      for {
+        sepFormat <- Config.tabularFormat(config.common.tableFormat)
+        targets <- determineTargets(config)
+        ontologyOpt <- config.common.ontologyOpt
+        ontology = ontologyOpt.getOrElse(OWLManager.createOWLOntologyManager().createOntology())
+        _ <- ZIO.foreach_(targets)(processTarget(_, sepFormat, config, ontology))
+        _ <- writeIndex(targets, config.common.outfile).when(config.common.batchPatterns.items.nonEmpty)
+      } yield ()
+    }
   }
 
-  private def processTarget(target: DocsTarget, sepFormat: CSVFormat, config: DocsConfig, ontology: OWLOntology): ZIO[Blocking, DOSDPError, Unit] = {
-    for {
-      _ <- ZIO.effectTotal(scribe.info(s"Processing pattern ${target.templateFile}"))
-      prefixes <- config.common.prefixesMap
-      dosdp <- Config.inputDOSDPFrom(target.templateFile)
-      eDOSDP = ExpandedDOSDP(dosdp, prefixes)
-      columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
-      (columns, rows) = columnsAndFillers
-      prefixes <- config.common.prefixesMap
-      iri <- ZIO.fromOption(dosdp.pattern_iri).orElseFail(DOSDPError("Pattern must have pattern IRI for document command"))
-      fillers = dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
-        dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
-        dosdp.data_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"`{$k}`" } ++
-        dosdp.data_list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"`{$k}`" } +
-        (DOSDP.DefinedClassVariable -> iri)
-      variableReadableIdentifiers = (dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
-        dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" }).map(e => IRI.create(e._2) -> s"`{${e._1}}`")
-      renderer = objectRenderer(ontology, variableReadableIdentifiers)
-      axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
-      patternIRI = IRI.create(iri)
-      docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
-      data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
-      markdown = DocsMarkdown.markdown(eDOSDP, docAxioms, renderer, data)
-      _ <- effectBlockingIO(new PrintWriter(target.outputFile, "utf-8")).bracketAuto { writer =>
-        effectBlockingIO(writer.print(markdown))
-      }.mapError(e => DOSDPError(s"Couldn't write Markdown to file ${target.outputFile}", e))
-    } yield ()
-  }
+  private def processTarget(target: DocsTarget, sepFormat: CSVFormat, config: DocsConfig, ontology: OWLOntology): ZIO[Blocking with Logging, DOSDPError, Unit] =
+    log.locally(_.annotate(loggingContext, target.toLogContext)) {
+      for {
+        _ <- log.info(s"Processing pattern ${target.templateFile}")
+        prefixes <- config.common.prefixesMap
+        dosdp <- Config.inputDOSDPFrom(target.templateFile)
+        eDOSDP = ExpandedDOSDP(dosdp, prefixes)
+        columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
+        (columns, rows) = columnsAndFillers
+        prefixes <- config.common.prefixesMap
+        iri <- ZIO.fromOption(dosdp.pattern_iri).orElse(logErrorFail("Pattern must have pattern IRI for document command"))
+        fillers = dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
+          dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
+          dosdp.data_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"`{$k}`" } ++
+          dosdp.data_list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"`{$k}`" } +
+          (DOSDP.DefinedClassVariable -> iri)
+        variableReadableIdentifiers = (dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
+          dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" }).map(e => IRI.create(e._2) -> s"`{${e._1}}`")
+        renderer = objectRenderer(ontology, variableReadableIdentifiers)
+        axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
+        patternIRI = IRI.create(iri)
+        docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
+        data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
+        markdown <- DocsMarkdown.markdown(eDOSDP, docAxioms, renderer, data)
+        _ <- effectBlockingIO(new PrintWriter(target.outputFile, "utf-8")).bracketAuto { writer =>
+          effectBlockingIO(writer.print(markdown))
+        }.flatMapError(e => logError(s"Couldn't write Markdown to file ${target.outputFile}", e))
+      } yield ()
+    }
 
   private def writeIndex(targets: List[DocsTarget], outpath: String) = {
     for {
@@ -71,18 +77,18 @@ object Docs {
       markdown = DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
       _ <- effectBlockingIO(new PrintWriter(s"$outpath/index.md", "utf-8")).bracketAuto { writer =>
         effectBlockingIO(writer.print(markdown))
-      }.mapError(e => DOSDPError(s"Couldn't write Markdown to file $outpath/index.md", e))
+      }.flatMapError(e => logError(s"Couldn't write Markdown to file $outpath/index.md", e))
     } yield DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
   }
 
-  private def determineTargets(config: DocsConfig): ZIO[Blocking, DOSDPError, List[DocsTarget]] = {
+  private def determineTargets(config: DocsConfig): ZIO[Blocking with Logging, DOSDPError, List[DocsTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
-      _ <- ZIO.effectTotal(scribe.info("Running in batch mode"))
-      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(ZIO.fail(DOSDPError(s"Pattern doesn't exist: $pattern"))))
-      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(ZIO.fail(DOSDPError("\"--template must be a directory in batch mode\"")))
-      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(ZIO.fail(DOSDPError("\"--infile must be a directory in batch mode\"")))
-      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(ZIO.fail(DOSDPError("\"--outfile must be a directory in batch mode\"")))
+      _ <- log.info("Running in batch mode")
+      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(logErrorFail(s"Pattern doesn't exist: $pattern")))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(logErrorFail("\"--template must be a directory in batch mode\""))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(logErrorFail("\"--infile must be a directory in batch mode\""))
+      _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(logErrorFail("\"--outfile must be a directory in batch mode\""))
     } yield patternNames.map { pattern =>
       val templateFileName = s"${config.common.template}/$pattern.yaml"
       val dataExtension = config.common.tableFormat.toLowerCase
@@ -95,9 +101,13 @@ object Docs {
 
   //TODO better handling for list values?
   private def formatDataRow(row: Map[String, String], columns: List[String], prefixes: PartialFunction[String, String]): List[String] =
-    columns.map(c => row.getOrElse(c, "")).map(v => Prefixes.idToIRI(v, prefixes).map(iri => s"[$v](${iri})").getOrElse(v))
+    columns.map(c => row.getOrElse(c, "")).map(v => Prefixes.idToIRI(v, prefixes).map(iri => s"[$v]($iri)").getOrElse(v))
 
-  private final case class DocsTarget(templateFile: String, inputFile: String, outputFile: String)
+  private final case class DocsTarget(templateFile: String, inputFile: String, outputFile: String) {
+
+    def toLogContext: Map[String, String] = Map("pattern" -> templateFile, "input" -> inputFile, "output" -> outputFile)
+
+  }
 
   final case class DocData(
                             name: Set[OWLAnnotationAssertionAxiom],

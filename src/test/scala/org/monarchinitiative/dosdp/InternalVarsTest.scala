@@ -7,6 +7,7 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty}
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 object InternalVarsTest extends DefaultRunnableSpec {
 
@@ -60,6 +61,6 @@ object InternalVarsTest extends DefaultRunnableSpec {
       )))
     }
 
-  )
+  ).provideCustomLayer(Logging.consoleErr())
 
 }
