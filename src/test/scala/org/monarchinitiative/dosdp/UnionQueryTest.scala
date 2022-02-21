@@ -5,6 +5,7 @@ import org.monarchinitiative.dosdp.cli.{Config, Query}
 import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLClass, OWLObjectProperty}
 import zio._
+import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
@@ -32,7 +33,7 @@ object UnionQueryTest extends DefaultRunnableSpec {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
         model <- Query.makeModel(ontology)
-        sparqlQuery <- ZIO.fromEither(SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms))
+        sparqlQuery <- SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.LogicalAxioms).provideCustomLayer(Logging.consoleErr())
         columnsAndResults <- Query.performQuery(sparqlQuery, model)
         (_, results) = columnsAndResults
         tests <- ZIO.foreach(results) { qs =>
@@ -44,6 +45,6 @@ object UnionQueryTest extends DefaultRunnableSpec {
         }
       } yield tests.reduce(_ && _)
     }
-  }
+  }.provideCustomLayer(Logging.consoleErr())
 
 }

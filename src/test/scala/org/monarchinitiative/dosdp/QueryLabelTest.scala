@@ -3,9 +3,10 @@ package org.monarchinitiative.dosdp
 import org.apache.jena.query.QuerySolution
 import org.apache.jena.sys.JenaSystem
 import org.monarchinitiative.dosdp.cli.{Config, Query}
-import zio.ZIO
+import zio._
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 object QueryLabelTest extends DefaultRunnableSpec {
 
@@ -17,7 +18,7 @@ object QueryLabelTest extends DefaultRunnableSpec {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.yaml")
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/QueryLabelTest.ofn", None)
         model <- Query.makeModel(ontology)
-        query <- ZIO.fromEither(Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.AnnotationAxioms, None))
+        query <- Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.AnnotationAxioms, None)
         (_, results) <- Query.performQuery(query, model)
       } yield {
         // Should match on any readable identifier (either label or synonym)
@@ -34,7 +35,7 @@ object QueryLabelTest extends DefaultRunnableSpec {
           ))))(isTrue)
       }
     }
-  }
+  }.provideCustomLayer(Logging.consoleErr())
 
   private def containsResourceBindings(qs: QuerySolution, bindings: Map[String, String]): Boolean =
     bindings.forall { case (variable, value) =>

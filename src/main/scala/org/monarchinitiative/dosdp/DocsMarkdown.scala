@@ -1,15 +1,18 @@
 package org.monarchinitiative.dosdp
 
+import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.monarchinitiative.dosdp.cli.Docs.DocData
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.io.OWLObjectRenderer
 import org.semanticweb.owlapi.model.{IRI, OWLObject}
+import zio.ZIO
+import zio.logging.Logging
 
 import scala.jdk.CollectionConverters._
 
 object DocsMarkdown {
 
-  def markdown(edosdp: ExpandedDOSDP, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): String = {
+  def markdown(edosdp: ExpandedDOSDP, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): ZIO[Logging, DOSDPError, String] = {
     def r(obj: OWLObject): String = renderer.render(obj).replace("\n", " ")
 
     val dosdp = edosdp.dosdp
@@ -17,10 +20,14 @@ object DocsMarkdown {
     val PatternCls = Class(PatternIRI)
     val equivPrefix = if (docData.equivalentTo.flatMap(_.getClassExpressionsMinus(PatternCls).asScala).size > 1) "- " else ""
     val subClassOfPrefix = if (docData.subClassOf.size > 1) "- " else ""
-    val variables = ((edosdp.varExpressions.to(List) ::: edosdp.listVarExpressions.to(List)).map { case (k, v) => k -> r(v) }) :::
-      dosdp.data_vars.getOrElse(Map.empty).to(List) ::: dosdp.data_list_vars.getOrElse(Map.empty).to(List)
+    for {
+      varExpressions <- edosdp.varExpressions
+      listVarExpressions <- edosdp.listVarExpressions
+    } yield {
+      val variables = ((varExpressions.to(List) ::: listVarExpressions.to(List)).map { case (k, v) => k -> r(v) }) :::
+        dosdp.data_vars.getOrElse(Map.empty).to(List) ::: dosdp.data_list_vars.getOrElse(Map.empty).to(List)
 
-    s"""# ${dosdp.pattern_name.getOrElse("")}
+      s"""# ${dosdp.pattern_name.getOrElse("")}
 
 [${dosdp.pattern_iri.getOrElse("Missing pattern IRI")}](${dosdp.pattern_iri.getOrElse("")})
 
@@ -44,10 +51,10 @@ ${docData.name.map { ax => r(ax.getValue) }.mkString("\n\n")}
 ## Annotations
 
 ${
-      docData.annotations.map { ax =>
-        s"- ${r(ax.getProperty)}: ${r(ax.getValue)}"
-      }.mkString("\n")
-    }
+        docData.annotations.map { ax =>
+          s"- ${r(ax.getProperty)}: ${r(ax.getValue)}"
+        }.mkString("\n")
+      }
 
 ## Definition
 
@@ -56,10 +63,10 @@ ${docData.definition.map { ax => r(ax.getValue) }.mkString("\n\n")}
 ## Equivalent to
 
 ${
-      docData.equivalentTo.flatMap { ax =>
-        ax.getClassExpressionsMinus(PatternCls).asScala.map(cls => r(cls)).map(text => s"$equivPrefix$text")
-      }.mkString("\n")
-    }
+        docData.equivalentTo.flatMap { ax =>
+          ax.getClassExpressionsMinus(PatternCls).asScala.map(cls => r(cls)).map(text => s"$equivPrefix$text")
+        }.mkString("\n")
+      }
 
 ${if (docData.subClassOf.nonEmpty) "## Subclass of\n" else ""}
 ${docData.subClassOf.map(ax => r(ax.getSuperClass)).map(text => s"$subClassOfPrefix$text").mkString("\n")}
@@ -76,6 +83,8 @@ ${data.head.map(_ => "|:--").mkString}|
 ${data.drop(1).map(_.mkString("| ", " | ", " |")).mkString("\n")}
 
 """
+    }
+
   }
 
   def indexMarkdown(patterns: List[(DOSDP, String)]): String = {

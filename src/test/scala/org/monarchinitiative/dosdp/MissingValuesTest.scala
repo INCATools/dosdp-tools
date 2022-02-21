@@ -8,6 +8,7 @@ import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationP
 import zio.test.Assertion._
 import zio.test._
 import org.phenoscape.scowl._
+import zio.logging._
 
 object MissingValuesTest extends DefaultRunnableSpec {
 
@@ -42,5 +43,6 @@ object MissingValuesTest extends DefaultRunnableSpec {
   }
 
   def spec = suite("All tests")(testMissingColumnsAndCellValuesFromTSV, testMissingColumnsAndCellValuesFromCSV)
+    .provideCustomLayer(Logging.consoleErr())
 
 }

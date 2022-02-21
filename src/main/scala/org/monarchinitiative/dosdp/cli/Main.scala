@@ -2,14 +2,23 @@ package org.monarchinitiative.dosdp.cli
 
 import caseapp._
 import org.apache.jena.sys.JenaSystem
-import org.monarchinitiative.dosdp.DOSDP
-import scribe._
-import scribe.filter._
 import zio._
+import zio.logging._
+import zio.logging.slf4j.bridge.initializeSlf4jBridge
 
 import java.time.{Duration, Instant}
 
 object Main extends ZCommandApp[Config] {
+
+  val loggingContext: LogAnnotation[Map[String, String]] = LogAnnotation(
+    name = "context",
+    initialValue = Map.empty,
+    combine = _ ++ _,
+    render = _.foldLeft("") { case (text, (key, value)) =>
+      val separator = if (text.nonEmpty) ";" else ""
+      s"$text$separator$key=$value"
+    }
+  )
 
   override def appName: String = "dosdp-tools"
 
@@ -21,20 +30,22 @@ object Main extends ZCommandApp[Config] {
   }
 
   override def run(config: Config, args: RemainingArgs): ZIO[ZEnv, Nothing, ExitCode] = {
-    val program = ZIO.effectTotal(JenaSystem.init()) *> ZIO.effectTotal(
-      scribe.Logger.root
-        .clearHandlers()
-        .clearModifiers()
-        .withModifier(select(packageName(DOSDP.getClass.getPackage.getName)).include(level >= Level.Info))
-        .withHandler(minimumLevel = Some(if (config.common.verbose) Level.Info else Level.Warn))
-        .replace()
-    ) *> config.run
+    val env =
+      Logging.console(
+        logLevel = if (config.common.verbose) LogLevel.Info else LogLevel.Warn,
+        format = LogFormat.ColoredLogFormat { (context, line) =>
+          val c = loggingContext.render(context.get(loggingContext))
+          s"[context: $c] $line"
+        }
+      ) >>> initializeSlf4jBridge
+    val program = ZIO.effectTotal(JenaSystem.init()) *> config.run
     program
       .as(ExitCode.success)
-      .catchAll { case DOSDPError(msg, e) =>
+      .catchAll { case DOSDPError(_, e) =>
         if (config.common.verbose) ZIO.effectTotal(e.printStackTrace()).as(ExitCode.failure)
-        else ZIO.effectTotal(scribe.error(msg)).as(ExitCode.failure)
+        else ZIO.unit.as(ExitCode.failure)
       }
+      .provideCustomLayer(env)
   }
 
 }

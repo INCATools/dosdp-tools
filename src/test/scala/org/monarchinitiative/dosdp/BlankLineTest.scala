@@ -7,6 +7,7 @@ import org.monarchinitiative.dosdp.cli.{Config, Generate}
 import org.phenoscape.scowl.{not => _, _}
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 object BlankLineTest extends DefaultRunnableSpec {
 
@@ -21,6 +22,6 @@ object BlankLineTest extends DefaultRunnableSpec {
         assert(axioms)(contains(Class("http://ex.org/2") Annotation(RDFSLabel, "Entity 2 TSV"))) &&
         assert(axioms)(contains(Class("http://ex.org/3") Annotation(RDFSLabel, "http://example.org/Entity3 thing")))
     }
-  }
+  }.provideCustomLayer(Logging.consoleErr())
 
 }

@@ -2,7 +2,6 @@ package org.monarchinitiative.dosdp
 
 import java.util.UUID
 import java.util.regex.Pattern
-
 import org.apache.jena.query.ParameterizedSparqlString
 import org.monarchinitiative.dosdp.cli.Config.{AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.{DOSDPError, Generate}
@@ -10,6 +9,8 @@ import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpre
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
 import org.phenoscape.scowl._
+import zio._
+import zio.logging._
 
 import scala.jdk.CollectionConverters._
 
@@ -17,7 +18,7 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, String] =
+  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] =
     for {
       select <- selectFor(dosdp, axioms)
       triples <- triplesFor(dosdp, axioms)
@@ -36,7 +37,7 @@ ORDER BY ?defined_class_label
 """
     }
 
-  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, String] =
+  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] =
     for {
       axVariables <- axiomVariables(dosdp)
     } yield {
@@ -48,7 +49,7 @@ ORDER BY ?defined_class_label
         .mkString(" ")
     }
 
-  private def axiomVariables(dosdp: ExpandedDOSDP): Either[DOSDPError, Set[String]] =
+  private def axiomVariables(dosdp: ExpandedDOSDP): ZIO[Logging, DOSDPError, Set[String]] =
     for {
       filledAxioms <- dosdp.filledLogicalAxioms(None, None)
     } yield filledAxioms.flatMap(selectVariables)
@@ -62,85 +63,87 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): Either[DOSDPError, Seq[String]] = {
-    val props = dosdp.readableIdentifierProperties.to(Set)
-    val logicalBindings = dosdp.dosdp.vars.map { vars =>
-      vars.keys.map { key =>
-        key -> SingleValue(DOSDP.variableToIRI(key).toString)
-      }.toMap
-    }
-    val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
-    val maybeAnnotationTriples =
-      if (queryAnnotations)
-        for {
-          annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
-        } yield annotationAxioms.to(Seq).flatMap(triples(_, props))
-      else Right(Nil)
-    val maybeAxiomTriples =
-      if (queryLogical) {
-        for {
-          filledAxioms <- dosdp.filledLogicalAxioms(None, None)
-        } yield filledAxioms.to(Seq).flatMap(ax => triples(ax, props))
+  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] = {
+    for {
+      propsList <- dosdp.readableIdentifierProperties
+      props = propsList.to(Set)
+      logicalBindings = dosdp.dosdp.vars.map { vars =>
+        vars.keys.map { key =>
+          key -> SingleValue(DOSDP.variableToIRI(key).toString)
+        }.toMap
       }
-      else Right(Nil)
-    val variableTriples = dosdp.varExpressions.toSeq.flatMap {
-      case (_, Thing)                                                               =>
-        Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
-      case (variable, named: OWLClass)                                              =>
-        Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
-      case (variable, ObjectUnionOf(operands)) if operands.forall(_.isNamed)        =>
-        Seq(operands.map(named => s"{ ?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . }")
-          .mkString(" UNION "))
-      case (variable, ObjectIntersectionOf(operands)) if operands.forall(_.isNamed) =>
-        operands.map(named => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . ")
-      case (variable, expression)                                                   =>
-        val pss = new ParameterizedSparqlString()
-        pss.appendNode(expression.asOMN)
-        val sanitizedExpression = pss.toString
-        Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
-    }
-    val maybeLabelTriples = {
-      for {
+      (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
+      annotationTriples <- if (queryAnnotations) for {
+        annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
+        triples <- ZIO.foreach(annotationAxioms.to(Seq))(triples(_, props))
+      } yield triples.flatten
+      else ZIO.succeed(Nil)
+      axiomTriples <- if (queryLogical) for {
+        filledAxioms <- dosdp.filledLogicalAxioms(None, None)
+        triples <- ZIO.foreach(filledAxioms)(triples(_, props))
+      } yield triples.flatten
+      else ZIO.succeed(Nil)
+      varExpressions <- dosdp.varExpressions
+      variableTriples = varExpressions.toSeq.flatMap {
+        case (_, Thing)                                                               =>
+          Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
+        case (variable, named: OWLClass)                                              =>
+          Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
+        case (variable, ObjectUnionOf(operands)) if operands.forall(_.isNamed)        =>
+          Seq(operands.map(named => s"{ ?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . }")
+            .mkString(" UNION "))
+        case (variable, ObjectIntersectionOf(operands)) if operands.forall(_.isNamed) =>
+          operands.map(named => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . ")
+        case (variable, expression)                                                   =>
+          val pss = new ParameterizedSparqlString()
+          pss.appendNode(expression.asOMN)
+          val sanitizedExpression = pss.toString
+          Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
+      }
+      labelTriples <- for {
         variables <- axiomVariables(dosdp)
       } yield variables.map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
-    }
-    for {
-      annotationTriples <- maybeAnnotationTriples
-      axiomTriples <- maybeAxiomTriples
-      labelTriples <- maybeLabelTriples
+
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
-  def triples(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): Seq[String] = axiom match {
+  def triples(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Logging, Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
       val (subClass, subClassTriples) = triples(subClassOf.getSubClass)
       val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
-      Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples
+      ZIO.succeed(Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples)
     case equivalentTo: OWLEquivalentClassesAxiom          =>
-      if (!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in equivalent class axiom unexpected")
-      (for {
-        named <- equivalentTo.getNamedClasses.asScala.headOption
-        expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
-      } yield {
-        val (namedClass, namedClassTriples) = triples(named)
-        val (equivClass, equivClassTriples) = triples(expression)
-        Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
-      }).toSeq.flatten
+      log.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+        .when(!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) *>
+        ZIO.succeed {
+          (for {
+            named <- equivalentTo.getNamedClasses.asScala.headOption
+            expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
+          } yield {
+            val (namedClass, namedClassTriples) = triples(named)
+            val (equivClass, equivClassTriples) = triples(expression)
+            Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
+          }).toSeq.flatten
+        }
     case disjointWith: OWLDisjointClassesAxiom            =>
-      if (!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) scribe.warn("More than two operands or missing named class in disjointness axiom unexpected")
-      (for {
-        named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
-        expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
-      } yield {
-        val (namedClass, namedClassTriples) = triples(named)
-        val (equivClass, equivClassTriples) = triples(expression)
-        Seq(s"$namedClass owl:disjointWith $equivClass .") ++ namedClassTriples ++ equivClassTriples
-      }).toSeq.flatten
+      log.warn("More than two operands or missing named class in disjointness axiom unexpected")
+        .when(!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) *>
+        ZIO.succeed {
+          (for {
+            named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
+            expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
+          } yield {
+            val (namedClass, namedClassTriples) = triples(named)
+            val (equivClass, equivClassTriples) = triples(expression)
+            Seq(s"$namedClass owl:disjointWith $equivClass .") ++ namedClassTriples ++ equivClassTriples
+          }).toSeq.flatten
+        }
     case annotationAssertion: OWLAnnotationAssertionAxiom =>
       val (subject, subjecTriples) = triples(factory.getOWLClass(annotationAssertion.getSubject.asInstanceOf[IRI]))
       val property = s"<${annotationAssertion.getProperty.getIRI}>"
       val (value, valueTriples) = triples(annotationAssertion.getValue, readableIdentifierProperties)
-      Seq(s"$subject $property $value .") ++ subjecTriples ++ valueTriples
+      ZIO.succeed(Seq(s"$subject $property $value .") ++ subjecTriples ++ valueTriples)
+
   }
 
   private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\w+)\\b".r

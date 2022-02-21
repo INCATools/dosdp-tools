@@ -5,6 +5,7 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom}
 import zio.test.Assertion._
 import zio.test._
+import zio.logging._
 
 object AxiomRestrictionsTest extends DefaultRunnableSpec {
 
@@ -48,6 +49,6 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
         assert(axioms6)(contains(logicalAxiom)) &&
         assert(axioms7)(isLeft)
     }
-  }
+  }.provideCustomLayer(Logging.consoleErr())
 
 }
