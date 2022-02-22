@@ -80,7 +80,7 @@ ORDER BY ?defined_class_label
       else ZIO.succeed(Nil)
       axiomTriples <- if (queryLogical) for {
         filledAxioms <- dosdp.filledLogicalAxioms(None, None)
-        triples <- ZIO.foreach(filledAxioms)(triples(_, props))
+        triples <- ZIO.foreach(filledAxioms.to(Seq))(triples(_, props))
       } yield triples.flatten
       else ZIO.succeed(Nil)
       varExpressions <- dosdp.varExpressions
