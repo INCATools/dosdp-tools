@@ -1,0 +1,45 @@
+pattern_name: plana_terms
+pattern_iri: https://tbd
+
+classes:
+  parent_entity: BFO:0000040
+  new_entity: BFO:0000040
+
+annotationProperties:
+  #  dbxref: oboInOwl:hasDbXref
+  depicted_by: foaf:depicted_by
+  image_comment: rdfs:comment
+  comment: rdfs:comment
+  has_obo_namespace: oboInOwl:hasOBONamespace
+  created_by: oboInOwl:created_by
+
+vars:
+  depicted_by: "'depicted_by'"
+  image_comment: "'image_comment'"
+  has_obo_namespace: "'has_obo_namespace'"
+  comment: "'comment'"
+  created_by: "'created_by'"
+
+data_list_vars:
+  dbxref: xsd:string
+  def_dbxref: xsd:string
+  exact_syn: xsd:string
+
+annotations:
+  - annotationProperty: depicted_by
+    var: depicted_by
+    annotations:
+      - annotationProperty: image_comment
+        text: "%s"
+        vars:
+          - image_comment
+  - annotationProperty: comment
+    text: "%s"
+    vars:
+      - comment
+  - annotationProperty: has_obo_namespace
+    text: "%s"
+    vars:
+      - has_obo_namespace
+  - annotationProperty: created_by
+    value: dbxref
