@@ -1,6 +1,7 @@
 enablePlugins(JavaAppPackaging)
 enablePlugins(BuildInfoPlugin)
 enablePlugins(GitVersioning)
+enablePlugins(LauncherJarPlugin)
 
 organization  := "org.monarchinitiative"
 
