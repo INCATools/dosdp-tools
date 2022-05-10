@@ -249,7 +249,6 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
 
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all", "comment_var" -> "My comment1.")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
-        _ = println(axioms)
       } yield assert(axioms)(contains(annotationAxiom1))
     },
     testM("Annotation should be replaced correctly. Tests the default behaviour (without multiClauses and multiValues).") {
