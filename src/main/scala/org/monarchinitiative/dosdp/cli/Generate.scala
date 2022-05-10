@@ -58,7 +58,9 @@ object Generate {
     val knownColumns = dosdp.allVars
     for {
       readableIdentifiers <- eDOSDP.readableIdentifierProperties
-      readableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty) |+| extraReadableIdentifiers
+      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
+      extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
+      readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
       generatedAxioms <- ZIO.foreach(fillers) { row =>
         val (varBindingsItems, localLabelItems) = (for {
           vars <- dosdp.vars.toSeq
@@ -182,12 +184,12 @@ object Generate {
     case AnnotationAxioms => (false, true)
   }
 
-  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, String]] = {
+  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
     val properties = readableIdentifiers.to(Set)
     val mappings = for {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
       if properties(prop)
-    } yield Map(prop.getIRI -> Map(subj -> value))
+    } yield Map(prop.getIRI -> Map(subj -> Set(value)))
     mappings.fold(Map.empty)(_ combine _)
   }
 
