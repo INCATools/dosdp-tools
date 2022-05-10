@@ -40,10 +40,13 @@ object Main extends ZCommandApp[Config] {
       ) >>> initializeSlf4jBridge
     val program = ZIO.effectTotal(JenaSystem.init()) *> config.run
     program
+      .tapError { e =>
+        if (config.common.verbose) ZIO.succeed(e.printStackTrace())
+        else log.error(e.getMessage)
+      }
       .as(ExitCode.success)
       .catchAll { case DOSDPError(_, e) =>
-        if (config.common.verbose) ZIO.effectTotal(e.printStackTrace()).as(ExitCode.failure)
-        else ZIO.unit.as(ExitCode.failure)
+        ZIO.unit.as(ExitCode.failure)
       }
       .provideCustomLayer(env)
   }
