@@ -27,7 +27,7 @@ buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, gitC
 
 buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
-val zioVersion = "1.0.13"
+val zioVersion = "1.0.14"
 
 libraryDependencies ++= {
     Seq(
