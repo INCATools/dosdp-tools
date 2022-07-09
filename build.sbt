@@ -45,7 +45,7 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-core"             % "0.13.0",
       "io.circe"                   %% "circe-generic"          % "0.13.0",
       "io.circe"                   %% "circe-parser"           % "0.13.0",
-      "org.obolibrary.robot"       %  "robot-core"             % "1.8.3"
+      "org.obolibrary.robot"       %  "robot-core"             % "1.8.4"
         exclude("ch.qos.logback", "logback-classic")
         exclude("org.slf4j", "slf4j-log4j12")
         exclude("org.geneontology", "whelk_2.12")
