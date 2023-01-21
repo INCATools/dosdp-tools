@@ -55,8 +55,8 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "apache-jena-libs"       % "4.5.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "1.3.10",
       "commons-codec"              %  "commons-codec"          % "1.15",
-      "dev.zio"                    %% "zio-logging"            % "0.5.14",
-      "dev.zio"                    %% "zio-logging-slf4j-bridge" % "0.5.14",
+      "dev.zio"                    %% "zio-logging"            % "2.1.8",
+      "dev.zio"                    %% "zio-logging-slf4j-bridge" % "2.1.8",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
       "dev.zio"                    %% "zio-test-sbt"           % zioVersion % Test
     )
