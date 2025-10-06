@@ -42,7 +42,7 @@ object Generate {
               (columns, fillers) = columnsAndFillers
               missingColumns = dosdp.allVars.diff(columns.to(Set))
               _ <- ZIO.foreach_(missingColumns)(c => log.warn(s"Input ${target.inputFile} for pattern ${target.templateFile} is missing column for pattern variable <$c>"))
-              axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool, Map.empty)
+              axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool, config.synonymPermutations.bool, Map.empty)
               _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
             } yield ()
           }
@@ -50,17 +50,29 @@ object Generate {
       } yield ()
     }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] =
-    renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, extraReadableIdentifiers)
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, synonymPermutations: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] =
+    renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, synonymPermutations, extraReadableIdentifiers)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, synonymPermutations: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val knownColumns = dosdp.allVars
     for {
       readableIdentifiers <- eDOSDP.readableIdentifierProperties
-      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
+      synonymProperties = if (synonymPermutations) List(
+        AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasExactSynonym"),
+        AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasNarrowSynonym"),
+        AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasBroadSynonym"),
+        AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
+      ) else List.empty
+      allIdentifiers = readableIdentifiers ++ synonymProperties
+      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(allIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
-      readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
+      // For labels, take min. For synonyms, keep all values
+      readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) =>
+        p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min }
+      }
+      // Keep full synonym index for permutation generation
+      synonymIndex: Map[IRI, Map[IRI, Set[String]]] = if (synonymPermutations) initialReadableIDIndex else Map.empty
       generatedAxioms <- ZIO.foreach(fillers) { row =>
         val (varBindingsItems, localLabelItems) = (for {
           vars <- dosdp.vars.toSeq
@@ -127,12 +139,12 @@ object Generate {
             eDOSDP.filledLogicalAxioms(Some(logicalBindingsExtended), Some(annotationBindings))
           else ZIO.succeed(Set.empty)
           annotationAxioms <- if (localOutputAnnotationAxioms)
-            eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindingsExtended))
+            eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindingsExtended), synonymIndex)
           else ZIO.succeed(Set.empty)
         } yield logicalAxioms ++ annotationAxioms
         maybeAxioms
       }
-      allAxioms = generatedAxioms.to(Set).flatten
+      allAxioms: Set[OWLAxiom] = generatedAxioms.to(Set).flatten
       res <- if (annotateAxiomSource) {
         ZIO.fromOption {
           dosdp.pattern_iri.map(IRI.create).map { patternIRI =>

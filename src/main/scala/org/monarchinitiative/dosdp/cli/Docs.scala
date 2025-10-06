@@ -58,10 +58,11 @@ object Docs {
         variableReadableIdentifiers = (dosdp.vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" } ++
           dosdp.list_vars.getOrElse(Map.empty).map { case (k, _) => k -> s"http://dosdp.org/filler/$k" }).map(e => IRI.create(e._2) -> s"`{${e._1}}`")
         renderer = objectRenderer(ontology, variableReadableIdentifiers)
-        axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
+        extraReadableIds = Map(RDFSLabel.getIRI -> variableReadableIdentifiers.toMap)
+        axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, false, extraReadableIds)
         patternIRI = IRI.create(iri)
         docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
-        data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
+        data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes))
         markdown <- DocsMarkdown.markdown(eDOSDP, docAxioms, renderer, data)
         _ <- effectBlockingIO(new PrintWriter(target.outputFile, "utf-8")).bracketAuto { writer =>
           effectBlockingIO(writer.print(markdown))

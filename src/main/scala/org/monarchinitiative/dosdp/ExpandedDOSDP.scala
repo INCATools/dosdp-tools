@@ -132,7 +132,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     ZIO.collectAll(owlAnnotations).map(_.to(Set).flatten)
   }
 
-  def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): ZIO[Logging, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
+  def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], synonymIndex: Map[IRI, Map[IRI, Set[String]]] = Map.empty): ZIO[Logging, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
     val definedTerm = (for {
       actualBindings <- annotationBindings
       SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
@@ -145,7 +145,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     } yield {
       for {
         normalizedAnnotationField <- allNormalizedAnns
-        annotation <- translateAnnotations(normalizedAnnotationField, annotationBindings, logicalBindings)
+        annotation <- translateAnnotations(normalizedAnnotationField, annotationBindings, logicalBindings, synonymIndex)
       } yield AnnotationAssertion(annotation.getAnnotations.asScala.toSet, annotation.getProperty, definedTerm, annotation.getValue)
     }
   }
@@ -171,7 +171,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     }.map(_.flatten.to(Set))
   }
 
-  private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings]): Set[OWLAnnotation] = annotationField match {
+  private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], synonymIndex: Map[IRI, Map[IRI, Set[String]]] = Map.empty): Set[OWLAnnotation] = annotationField match {
     case NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumnOpt, subAnnotations) =>
       val valueOpts = (for {
         column <- overrideColumnOpt
@@ -179,14 +179,14 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         SingleValue(binding) <- bindings.get(column)
         trimmed = binding.trim
         if trimmed.nonEmpty
-      } yield Seq(trimmed)).orElse(Some(printAnnotation(text, vars, multiClause, annotationBindings)))
-      valueOpts.getOrElse(Seq.empty).toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, value))
+      } yield Seq(trimmed)).orElse(Some(printAnnotation(text, vars, multiClause, annotationBindings, logicalBindings, synonymIndex)))
+      valueOpts.getOrElse(Seq.empty).toSet[String].map(value => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings, synonymIndex)), prop, value))
     case NormalizedListAnnotation(prop, value, subAnnotations)                                        =>
       // If no variable bindings are passed in, dummy value is filled in using variable name
       val multiValBindingsOpt = annotationBindings.map(multiValueBindings)
       val bindingsMap = multiValBindingsOpt.getOrElse(Map(value -> MultiValue(Set("'$" + value + "'"))))
       val listValueOpt = bindingsMap.get(value)
-      listValueOpt.toSet[MultiValue].flatMap(listValue => listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)), prop, v)))
+      listValueOpt.toSet[MultiValue].flatMap(listValue => listValue.value.map(v => Annotation(subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings, synonymIndex)), prop, v)))
     case NormalizedIRIValueAnnotation(prop, varr, subAnnotations)                                     =>
       val maybeIRIValue = logicalBindings.map { actualBindings =>
         for {
@@ -195,7 +195,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         } yield iri
       }.getOrElse(Some(DOSDP.variableToIRI(varr)))
       maybeIRIValue.toSet[IRI].map(iriValue => Annotation(
-        subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)),
+        subAnnotations.flatMap(translateAnnotations(_, annotationBindings, logicalBindings, synonymIndex)),
         prop,
         iriValue))
   }
@@ -208,9 +208,11 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
    * @param vars               annotation variables
    * @param multiClause        annotation multiClauses
    * @param annotationBindings variable bindings
+   * @param logicalBindings    logical bindings to resolve IRIs
+   * @param synonymIndex       index of synonyms for generating permutations
    * @return a sequence of printed and replaced annotation texts
    */
-  def printAnnotation(text: Option[String], vars: Option[List[String]], multiClause: Option[MultiClausePrintf], annotationBindings: Option[Bindings]): Seq[String] = {
+  def printAnnotation(text: Option[String], vars: Option[List[String]], multiClause: Option[MultiClausePrintf], annotationBindings: Option[Bindings], logicalBindings: Option[Bindings] = None, synonymIndex: Map[IRI, Map[IRI, Set[String]]] = Map.empty): Seq[String] = {
     val clauseVars = for {
       mc <- multiClause.toList
       clauses <- mc.clauses.toList
@@ -221,15 +223,91 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     val annotationRelatedMultiValueBindings = annotationBindings.getOrElse(Map.empty[String, Binding])
       .view.filterKeys(variables.contains(_)).collectFirst { case (key, MultiValue(value)) => (key, value) }
     val singleValBindings = annotationBindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
-    annotationRelatedMultiValueBindings match {
-      case None                 =>
-        PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), quote = false).toSeq
-      case Some(multiValuePair) =>
-        val multiValueText = for {
-          value <- multiValuePair._2
-          multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
-        } yield multiText
-        multiValueText.toSeq
+
+    // If synonym permutations are enabled, generate all permutations
+    if (synonymIndex.nonEmpty && logicalBindings.isDefined) {
+      generateSynonymPermutations(text, vars, multiClause, singleValBindings, annotationRelatedMultiValueBindings, logicalBindings.get, synonymIndex)
+    } else {
+      // Original behavior
+      annotationRelatedMultiValueBindings match {
+        case None                 =>
+          PrintfText.replaced(text, vars, multiClause, annotationBindings.map(singleValueBindings), quote = false).toSeq
+        case Some(multiValuePair) =>
+          val multiValueText = for {
+            value <- multiValuePair._2
+            multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
+          } yield multiText
+          multiValueText.toSeq
+      }
+    }
+  }
+
+  private def generateSynonymPermutations(text: Option[String], vars: Option[List[String]], multiClause: Option[MultiClausePrintf], singleValBindings: Map[String, SingleValue], annotationRelatedMultiValueBindings: Option[(String, Set[String])], logicalBindings: Map[String, Binding], synonymIndex: Map[IRI, Map[IRI, Set[String]]]): Seq[String] = {
+    // Collect all synonym alternatives for each variable
+    val varSynonymAlternatives: Map[String, Seq[String]] = singleValBindings.flatMap { case (varName, SingleValue(value)) =>
+      // Try to get the IRI for this binding value from logical bindings
+      val iriOpt = for {
+        logicalBinding <- logicalBindings.get(varName)
+        iriString <- logicalBinding match {
+          case SingleValue(v) => Some(v)
+          case _ => None
+        }
+        iri <- Prefixes.idToIRI(iriString, prefixes)
+      } yield iri
+
+      // Collect all synonyms for this IRI
+      iriOpt.map { iri =>
+        val allValues = synonymIndex.values.flatMap(_.get(iri)).flatten.toSeq
+        // Include the original label value first, then all synonyms
+        varName -> (value +: allValues.filterNot(_ == value))
+      }
+    }
+
+    // If no variables have synonyms, return original behavior
+    if (varSynonymAlternatives.isEmpty) {
+      annotationRelatedMultiValueBindings match {
+        case None =>
+          PrintfText.replaced(text, vars, multiClause, Some(singleValBindings), quote = false).toSeq
+        case Some(multiValuePair) =>
+          val multiValueText = for {
+            value <- multiValuePair._2
+            multiText <- PrintfText.replaced(None, None, multiClause, Some(singleValBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
+          } yield multiText
+          multiValueText.toSeq
+      }
+    } else {
+      // Generate cartesian product of all synonym combinations
+      val varsWithSynonyms = varSynonymAlternatives.keys.toSeq
+      val synonymLists = varsWithSynonyms.map(varSynonymAlternatives)
+
+      def cartesianProduct[T](lists: Seq[Seq[T]]): Seq[Seq[T]] = lists match {
+        case Nil => Seq(Seq.empty)
+        case head :: tail =>
+          for {
+            item <- head
+            rest <- cartesianProduct(tail)
+          } yield item +: rest
+      }
+
+      val allCombinations = cartesianProduct(synonymLists)
+
+      // Generate text for each combination
+      allCombinations.flatMap { combination =>
+        val bindingsForThisCombination = varsWithSynonyms.zip(combination).map {
+          case (varName, synonymValue) => varName -> SingleValue(synonymValue)
+        }.toMap
+        val updatedBindings = singleValBindings ++ bindingsForThisCombination
+
+        annotationRelatedMultiValueBindings match {
+          case None =>
+            PrintfText.replaced(text, vars, multiClause, Some(updatedBindings), quote = false).toSeq
+          case Some(multiValuePair) =>
+            for {
+              value <- multiValuePair._2.toSeq
+              multiText <- PrintfText.replaced(None, None, multiClause, Some(updatedBindings + (multiValuePair._1 -> SingleValue(value))), quote = false)
+            } yield multiText
+        }
+      }
     }
   }
 

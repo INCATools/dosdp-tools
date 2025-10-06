@@ -114,7 +114,10 @@ final case class GenerateConfig(@Recurse
                                 addAxiomSourceAnnotation: BoolValue = FalseValue,
                                 @HelpMessage("IRI for annotation property to use to link generated axioms to pattern IRI")
                                 @ValueDescription("IRI")
-                                axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source"
+                                axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source",
+                                @HelpMessage("Generate synonym permutations from filler synonyms in addition to labels")
+                                @ValueDescription("true|false")
+                                synonymPermutations: BoolValue = FalseValue
                                ) extends Config {
 
   override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Generate.run(this)

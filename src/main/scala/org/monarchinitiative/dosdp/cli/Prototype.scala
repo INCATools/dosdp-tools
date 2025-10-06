@@ -46,7 +46,7 @@ object Prototype {
           dosdp.data_vars.getOrElse(Map.empty) ++
           dosdp.data_list_vars.getOrElse(Map.empty) +
           (DOSDP.DefinedClassVariable -> iri)
-        axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false, Map.empty)
+        axioms <- Generate.renderPattern(dosdp, prefixes, fillers, ontologyOpt, true, true, None, false, OboInOwlSource, false, false, Map.empty)
         maybeTitleAxiom = dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
       } yield axioms ++ maybeTitleAxiom
     }
