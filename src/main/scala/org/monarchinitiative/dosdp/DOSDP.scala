@@ -219,7 +219,8 @@ final case class PrintfAnnotation(
                                    text: Option[String],
                                    vars: Option[List[String]],
                                    `override`: Option[String],
-                                   multi_clause: Option[MultiClausePrintf] = None)
+                                   multi_clause: Option[MultiClausePrintf] = None,
+                                   permutations: Option[List[Permutation]] = None)
   extends Annotations with PrintfText {
 
   val shouldQuote = false
@@ -243,9 +244,9 @@ object Annotations {
 
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[ListAnnotation].map[Annotations](identity).or(Decoder[IRIValueAnnotation].map[Annotations](identity)).or(Decoder[PrintfAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
-    case pfa @ PrintfAnnotation(_, _, _, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _, _)             => la.asJson
-    case iva @ IRIValueAnnotation(_, _, _)        => iva.asJson
+    case pfa @ PrintfAnnotation(_, _, _, _, _, _, _) => pfa.asJson
+    case la @ ListAnnotation(_, _, _)                => la.asJson
+    case iva @ IRIValueAnnotation(_, _, _)           => iva.asJson
   }
 
 }
@@ -257,7 +258,8 @@ final case class PrintfAnnotationOBO(
                                       xrefs: Option[String],
                                       text: Option[String],
                                       vars: Option[List[String]],
-                                      multi_clause: Option[MultiClausePrintf] = None) extends PrintfText with AnnotationLike with OBOAnnotations {
+                                      multi_clause: Option[MultiClausePrintf] = None,
+                                      permutations: Option[List[Permutation]] = None) extends PrintfText with AnnotationLike with OBOAnnotations {
 
   val shouldQuote = false
 
@@ -350,4 +352,15 @@ final case class RegexFunction(regex: RegexSub) extends Function {
 
 final case class Join(sep: String)
 
+/**
+ * Represents a permutation specification for generating additional annotations
+ * using values from annotation properties on filler terms.
+ *
+ * @param `var` The name of a single variable for which to generate permutations.
+ *              Must correspond to a variable specified in the 'vars' field of the annotation.
+ * @param annotationProperties A list of annotation property names (as declared in the pattern's
+ *                             annotationProperties dictionary) whose values from the filler term
+ *                             will be used to generate additional annotations.
+ */
+final case class Permutation(`var`: String, annotationProperties: List[String])
 

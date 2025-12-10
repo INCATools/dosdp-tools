@@ -56,6 +56,8 @@ object Generate {
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val knownColumns = dosdp.allVars
+    // Create permutation index for looking up annotation property values from filler terms
+    val permutationIndex: eDOSDP.PermutationIndex = ontOpt.map(createPermutationIndex).getOrElse(Map.empty)
     for {
       readableIdentifiers <- eDOSDP.readableIdentifierProperties
       initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
@@ -127,7 +129,7 @@ object Generate {
             eDOSDP.filledLogicalAxioms(Some(logicalBindingsExtended), Some(annotationBindings))
           else ZIO.succeed(Set.empty)
           annotationAxioms <- if (localOutputAnnotationAxioms)
-            eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindingsExtended))
+            eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindingsExtended), permutationIndex)
           else ZIO.succeed(Set.empty)
         } yield logicalAxioms ++ annotationAxioms
         maybeAxioms
@@ -190,6 +192,17 @@ object Generate {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
       if properties(prop)
     } yield Map(prop.getIRI -> Map(subj -> Set(value)))
+    mappings.fold(Map.empty)(_ combine _)
+  }
+
+  /**
+   * Creates an index of annotation property values for filler terms, used for permutation generation.
+   * Structure: Map[FillerTermIRI, Map[AnnotationPropertyIRI, Set[AnnotationValues]]]
+   */
+  private def createPermutationIndex(ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
+    val mappings = for {
+      AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
+    } yield Map(subj -> Map(prop.getIRI -> Set(value)))
     mappings.fold(Map.empty)(_ combine _)
   }
 
