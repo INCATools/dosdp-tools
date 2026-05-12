@@ -1,0 +1,14 @@
+Prefix(:=<http://purl.obolibrary.org/obo/ONT_>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+Ontology(<http://purl.obolibrary.org/obo/substitutions_test.owl>
+
+Declaration(Class(<http://purl.obolibrary.org/obo/ONT_0000100>))
+Declaration(Class(<http://purl.obolibrary.org/obo/ONT_0000200>))
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/ONT_0000100> "kinase activity"^^xsd:string)
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/ONT_0000200> "binding"^^xsd:string)
+)
