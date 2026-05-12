@@ -50,20 +50,13 @@ object GenerateDefinedClassTest extends DefaultRunnableSpec {
       } yield assert(axioms)(contains[OWLAxiom](expectedLabel)) &&
         assert(axioms)(contains[OWLAxiom](expectedSubClassOf))
     },
-    testM("with a defined_class column present, the minted IRI is used for logical axioms but the OBO `name` annotation lands on the row value") {
-      // The logical-axiom path uses the iri-binding for `defined_class`, while the OBO-style
-      // `name` rendering picks up the row's `defined_class` value before the iri-binding
-      // overrides it. If both halves of this assertion need to flip in a future change,
-      // that's the signal to update the test.
+    testM("fails when the input table has a defined_class column alongside generateDefinedClass") {
       val row = Map("defined_class" -> "ONT:9999999", "item" -> "ONT:0000002")
-      val rowDefinedClass: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_9999999")
-      for {
-        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None,
-          outputLogicalAxioms = true, outputAnnotationAxioms = true, None,
-          annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource,
-          generateDefinedClass = true, Map.empty)
-      } yield assert(axioms)(contains[OWLAxiom](expectedSubClassOf)) &&
-        assert(axioms)(contains[OWLAxiom](rowDefinedClass Annotation(RDFSLabel, "http://purl.obolibrary.org/obo/ONT_0000002 item")))
+      val program = Generate.renderPattern(dosdp, OBOPrefixes, List(row), None,
+        outputLogicalAxioms = true, outputAnnotationAxioms = true, None,
+        annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource,
+        generateDefinedClass = true, Map.empty)
+      assertM(program.flip.map(_.msg))(containsString(DOSDP.DefinedClassVariable))
     },
     testM("fails when pattern_iri is missing") {
       val noIRI = dosdp.copy(pattern_iri = None)

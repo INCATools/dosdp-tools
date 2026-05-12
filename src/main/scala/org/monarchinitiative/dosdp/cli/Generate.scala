@@ -57,6 +57,8 @@ object Generate {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val knownColumns = dosdp.allVars
     for {
+      _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
+        logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
       permutationProperties <- eDOSDP.permutationAnnotationProperties
       permutationIndex =
         if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
@@ -98,8 +100,10 @@ object Generate {
           function <- internalVar.apply.toSeq
           value <- function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
         } yield internalVar.var_name -> SingleValue(value)).toMap
+        // Exclude defined_class so the iri-binding constructed below stays authoritative
+        // for both logical and annotation axioms.
         val additionalBindings = for {
-          (key, value) <- row.view.filterKeys(k => !knownColumns(k)).toMap
+          (key, value) <- row.view.filterKeys(k => !knownColumns(k) && k != DOSDP.DefinedClassVariable).toMap
         } yield key -> SingleValue(value.trim)
         val maybeAxioms = for {
           definedClass <- if (generateDefinedClass) {
