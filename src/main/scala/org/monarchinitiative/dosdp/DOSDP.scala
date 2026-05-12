@@ -98,33 +98,33 @@ trait PrintfText {
 
 object PrintfText {
 
-  def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, Binding]], quote: Boolean): Option[String] = {
+  def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String] = Set.empty): Option[String] = {
     val singleValueBindings = bindings.map(x => x.collect { case (key, SingleValue(value)) => (key, SingleValue(value)) })
-    val replacedText = text.flatMap(content => replaceText(content, vars, singleValueBindings, quote))
-    val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote))
+    val replacedText = text.flatMap(content => replaceText(content, vars, singleValueBindings, quote, unquotedVars))
+    val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote, unquotedVars))
     replacedText.orElse(replacedClause)
   }
 
-  private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+  private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean, unquotedVars: Set[String]): Option[String] = {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.view.mapValues(_.value).toMap
-          realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
+          realVars.map(v => stringValues.get(v).map(text => if (quote && !unquotedVars(v) && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
 
-  private def replaceMultiClause(multi_clause: MultiClausePrintf, bindings: Option[Map[String, Binding]], quote: Boolean): Option[String] = {
+  private def replaceMultiClause(multi_clause: MultiClausePrintf, bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String]): Option[String] = {
     val replacedTexts = for {
       printfClauses <- multi_clause.clauses.toSeq
       printfClause <- printfClauses
-      printfClauseText <- replaceClause(printfClause, bindings, quote)
+      printfClauseText <- replaceClause(printfClause, bindings, quote, unquotedVars)
       subClauses = printfClause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
-      subClausesTexts = subClauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
+      subClausesTexts = subClauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote, unquotedVars))
       clauseText = (printfClauseText :: subClausesTexts).mkString(multi_clause.sep.getOrElse(" "))
     } yield clauseText
     val result = replacedTexts.filter(_.nonEmpty).mkString(multi_clause.sep.getOrElse(" "))
@@ -132,7 +132,7 @@ object PrintfText {
     if (trimmed.isEmpty) None else Some(trimmed)
   }
 
-  private def replaceClause(printfClause: PrintfClause, bindings: Option[Map[String, Binding]], quote: Boolean): Seq[String] = {
+  private def replaceClause(printfClause: PrintfClause, bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String]): Seq[String] = {
     val singleValueBindings = bindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
     val clauseMultiValueBinding = bindings.getOrElse(Map.empty[String, Binding])
       .view.filterKeys(printfClause.vars.getOrElse(List.empty).contains(_))
@@ -141,12 +141,12 @@ object PrintfText {
     clauseMultiValueBinding match {
       case None                 =>
         // unpack clause to text and replace
-        replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote).toSeq
+        replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote, unquotedVars).toSeq
       case Some(multiValuePair) =>
         // unpack clause and first multi value (only one per clause supported)
         val multiValueText = for {
           value <- multiValuePair._2
-          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings + (multiValuePair._1 -> SingleValue(value))), quote)
+          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings + (multiValuePair._1 -> SingleValue(value))), quote, unquotedVars)
         } yield multiText
         multiValueText.toSeq
     }
@@ -219,7 +219,8 @@ final case class PrintfAnnotation(
                                    text: Option[String],
                                    vars: Option[List[String]],
                                    `override`: Option[String],
-                                   multi_clause: Option[MultiClausePrintf] = None)
+                                   multi_clause: Option[MultiClausePrintf] = None,
+                                   permutations: Option[List[Permutation]] = None)
   extends Annotations with PrintfText {
 
   val shouldQuote = false
@@ -243,9 +244,9 @@ object Annotations {
 
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[ListAnnotation].map[Annotations](identity).or(Decoder[IRIValueAnnotation].map[Annotations](identity)).or(Decoder[PrintfAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
-    case pfa @ PrintfAnnotation(_, _, _, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _, _)             => la.asJson
-    case iva @ IRIValueAnnotation(_, _, _)        => iva.asJson
+    case pfa: PrintfAnnotation   => pfa.asJson
+    case la: ListAnnotation      => la.asJson
+    case iva: IRIValueAnnotation => iva.asJson
   }
 
 }
@@ -257,7 +258,8 @@ final case class PrintfAnnotationOBO(
                                       xrefs: Option[String],
                                       text: Option[String],
                                       vars: Option[List[String]],
-                                      multi_clause: Option[MultiClausePrintf] = None) extends PrintfText with AnnotationLike with OBOAnnotations {
+                                      multi_clause: Option[MultiClausePrintf] = None,
+                                      permutations: Option[List[Permutation]] = None) extends PrintfText with AnnotationLike with OBOAnnotations {
 
   val shouldQuote = false
 
@@ -350,4 +352,15 @@ final case class RegexFunction(regex: RegexSub) extends Function {
 
 final case class Join(sep: String)
 
+/**
+ * Represents a permutation specification for generating additional annotations
+ * using values from annotation properties on filler terms.
+ *
+ * @param `var` The name of a single variable for which to generate permutations.
+ *              Must correspond to a variable specified in the 'vars' field of the annotation.
+ * @param annotationProperties A list of annotation property names (as declared in the pattern's
+ *                             annotationProperties dictionary) whose values from the filler term
+ *                             will be used to generate additional annotations.
+ */
+final case class Permutation(`var`: String, annotationProperties: List[String])
 

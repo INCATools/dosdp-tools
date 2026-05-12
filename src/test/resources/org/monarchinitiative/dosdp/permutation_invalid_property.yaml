@@ -1,0 +1,23 @@
+pattern_name: permutationInvalidPropertyPattern
+pattern_iri: http://purl.obolibrary.org/obo/test/permutation_invalid_property.yaml
+
+description: 'Permutation references an annotation property not in annotationProperties — should fail validation.'
+
+classes:
+  thing: "owl:Thing"
+
+annotationProperties:
+  exact_synonym: "oio:hasExactSynonym"
+
+vars:
+  disease: "'thing'"
+
+annotations:
+  - annotationProperty: exact_synonym
+    text: "%s"
+    vars:
+      - disease
+    permutations:
+      - var: disease
+        annotationProperties:
+          - undeclared_property

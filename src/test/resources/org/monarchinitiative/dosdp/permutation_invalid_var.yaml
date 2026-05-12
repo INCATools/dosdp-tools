@@ -1,0 +1,23 @@
+pattern_name: permutationInvalidVarPattern
+pattern_iri: http://purl.obolibrary.org/obo/test/permutation_invalid_var.yaml
+
+description: 'Permutation references a var not in the annotation vars list — should fail validation.'
+
+classes:
+  thing: "owl:Thing"
+
+annotationProperties:
+  exact_synonym: "oio:hasExactSynonym"
+
+vars:
+  disease: "'thing'"
+
+annotations:
+  - annotationProperty: exact_synonym
+    text: "%s"
+    vars:
+      - disease
+    permutations:
+      - var: not_a_real_var
+        annotationProperties:
+          - exact_synonym
