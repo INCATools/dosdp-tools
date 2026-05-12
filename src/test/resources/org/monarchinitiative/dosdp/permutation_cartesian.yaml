@@ -1,0 +1,36 @@
+pattern_name: permutationCartesianPattern
+pattern_iri: http://purl.obolibrary.org/obo/test/permutation_cartesian.yaml
+
+description: 'Two-var cartesian product test for permutation feature.'
+
+classes:
+  thing: "owl:Thing"
+
+annotationProperties:
+  exact_synonym: "oio:hasExactSynonym"
+  related_synonym: "oio:hasRelatedSynonym"
+
+vars:
+  quality: "'thing'"
+  entity: "'thing'"
+
+name:
+  text: "%s %s"
+  vars:
+    - quality
+    - entity
+
+annotations:
+  - annotationProperty: exact_synonym
+    text: "%s %s"
+    vars:
+      - quality
+      - entity
+    permutations:
+      - var: quality
+        annotationProperties:
+          - exact_synonym
+      - var: entity
+        annotationProperties:
+          - exact_synonym
+          - related_synonym
