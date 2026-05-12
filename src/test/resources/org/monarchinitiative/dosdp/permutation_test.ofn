@@ -1,0 +1,33 @@
+Prefix(:=<http://purl.obolibrary.org/obo/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(oio:=<http://www.geneontology.org/formats/oboInOwl#>)
+
+Ontology(<http://purl.obolibrary.org/obo/test/permutation_test>
+
+Declaration(Class(:MONDO_0005267))
+Declaration(Class(:MONDO_0005268))
+Declaration(AnnotationProperty(oio:hasExactSynonym))
+Declaration(AnnotationProperty(oio:hasRelatedSynonym))
+
+############################
+#   Classes
+############################
+
+# Class: :MONDO_0005267 (heart disease)
+# Has synonyms: cardiac disease, heart condition
+
+AnnotationAssertion(rdfs:label :MONDO_0005267 "heart disease")
+AnnotationAssertion(oio:hasExactSynonym :MONDO_0005267 "cardiac disease")
+AnnotationAssertion(oio:hasRelatedSynonym :MONDO_0005267 "heart condition")
+
+# Class: :MONDO_0005268 (lung disease)
+# Has synonyms: pulmonary disease
+
+AnnotationAssertion(rdfs:label :MONDO_0005268 "lung disease")
+AnnotationAssertion(oio:hasExactSynonym :MONDO_0005268 "pulmonary disease")
+
+)
