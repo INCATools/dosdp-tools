@@ -1,0 +1,47 @@
+pattern_name: permutationTestPattern
+pattern_iri: http://purl.obolibrary.org/obo/test/permutation_test.yaml
+
+description: 'Sample pattern to test permutation feature for synonym generation.'
+
+classes:
+  acute: "PATO:0000389"
+  disease: "MONDO:0000001"
+
+annotationProperties:
+  exact_synonym: "oio:hasExactSynonym"
+  related_synonym: "oio:hasRelatedSynonym"
+
+vars:
+  disease: "'disease'"
+
+name:
+  text: "acute %s"
+  vars:
+    - disease
+
+def:
+  text: "Acute form of %s."
+  vars:
+    - disease
+
+# Test permutation with generated_synonyms (OBO Printf style)
+generated_synonyms:
+  - text: "%s, acute"
+    vars:
+      - disease
+    permutations:
+      - var: disease
+        annotationProperties:
+          - exact_synonym
+
+# Test permutation through annotations list (general PrintfAnnotation style)
+annotations:
+  - annotationProperty: related_synonym
+    text: "acute form of %s"
+    vars:
+      - disease
+    permutations:
+      - var: disease
+        annotationProperties:
+          - exact_synonym
+          - related_synonym
