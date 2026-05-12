@@ -1,0 +1,24 @@
+Prefix(:=<http://purl.obolibrary.org/obo/>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+Prefix(oio:=<http://www.geneontology.org/formats/oboInOwl#>)
+
+Ontology(<http://purl.obolibrary.org/obo/test/permutation_cartesian>
+
+Declaration(Class(:TEST_0000001))
+Declaration(Class(:TEST_0000002))
+Declaration(AnnotationProperty(oio:hasExactSynonym))
+Declaration(AnnotationProperty(oio:hasRelatedSynonym))
+
+AnnotationAssertion(rdfs:label :TEST_0000001 "enlarged")
+AnnotationAssertion(oio:hasExactSynonym :TEST_0000001 "big")
+AnnotationAssertion(oio:hasExactSynonym :TEST_0000001 "hypertrophic")
+
+AnnotationAssertion(rdfs:label :TEST_0000002 "heart")
+AnnotationAssertion(oio:hasExactSynonym :TEST_0000002 "cardiac organ")
+AnnotationAssertion(oio:hasRelatedSynonym :TEST_0000002 "pump")
+
+)

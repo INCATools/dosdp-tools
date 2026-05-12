@@ -244,9 +244,9 @@ object Annotations {
 
   implicit val decodeAnnotations: Decoder[Annotations] = Decoder[ListAnnotation].map[Annotations](identity).or(Decoder[IRIValueAnnotation].map[Annotations](identity)).or(Decoder[PrintfAnnotation].map[Annotations](identity))
   implicit val encodeAnnotations: Encoder[Annotations] = Encoder.instance {
-    case pfa @ PrintfAnnotation(_, _, _, _, _, _, _) => pfa.asJson
-    case la @ ListAnnotation(_, _, _)                => la.asJson
-    case iva @ IRIValueAnnotation(_, _, _)           => iva.asJson
+    case pfa: PrintfAnnotation   => pfa.asJson
+    case la: ListAnnotation      => la.asJson
+    case iva: IRIValueAnnotation => iva.asJson
   }
 
 }

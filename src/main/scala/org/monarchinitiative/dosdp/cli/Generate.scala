@@ -56,9 +56,11 @@ object Generate {
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val knownColumns = dosdp.allVars
-    // Create permutation index for looking up annotation property values from filler terms
-    val permutationIndex: eDOSDP.PermutationIndex = ontOpt.map(createPermutationIndex).getOrElse(Map.empty)
     for {
+      permutationProperties <- eDOSDP.permutationAnnotationProperties
+      permutationIndex =
+        if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
+        else ontOpt.map(createPermutationIndex(_, permutationProperties)).getOrElse(Map.empty)
       readableIdentifiers <- eDOSDP.readableIdentifierProperties
       initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
@@ -196,12 +198,15 @@ object Generate {
   }
 
   /**
-   * Creates an index of annotation property values for filler terms, used for permutation generation.
+   * Index of annotation property values for filler terms, used for permutation generation.
+   * Only the supplied `properties` are indexed — every other annotation assertion in the
+   * ontology is skipped.
    * Structure: Map[FillerTermIRI, Map[AnnotationPropertyIRI, Set[AnnotationValues]]]
    */
-  private def createPermutationIndex(ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
+  private def createPermutationIndex(ont: OWLOntology, properties: Set[OWLAnnotationProperty]): Map[IRI, Map[IRI, Set[String]]] = {
     val mappings = for {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
+      if properties(prop)
     } yield Map(subj -> Map(prop.getIRI -> Set(value)))
     mappings.fold(Map.empty)(_ combine _)
   }
