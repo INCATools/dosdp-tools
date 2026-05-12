@@ -41,7 +41,7 @@ libraryDependencies ++= {
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
       "org.geneontology"           %% "owl-diff"               % "1.2.2",
-      "io.circe"                   %% "circe-yaml"             % "0.14.1
+      "io.circe"                   %% "circe-yaml"             % "0.14.1",
       "io.circe"                   %% "circe-core"             % "0.14.9",
       "io.circe"                   %% "circe-generic"          % "0.14.9",
       "io.circe"                   %% "circe-parser"           % "0.14.9",
