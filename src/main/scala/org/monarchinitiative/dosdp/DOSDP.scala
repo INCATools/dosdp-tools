@@ -98,33 +98,33 @@ trait PrintfText {
 
 object PrintfText {
 
-  def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, Binding]], quote: Boolean): Option[String] = {
+  def replaced(text: Option[String], vars: Option[List[String]], multi_clause: Option[MultiClausePrintf], bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String] = Set.empty): Option[String] = {
     val singleValueBindings = bindings.map(x => x.collect { case (key, SingleValue(value)) => (key, SingleValue(value)) })
-    val replacedText = text.flatMap(content => replaceText(content, vars, singleValueBindings, quote))
-    val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote))
+    val replacedText = text.flatMap(content => replaceText(content, vars, singleValueBindings, quote, unquotedVars))
+    val replacedClause = multi_clause.flatMap(content => replaceMultiClause(content, bindings, quote, unquotedVars))
     replacedText.orElse(replacedClause)
   }
 
-  private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean): Option[String] = {
+  private def replaceText(text: String, vars: Option[List[String]], bindings: Option[Map[String, SingleValue]], quote: Boolean, unquotedVars: Set[String]): Option[String] = {
     import cats.implicits._
     val fillersOpt = vars.map { realVars =>
       bindings match {
         case None        => Some(realVars.map(name => "'$" + name + "'"))
         case Some(bound) =>
           val stringValues = bound.view.mapValues(_.value).toMap
-          realVars.map(v => stringValues.get(v).map(text => if (quote && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
+          realVars.map(v => stringValues.get(v).map(text => if (quote && !unquotedVars(v) && !(text.startsWith("'") && text.endsWith("'"))) s"'$text'" else text)).sequence
       }
     }
     fillersOpt.getOrElse(Some(Nil)).map(fillers => text.trim().format(fillers: _*))
   }
 
-  private def replaceMultiClause(multi_clause: MultiClausePrintf, bindings: Option[Map[String, Binding]], quote: Boolean): Option[String] = {
+  private def replaceMultiClause(multi_clause: MultiClausePrintf, bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String]): Option[String] = {
     val replacedTexts = for {
       printfClauses <- multi_clause.clauses.toSeq
       printfClause <- printfClauses
-      printfClauseText <- replaceClause(printfClause, bindings, quote)
+      printfClauseText <- replaceClause(printfClause, bindings, quote, unquotedVars)
       subClauses = printfClause.sub_clauses.getOrElse(List.empty[MultiClausePrintf])
-      subClausesTexts = subClauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote))
+      subClausesTexts = subClauses.flatMap(mc => replaced(None, None, Some(mc), bindings, quote, unquotedVars))
       clauseText = (printfClauseText :: subClausesTexts).mkString(multi_clause.sep.getOrElse(" "))
     } yield clauseText
     val result = replacedTexts.filter(_.nonEmpty).mkString(multi_clause.sep.getOrElse(" "))
@@ -132,7 +132,7 @@ object PrintfText {
     if (trimmed.isEmpty) None else Some(trimmed)
   }
 
-  private def replaceClause(printfClause: PrintfClause, bindings: Option[Map[String, Binding]], quote: Boolean): Seq[String] = {
+  private def replaceClause(printfClause: PrintfClause, bindings: Option[Map[String, Binding]], quote: Boolean, unquotedVars: Set[String]): Seq[String] = {
     val singleValueBindings = bindings.getOrElse(Map.empty[String, Binding]).collect { case (key, SingleValue(value)) => (key, SingleValue(value)) }
     val clauseMultiValueBinding = bindings.getOrElse(Map.empty[String, Binding])
       .view.filterKeys(printfClause.vars.getOrElse(List.empty).contains(_))
@@ -141,12 +141,12 @@ object PrintfText {
     clauseMultiValueBinding match {
       case None                 =>
         // unpack clause to text and replace
-        replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote).toSeq
+        replaced(Some(printfClause.text), printfClause.vars, None, bindings, quote, unquotedVars).toSeq
       case Some(multiValuePair) =>
         // unpack clause and first multi value (only one per clause supported)
         val multiValueText = for {
           value <- multiValuePair._2
-          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings + (multiValuePair._1 -> SingleValue(value))), quote)
+          multiText <- replaced(Some(printfClause.text), printfClause.vars, None, Some(singleValueBindings + (multiValuePair._1 -> SingleValue(value))), quote, unquotedVars)
         } yield multiText
         multiValueText.toSeq
     }

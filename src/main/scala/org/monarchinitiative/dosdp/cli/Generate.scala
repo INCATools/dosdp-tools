@@ -107,7 +107,7 @@ object Generate {
             .orElse(logErrorFail(s"No input column provided for ${DOSDP.DefinedClassVariable}"))
           iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
           logicalBindings = varBindings + iriBinding
-          logicalBindingsExtended = logicalBindings ++ listVarBindings
+          logicalBindingsExtended = logicalBindings ++ listVarBindings ++ dataVarBindings ++ dataListBindings
           readableIDIndexPlusLocalLabels = readableIDIndex + localLabels
           initialAnnotationBindings = varBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
             listVarBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++

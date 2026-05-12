@@ -30,6 +30,14 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
+  // Data var fillers are numeric/string literals that get substituted into datatype
+  // facets (e.g. `xsd:short[>= %s]`). They must NOT be wrapped in the Manchester-syntax
+  // name-quoting that PrintfText applies to class/property name fillers — otherwise the
+  // resulting literal has stray apostrophes in its lexical form and is ill-typed.
+  private val dataVarNames: Set[String] =
+    dosdp.data_vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
+      dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+
   private def parseExpression(exp: Option[PrintfOWLConvenience], logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] =
     ZIO.foreach(exp) { eq =>
       expressionFor(eq, logicalBindings).flatMap { ceOpt =>
@@ -114,12 +122,12 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     }
 
   private def expressionFor(template: PrintfText, bindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Option[OWLClassExpression]] =
-    ZIO.foreach(template.replaced(bindings)) { text =>
+    ZIO.foreach(PrintfText.replaced(template.text, template.vars, template.multi_clause, bindings, template.shouldQuote, dataVarNames)) { text =>
       ZIO.effect(expressionParser.parse(text)).flatMapError(e => logError(s"Failed to parse class expression: $text", e))
     }
 
   private def axiomFor(template: PrintfText, bindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Option[OWLAxiom]] =
-    ZIO.foreach(template.replaced(bindings)) { text =>
+    ZIO.foreach(PrintfText.replaced(template.text, template.vars, template.multi_clause, bindings, template.shouldQuote, dataVarNames)) { text =>
       ZIO.effect(axiomParser.parse(text)).flatMapError(e => logError(s"Failed to parse axiom: $text", e))
     }
 
