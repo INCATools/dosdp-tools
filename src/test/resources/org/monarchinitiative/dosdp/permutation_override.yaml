@@ -1,0 +1,24 @@
+pattern_name: permutationOverridePattern
+pattern_iri: http://purl.obolibrary.org/obo/test/permutation_override.yaml
+
+description: 'Annotation with both override: and permutations: — used to pin the rule that an explicit override value short-circuits permutation expansion for that row.'
+
+classes:
+  thing: "owl:Thing"
+
+annotationProperties:
+  exact_synonym: "oio:hasExactSynonym"
+
+vars:
+  disease: "'thing'"
+
+annotations:
+  - annotationProperty: exact_synonym
+    text: "%s, acute"
+    vars:
+      - disease
+    override: name_override
+    permutations:
+      - var: disease
+        annotationProperties:
+          - exact_synonym
