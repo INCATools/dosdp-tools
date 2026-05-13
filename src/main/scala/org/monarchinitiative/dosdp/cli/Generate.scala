@@ -54,16 +54,17 @@ object Generate {
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, extraReadableIdentifiers)
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
-    val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
     val knownColumns = dosdp.allVars
     for {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
         logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
-      permutationProperties <- eDOSDP.permutationAnnotationProperties
+      compiled <- PatternCompiler.compile(dosdp, prefixes)
+      eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
+      permutationProperties = compiled.permutationProperties
       permutationIndex =
         if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
         else ontOpt.map(createPermutationIndex(_, permutationProperties)).getOrElse(Map.empty)
-      readableIdentifiers <- eDOSDP.readableIdentifierProperties
+      readableIdentifiers = compiled.readableIdentifierProperties
       initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
       readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
