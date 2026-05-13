@@ -55,6 +55,7 @@ object Generate {
 
   def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
     val eDOSDP = ExpandedDOSDP(dosdp, prefixes)
+    val knownColumns = dosdp.allVars
     for {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
         logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
@@ -67,7 +68,7 @@ object Generate {
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
       readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
       generatedAxioms <- ZIO.foreach(fillers) { row =>
-        renderRow(eDOSDP, dosdp, prefixes, row, readableIdentifiers, readableIDIndex, permutationIndex,
+        renderRow(eDOSDP, dosdp, prefixes, knownColumns, row, readableIdentifiers, readableIDIndex, permutationIndex,
           outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, generateDefinedClass)
       }
       allAxioms = generatedAxioms.to(Set).flatten
@@ -85,6 +86,7 @@ object Generate {
   private def renderRow(eDOSDP: ExpandedDOSDP,
                         dosdp: DOSDP,
                         prefixes: PartialFunction[String, String],
+                        knownColumns: Set[String],
                         row: Map[String, String],
                         readableIdentifiers: List[OWLAnnotationProperty],
                         readableIDIndex: Map[IRI, Map[IRI, String]],
@@ -93,7 +95,7 @@ object Generate {
                         outputAnnotationAxioms: Boolean,
                         restrictAxiomsColumnName: Option[String],
                         generateDefinedClass: Boolean): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
-    val bindings = RowBindings.fromRow(dosdp, prefixes, row)
+    val bindings = RowBindings.fromRow(dosdp, prefixes, knownColumns, row)
     for {
       definedClass <- resolveDefinedClass(dosdp, prefixes, row, bindings, generateDefinedClass)
       iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
@@ -253,7 +255,7 @@ object Generate {
    * IRI must remain authoritative for both logical and annotation axioms, so a
    * stray `defined_class` column must not be allowed to leak in via
    * `annotationBindings = expandedBindings ++ additionalBindings` and override
-   * it. See the fix for issue #508.
+   * it.
    *
    * `localLabels` captures `<var>_label` columns — user-supplied display labels
    * that are applied during annotation rendering ahead of any ontology lookup.
@@ -276,7 +278,13 @@ object Generate {
 
   private[cli] object RowBindings {
 
-    def fromRow(dosdp: DOSDP, prefixes: PartialFunction[String, String], row: Map[String, String]): RowBindings = {
+    private def collect[V <: Binding](dict: Option[Map[String, String]], row: Map[String, String])(mkBinding: String => V): Map[String, V] =
+      dict.toSeq.flatMap(_.keys).flatMap(name => row.get(name).flatMap(stripToOption).map(name -> mkBinding(_))).toMap
+
+    private def parseMultiValue(filler: String): MultiValue =
+      MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))
+
+    def fromRow(dosdp: DOSDP, prefixes: PartialFunction[String, String], knownColumns: Set[String], row: Map[String, String]): RowBindings = {
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
         varr <- vars.keys
@@ -288,28 +296,15 @@ object Generate {
       } yield (varr -> SingleValue(filler.trim), fillerLabelOpt)).unzip
       val varBindings = varBindingsItems.toMap
       val localLabels = localLabelItems.flatten.toMap
-      val listVarBindings = (for {
-        listVars <- dosdp.list_vars.toSeq
-        listVar <- listVars.keys
-        filler <- row.get(listVar).flatMap(stripToOption)
-      } yield listVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
-      val dataVarBindings = (for {
-        dataVars <- dosdp.data_vars.toSeq
-        dataVar <- dataVars.keys
-        filler <- row.get(dataVar).flatMap(stripToOption)
-      } yield dataVar -> SingleValue(filler.trim)).toMap
-      val dataListBindings = (for {
-        dataListVars <- dosdp.data_list_vars.toSeq
-        dataListVar <- dataListVars.keys
-        filler <- row.get(dataListVar).flatMap(stripToOption)
-      } yield dataListVar -> MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))).toMap
+      val listVarBindings = collect(dosdp.list_vars, row)(parseMultiValue)
+      val dataVarBindings = collect(dosdp.data_vars, row)(s => SingleValue(s.trim))
+      val dataListBindings = collect(dosdp.data_list_vars, row)(parseMultiValue)
       val internalVarBindings = (for {
         internalVars <- dosdp.internal_vars.toSeq
         internalVar <- internalVars
         function <- internalVar.apply.toSeq
         value <- function.apply(Some(dataListBindings.getOrElse(internalVar.input, listVarBindings.getOrElse(internalVar.input, MultiValue(Set.empty[String])))))
       } yield internalVar.var_name -> SingleValue(value)).toMap
-      val knownColumns = dosdp.allVars
       val additionalBindings = (for {
         (key, value) <- row.view.filterKeys(k => !knownColumns(k) && k != DOSDP.DefinedClassVariable).toMap
       } yield key -> SingleValue(value.trim)).toMap
