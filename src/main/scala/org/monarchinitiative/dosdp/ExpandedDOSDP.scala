@@ -141,7 +141,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     val owlAnnotations = for {
       annotations <- element.annotations.to(List)
       annotation <- annotations
-      maybeNormalizedAnnotation = normalizeAnnotation(annotation)
+      maybeNormalizedAnnotation = AnnotationCompiler.normalizeAnnotation(annotation, safeChecker)
     } yield maybeNormalizedAnnotation.map(normalizedAnnotation => translateAnnotations(normalizedAnnotation, annotationBindings, logicalBindings))
     ZIO.collectAll(owlAnnotations).map(_.to(Set).flatten)
   }
@@ -154,7 +154,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     } yield Class(iri)).getOrElse(term)
     for {
       oboAnns <- normalizedOBOAnnotations
-      otherAnns <- ZIO.foreach(dosdp.annotations.to(List).flatten)(normalizeAnnotation)
+      otherAnns <- ZIO.foreach(dosdp.annotations.to(List).flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker))
       allNormalizedAnns = oboAnns ++ otherAnns
     } yield {
       for {
@@ -182,7 +182,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       (dosdp.generated_broad_synonyms.toList.flatten,    BroadSynonym,   Some(overrides(BroadSynonym))),
       (dosdp.generated_related_synonyms.toList.flatten,  RelatedSynonym, Some(overrides(RelatedSynonym))))
     ZIO.foreach(fields) { case (anns, property, overrideColumnOpt) =>
-      ZIO.foreach(anns)(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
+      ZIO.foreach(anns)(ann => AnnotationCompiler.normalizeOBOAnnotation(ann, property, overrideColumnOpt, safeChecker))
     }.map(_.flatten.to(Set))
   }
 
@@ -331,62 +331,6 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       } yield h :: t
   }
 
-  private def normalizeAnnotation(annotation: Annotations): ZIO[Logging, DOSDPError, NormalizedAnnotation] = annotation match {
-    case PrintfAnnotation(anns, ap, text, vars, overrideColumn, multiClause, perms) =>
-      for {
-        prop <- safeChecker.getOWLAnnotationProperty(ap).orElse(logErrorFail(s"No annotation property binding: $ap"))
-        annotations <- ZIO.foreach(anns.to(List).flatten)(normalizeAnnotation)
-        _ <- validatePermutationVars(perms.getOrElse(List.empty), vars.getOrElse(List.empty))
-        normalizedPerms <- ZIO.foreach(perms.getOrElse(List.empty))(normalizePermutation)
-      } yield NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumn, annotations.to(Set), normalizedPerms)
-    case ListAnnotation(anns, ap, value)                                     =>
-      for {
-        prop <- safeChecker.getOWLAnnotationProperty(ap).orElse(logErrorFail(s"No annotation property binding: $ap"))
-        annotations <- ZIO.foreach(anns.to(List).flatten)(normalizeAnnotation)
-      } yield NormalizedListAnnotation(prop, value, annotations.to(Set))
-    case IRIValueAnnotation(anns, ap, varr)                                  =>
-      for {
-        prop <- safeChecker.getOWLAnnotationProperty(ap).orElse(logErrorFail(s"No annotation property binding: $ap"))
-        annotations <- ZIO.foreach(anns.to(List).flatten)(normalizeAnnotation)
-      } yield NormalizedIRIValueAnnotation(prop, varr, annotations.to(Set))
-  }
-
-  private def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty, overrideColumn: Option[String]): ZIO[Logging, DOSDPError, NormalizedAnnotation] =
-    annotation match {
-      case PrintfAnnotationOBO(anns, xrefs, text, vars, multiClause, perms) =>
-        for {
-          annotations <- ZIO.foreach(anns.to(List).flatten)(normalizeAnnotation)
-          _ <- validatePermutationVars(perms.getOrElse(List.empty), vars.getOrElse(List.empty))
-          normalizedPerms <- ZIO.foreach(perms.getOrElse(List.empty))(normalizePermutation)
-        } yield NormalizedPrintfAnnotation(property, text, vars, multiClause, overrideColumn,
-          annotations.to(Set) ++ xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)),
-          normalizedPerms)
-      case ListAnnotationOBO(value, xrefs)                           => ZIO.succeed(
-        NormalizedListAnnotation(
-          property,
-          value,
-          xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)).to(Set))
-      )
-    }
-
-  private def normalizePermutation(permutation: Permutation): ZIO[Logging, DOSDPError, NormalizedPermutation] = {
-    for {
-      props <- ZIO.foreach(permutation.annotationProperties) { apName =>
-        safeChecker.getOWLAnnotationProperty(apName).orElse(logErrorFail(s"No annotation property binding for permutation: $apName"))
-      }
-    } yield NormalizedPermutation(permutation.`var`, props)
-  }
-
-  /**
-   * Validates that all permutation vars reference variables in the annotation's vars list.
-   */
-  private def validatePermutationVars(permutations: List[Permutation], vars: List[String]): ZIO[Logging, DOSDPError, Unit] = {
-    val varSet = vars.toSet
-    val invalidVars = permutations.map(_.`var`).filterNot(varSet.contains)
-    if (invalidVars.isEmpty) ZIO.unit
-    else logErrorFail(s"Permutation vars not found in annotation vars list: ${invalidVars.mkString(", ")}. Available vars: ${vars.mkString(", ")}")
-  }
-
   private def singleValueBindings(bindings: Bindings): Map[String, SingleValue] = bindings.collect { case (key, value: SingleValue) => key -> value }
 
   private def multiValueBindings(bindings: Bindings): Map[String, MultiValue] = bindings.collect { case (key, value: MultiValue) => key -> value }
@@ -399,54 +343,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       }
     }.map(_.getOrElse(RDFSLabel :: Nil))
 
-  /**
-   * The OWL annotation properties referenced by any `permutation` entry anywhere in this pattern.
-   * Names that fail to resolve are silently dropped here; `normalizePermutation` is the canonical
-   * place where an unresolved reference becomes a validation error.
-   */
-  val permutationAnnotationProperties: URIO[Logging, Set[OWLAnnotationProperty]] = {
-    val names = collectPermutationPropertyNames(dosdp)
-    ZIO.foreach(names.toList)(name => safeChecker.getOWLAnnotationProperty(name).option)
-      .map(_.flatten.toSet)
-  }
-
-  private def collectPermutationPropertyNames(dosdp: DOSDP): Set[String] = {
-    def fromAnnotations(annos: List[Annotations]): List[Permutation] =
-      annos.flatMap {
-        case pfa: PrintfAnnotation =>
-          pfa.permutations.toList.flatten ++ fromAnnotations(pfa.annotations.toList.flatten)
-        case _                     => Nil
-      }
-    def fromOBO(obo: PrintfAnnotationOBO): List[Permutation] =
-      obo.permutations.toList.flatten ++ fromAnnotations(obo.annotations.toList.flatten)
-
-    val perms =
-      fromAnnotations(dosdp.annotations.toList.flatten) ++
-        dosdp.name.toList.flatMap(fromOBO) ++
-        dosdp.comment.toList.flatMap(fromOBO) ++
-        dosdp.`def`.toList.flatMap(fromOBO) ++
-        dosdp.namespace.toList.flatMap(fromOBO) ++
-        dosdp.generated_synonyms.toList.flatten.flatMap(fromOBO) ++
-        dosdp.generated_narrow_synonyms.toList.flatten.flatMap(fromOBO) ++
-        dosdp.generated_broad_synonyms.toList.flatten.flatMap(fromOBO) ++
-        dosdp.generated_related_synonyms.toList.flatten.flatMap(fromOBO)
-
-    perms.flatMap(_.annotationProperties).toSet
-  }
-
-  private sealed trait NormalizedAnnotation {
-    def property: OWLAnnotationProperty
-
-    def subAnnotations: Set[NormalizedAnnotation]
-  }
-
-  private case class NormalizedPrintfAnnotation(property: OWLAnnotationProperty, text: Option[String], vars: Option[List[String]], multiClause: Option[MultiClausePrintf], overrideColumn: Option[String], subAnnotations: Set[NormalizedAnnotation], permutations: List[NormalizedPermutation]) extends NormalizedAnnotation
-
-  private case class NormalizedPermutation(`var`: String, annotationProperties: List[OWLAnnotationProperty])
-
-  private case class NormalizedListAnnotation(property: OWLAnnotationProperty, value: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
-
-  private case class NormalizedIRIValueAnnotation(property: OWLAnnotationProperty, `var`: String, subAnnotations: Set[NormalizedAnnotation]) extends NormalizedAnnotation
+  val permutationAnnotationProperties: URIO[Logging, Set[OWLAnnotationProperty]] =
+    AnnotationCompiler.permutationAnnotationProperties(dosdp, safeChecker)
 
 }
 
