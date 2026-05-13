@@ -19,7 +19,7 @@ object Terms {
         dosdp <- config.common.inputDOSDP
         prefixes <- config.common.prefixesMap
         compiled <- PatternCompiler.compile(dosdp, prefixes)
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
+        eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
         sepFormat <- Config.tabularFormat(config.common.tableFormat)
         patternAxioms <- eDOSDP.filledLogicalAxioms(None, None)
         patternTerms = patternAxioms.flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith("urn:dosdp:")))

@@ -64,15 +64,12 @@ ORDER BY ?defined_class_label
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
   def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] = {
+    val props = dosdp.readableIdentifierProperties.to(Set)
+    val logicalBindings = dosdp.dosdp.vars.map { vars =>
+      vars.keys.map(key => key -> SingleValue(DOSDP.variableToIRI(key).toString)).toMap
+    }
+    val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
     for {
-      propsList <- dosdp.readableIdentifierProperties
-      props = propsList.to(Set)
-      logicalBindings = dosdp.dosdp.vars.map { vars =>
-        vars.keys.map { key =>
-          key -> SingleValue(DOSDP.variableToIRI(key).toString)
-        }.toMap
-      }
-      (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
       annotationTriples <- if (queryAnnotations) for {
         annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
         triples <- ZIO.foreach(annotationAxioms.to(Seq))(triplesForAxiom(_, props))

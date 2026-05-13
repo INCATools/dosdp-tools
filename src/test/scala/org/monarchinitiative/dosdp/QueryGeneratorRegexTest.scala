@@ -15,7 +15,8 @@ object QueryGeneratorRegexTest extends DefaultRunnableSpec {
     testM("Query label token regex") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorRegexTest.yaml")
-        results <- SPARQL.triplesFor(ExpandedDOSDP(dosdp, OBOPrefixes), Config.AnnotationAxioms)
+        compiled <- PatternCompiler.compile(dosdp, OBOPrefixes)
+        results <- SPARQL.triplesFor(ExpandedDOSDP(dosdp, OBOPrefixes, compiled), Config.AnnotationAxioms)
       } yield assert(results.forall(a => a.contains("vector-borne")))(isFalse) && assert(results.forall(a => !a.contains("infectious_disease123asdf")))(isFalse)
     }
   }.provideCustomLayer(Logging.consoleErr())

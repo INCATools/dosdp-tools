@@ -59,7 +59,7 @@ object Generate {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
         logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
       compiled <- PatternCompiler.compile(dosdp, prefixes)
-      eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
+      eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
       permutationProperties = compiled.permutationProperties
       permutationIndex =
         if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
