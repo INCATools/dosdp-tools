@@ -23,7 +23,8 @@ object QueryGeneratorTest extends DefaultRunnableSpec {
     testM("Defined class should be first column") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorTest.yaml")
-        query <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), Config.LogicalAxioms)
+        compiled <- PatternCompiler.compile(dosdp, prefixes)
+        query <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes, compiled), Config.LogicalAxioms)
         variables <- ZIO.effect(QueryFactory.create(query).getProjectVars.asScala)
       } yield assert(variables(0).getVarName)(equalTo("defined_class")) &&
         assert(variables(1).getVarName)(equalTo("defined_class_label"))

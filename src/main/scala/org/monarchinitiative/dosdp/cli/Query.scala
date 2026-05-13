@@ -98,7 +98,7 @@ object Query {
   def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): ZIO[Logging, DOSDPError, String] =
     for {
       compiled <- PatternCompiler.compile(dosdp, prefixes)
-      sparqlQuery <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes, Some(compiled)), axiomKind)
+      sparqlQuery <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes, compiled), axiomKind)
     } yield reasonerOpt
       .map(reasoner => new Owlet(reasoner).expandQueryString(sparqlQuery, asValues = true))
       .getOrElse(sparqlQuery)

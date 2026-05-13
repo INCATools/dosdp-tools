@@ -46,7 +46,7 @@ object Docs {
         prefixes <- config.common.prefixesMap
         dosdp <- Config.inputDOSDPFrom(target.templateFile)
         compiled <- PatternCompiler.compile(dosdp, prefixes)
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
+        eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
         columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
         (columns, rows) = columnsAndFillers
         prefixes <- config.common.prefixesMap
