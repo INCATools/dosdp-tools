@@ -192,7 +192,17 @@ object Config {
   }
 
   /**
-   * This works around some confusing behavior in case-app boolean parsing
+   * Three-state boolean used in place of `Boolean` for CLI flags.
+   *
+   * Why this exists: case-app treats `Boolean` fields as presence-only switches
+   * (`--flag` toggles it on, with no value consumed). That means a user writing
+   * `--flag false` actually sets the flag to `true` and leaves `false` as a stray
+   * positional argument — a silent footgun for users who expect `--flag true|false`
+   * to behave the way it does in most CLIs.
+   *
+   * Defining a custom value type with its own [[ArgParser]] forces case-app to
+   * require an argument after the flag, so `--flag true` and `--flag false` both
+   * parse predictably. Call [[bool]] on the result to recover a plain `Boolean`.
    */
   sealed trait BoolValue {
 
