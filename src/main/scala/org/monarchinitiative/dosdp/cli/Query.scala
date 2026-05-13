@@ -7,7 +7,7 @@ import org.apache.jena.vocabulary.DCTerms
 import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.cli.Main.loggingContext
-import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, SPARQL, SesameJena}
+import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, PatternCompiler, SPARQL, SesameJena}
 import org.phenoscape.owlet.Owlet
 import org.phenoscape.scowl._
 import org.semanticweb.HermiT.ReasonerFactory
@@ -95,18 +95,13 @@ object Query {
       query <- makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt)
     } yield (query, dosdp.pattern_iri)
 
-  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): ZIO[Logging, DOSDPError, String] = {
-    val maybeSparqlQuery = SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes), axiomKind)
+  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): ZIO[Logging, DOSDPError, String] =
     for {
-      sparqlQuery <- maybeSparqlQuery
-    } yield {
-      reasonerOpt
-        .map { reasoner =>
-          new Owlet(reasoner).expandQueryString(sparqlQuery, asValues = true)
-        }
-        .getOrElse(sparqlQuery)
-    }
-  }
+      compiled <- PatternCompiler.compile(dosdp, prefixes)
+      sparqlQuery <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes, Some(compiled)), axiomKind)
+    } yield reasonerOpt
+      .map(reasoner => new Owlet(reasoner).expandQueryString(sparqlQuery, asValues = true))
+      .getOrElse(sparqlQuery)
 
   private def processTarget(target: QueryTarget,
                             config: QueryConfig,

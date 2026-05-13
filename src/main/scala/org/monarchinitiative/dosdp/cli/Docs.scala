@@ -7,7 +7,7 @@ import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.cli.Generate.readFillers
 import org.monarchinitiative.dosdp.cli.Main.loggingContext
 import org.monarchinitiative.dosdp.cli.Prototype.OboInOwlSource
-import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ExpandedDOSDP, Prefixes}
+import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ExpandedDOSDP, PatternCompiler, Prefixes}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.io.OWLObjectRenderer
@@ -45,7 +45,8 @@ object Docs {
         _ <- log.info(s"Processing pattern ${target.templateFile}")
         prefixes <- config.common.prefixesMap
         dosdp <- Config.inputDOSDPFrom(target.templateFile)
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes)
+        compiled <- PatternCompiler.compile(dosdp, prefixes)
+        eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
         columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
         (columns, rows) = columnsAndFillers
         prefixes <- config.common.prefixesMap
