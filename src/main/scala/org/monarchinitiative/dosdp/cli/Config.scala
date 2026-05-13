@@ -178,16 +178,18 @@ object Config {
     case other => logErrorFail(s"Invalid tabular format requested: $other")
   }
 
-  def inputDOSDPFrom(location: String): ZIO[Logging, DOSDPError, DOSDP] =
+  def inputDOSDPFrom(location: String): ZIO[Logging, DOSDPError, DOSDP] = {
+    def wrap[A](what: String)(z: ZIO[Logging, Throwable, A]): ZIO[Logging, DOSDPError, A] =
+      z.flatMapError(e => logError(s"$what at $location", e))
     for {
       file <- ZIO.effectTotal(new File(location))
-      fileExists <- ZIO.effect(file.exists).flatMapError(e => logError(s"Could not read pattern file at $location", e))
-      sourceZ = if (fileExists) ZIO.effect(Source.fromFile(file, "UTF-8")) else
-        ZIO.effect(Source.fromURL(location, "UTF-8"))
-      dosdpText <- sourceZ.bracketAuto(s => ZIO.effect(s.mkString)).flatMapError(e => logError(s"Could not read pattern file at $location", e))
-      json <- ZIO.fromEither(parser.parse(dosdpText)).flatMapError(e => logError(s"Invalid JSON format for pattern file at $location", e))
-      dosdp <- ZIO.fromEither(json.as[DOSDP]).flatMapError(e => logError(s"JSON does not conform to DOS-DP schema for pattern file at $location", e))
+      fileExists <- wrap("Could not read pattern file")(ZIO.effect(file.exists))
+      sourceZ = if (fileExists) ZIO.effect(Source.fromFile(file, "UTF-8")) else ZIO.effect(Source.fromURL(location, "UTF-8"))
+      dosdpText <- wrap("Could not read pattern file")(sourceZ.bracketAuto(s => ZIO.effect(s.mkString)))
+      json <- wrap("Invalid JSON format for pattern file")(ZIO.fromEither(parser.parse(dosdpText)))
+      dosdp <- wrap("JSON does not conform to DOS-DP schema for pattern file")(ZIO.fromEither(json.as[DOSDP]))
     } yield dosdp
+  }
 
   /**
    * This works around some confusing behavior in case-app boolean parsing
