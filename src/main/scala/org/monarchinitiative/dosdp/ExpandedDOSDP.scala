@@ -166,22 +166,23 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def normalizedOBOAnnotations: ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] = {
     import PrintfAnnotationOBO._
-    val base: Map[Set[OBOAnnotations], (OWLAnnotationProperty, Option[String])] = Map(
-      dosdp.name.toSet[OBOAnnotations] -> (Name, Some(overrides(Name))),
-      dosdp.comment.toSet[OBOAnnotations] -> (Comment, Some(overrides(Comment))),
-      dosdp.`def`.toSet[OBOAnnotations] -> (Def, Some(overrides(Def))),
-      dosdp.namespace.toSet[OBOAnnotations] -> (Namespace, Some(overrides(Namespace))),
-      dosdp.exact_synonym.toSet[OBOAnnotations] -> (ExactSynonym, None),
-      dosdp.narrow_synonym.toSet[OBOAnnotations] -> (NarrowSynonym, None),
-      dosdp.related_synonym.toSet[OBOAnnotations] -> (RelatedSynonym, None),
-      dosdp.broad_synonym.toSet[OBOAnnotations] -> (BroadSynonym, None),
-      dosdp.xref.toSet[OBOAnnotations] -> (Xref, None),
-      dosdp.generated_synonyms.toSet.flatten[OBOAnnotations] -> (ExactSynonym, Some(overrides(ExactSynonym))),
-      dosdp.generated_narrow_synonyms.toSet.flatten[OBOAnnotations] -> (NarrowSynonym, Some(overrides(NarrowSynonym))),
-      dosdp.generated_broad_synonyms.toSet.flatten[OBOAnnotations] -> (BroadSynonym, Some(overrides(BroadSynonym))),
-      dosdp.generated_related_synonyms.toSet.flatten[OBOAnnotations] -> (RelatedSynonym, Some(overrides(RelatedSynonym))))
-    ZIO.foreach(base.to(Iterable)) { case (value, (property, overrideColumnOpt)) =>
-      ZIO.foreach(value)(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
+    // (annotation-values-from-DOSDP, target-OWL-property, override-column-name)
+    val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
+      (dosdp.name,                                       Name,           Some(overrides(Name))),
+      (dosdp.comment,                                    Comment,        Some(overrides(Comment))),
+      (dosdp.`def`,                                      Def,            Some(overrides(Def))),
+      (dosdp.namespace,                                  Namespace,      Some(overrides(Namespace))),
+      (dosdp.exact_synonym,                              ExactSynonym,   None),
+      (dosdp.narrow_synonym,                             NarrowSynonym,  None),
+      (dosdp.related_synonym,                            RelatedSynonym, None),
+      (dosdp.broad_synonym,                              BroadSynonym,   None),
+      (dosdp.xref,                                       Xref,           None),
+      (dosdp.generated_synonyms.toList.flatten,          ExactSynonym,   Some(overrides(ExactSynonym))),
+      (dosdp.generated_narrow_synonyms.toList.flatten,   NarrowSynonym,  Some(overrides(NarrowSynonym))),
+      (dosdp.generated_broad_synonyms.toList.flatten,    BroadSynonym,   Some(overrides(BroadSynonym))),
+      (dosdp.generated_related_synonyms.toList.flatten,  RelatedSynonym, Some(overrides(RelatedSynonym))))
+    ZIO.foreach(fields) { case (anns, property, overrideColumnOpt) =>
+      ZIO.foreach(anns)(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
     }.map(_.flatten.to(Set))
   }
 
@@ -273,35 +274,47 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       printAnnotation(text, vars, multiClause, annotationBindings)
     else {
       val permutationsByVar: Map[String, NormalizedPermutation] = permutations.map(p => p.`var` -> p).toMap
-
-      // For each variable, collect label value (always first) plus any permutation values.
-      val valueLists: List[List[String]] = variableList.map { varName =>
-        val labelValue: Option[String] = for {
-          bindings <- annotationBindings
-          SingleValue(value) <- bindings.get(varName)
-        } yield value
-
-        val fillerIRI: Option[IRI] = for {
-          bindings <- logicalBindings
-          SingleValue(value) <- bindings.get(varName)
-          iri <- Prefixes.idToIRI(value, prefixes)
-        } yield iri
-
-        val permutationValues: Set[String] = (for {
-          perm <- permutationsByVar.get(varName)
-          iri <- fillerIRI
-          termAnnos <- permutationIndex.get(iri)
-        } yield perm.annotationProperties.flatMap(prop => termAnnos.getOrElse(prop.getIRI, Set.empty)).toSet)
-          .getOrElse(Set.empty)
-
-        labelValue.toList ++ permutationValues.toList
-      }
-
-      cartesianProduct(valueLists).flatMap { values =>
-        val bindingsForCombination = variableList.zip(values).map { case (varName, value) => varName -> SingleValue(value) }.toMap
+      val valuesPerVar = variableList.map(v =>
+        valuesForVar(v, permutationsByVar, annotationBindings, logicalBindings, permutationIndex))
+      cartesianProduct(valuesPerVar).flatMap { combination =>
+        val bindingsForCombination = variableList.zip(combination).map { case (n, v) => n -> SingleValue(v) }.toMap
         PrintfText.replaced(text, vars, multiClause, Some(bindingsForCombination), quote = false)
       }.distinct
     }
+  }
+
+  /**
+   * Candidate values for one variable in a permuted annotation: the label always
+   * comes first (so its combination shows up before any permutation-only combination),
+   * followed by values pulled from the filler term's annotation properties named by
+   * any matching permutation spec.
+   */
+  private def valuesForVar(
+    varName: String,
+    permutationsByVar: Map[String, NormalizedPermutation],
+    annotationBindings: Option[Bindings],
+    logicalBindings: Option[Bindings],
+    permutationIndex: PermutationIndex
+  ): List[String] = {
+    val labelValue: Option[String] = for {
+      bindings <- annotationBindings
+      SingleValue(value) <- bindings.get(varName)
+    } yield value
+
+    val fillerIRI: Option[IRI] = for {
+      bindings <- logicalBindings
+      SingleValue(value) <- bindings.get(varName)
+      iri <- Prefixes.idToIRI(value, prefixes)
+    } yield iri
+
+    val permutationValues: Set[String] = (for {
+      perm <- permutationsByVar.get(varName)
+      iri <- fillerIRI
+      termAnnos <- permutationIndex.get(iri)
+    } yield perm.annotationProperties.flatMap(prop => termAnnos.getOrElse(prop.getIRI, Set.empty)).toSet)
+      .getOrElse(Set.empty)
+
+    labelValue.toList ++ permutationValues.toList
   }
 
   /**

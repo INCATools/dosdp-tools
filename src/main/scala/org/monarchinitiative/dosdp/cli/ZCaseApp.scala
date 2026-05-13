@@ -12,7 +12,23 @@ import zio.console.{Console, putStrLn}
 import java.io.IOException
 
 /**
- * Adapted from caseapp.cats.IOCaseApp
+ * ZIO-flavored replacements for case-app's [[caseapp.CaseApp]] and
+ * [[caseapp.CommandApp]] base classes.
+ *
+ * Why this exists: case-app's stock base classes assume a synchronous `def run`
+ * returning `Unit`. They are not parameterized over an effect type, so any
+ * subcommand that needs to thread `ZIO[ZEnv, …, ExitCode]` through the entry
+ * point would have to call `Runtime#unsafeRun` from inside a stock `run`. These
+ * classes invert that: the abstract `run` returns ZIO, and the trampoline from
+ * `args: List[String]` into `run` itself runs as a single ZIO program suitable
+ * for a `zio.App` entry point.
+ *
+ * The structure mirrors `caseapp.cats.IOCaseApp` and
+ * `caseapp.cats.CommandIOApp` from case-app-cats, but for `zio.ZIO`.
+ *
+ * The `WithHelp` branches in the pattern match cover the four possible parse
+ * outcomes case-app produces: `--usage` requested, `--help` requested, a parse
+ * error, or a successfully-parsed options value.
  */
 abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T]) extends App {
 
