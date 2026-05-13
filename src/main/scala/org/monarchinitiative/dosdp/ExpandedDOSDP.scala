@@ -166,22 +166,23 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
 
   private def normalizedOBOAnnotations: ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] = {
     import PrintfAnnotationOBO._
-    val base: Map[Set[OBOAnnotations], (OWLAnnotationProperty, Option[String])] = Map(
-      dosdp.name.toSet[OBOAnnotations] -> (Name, Some(overrides(Name))),
-      dosdp.comment.toSet[OBOAnnotations] -> (Comment, Some(overrides(Comment))),
-      dosdp.`def`.toSet[OBOAnnotations] -> (Def, Some(overrides(Def))),
-      dosdp.namespace.toSet[OBOAnnotations] -> (Namespace, Some(overrides(Namespace))),
-      dosdp.exact_synonym.toSet[OBOAnnotations] -> (ExactSynonym, None),
-      dosdp.narrow_synonym.toSet[OBOAnnotations] -> (NarrowSynonym, None),
-      dosdp.related_synonym.toSet[OBOAnnotations] -> (RelatedSynonym, None),
-      dosdp.broad_synonym.toSet[OBOAnnotations] -> (BroadSynonym, None),
-      dosdp.xref.toSet[OBOAnnotations] -> (Xref, None),
-      dosdp.generated_synonyms.toSet.flatten[OBOAnnotations] -> (ExactSynonym, Some(overrides(ExactSynonym))),
-      dosdp.generated_narrow_synonyms.toSet.flatten[OBOAnnotations] -> (NarrowSynonym, Some(overrides(NarrowSynonym))),
-      dosdp.generated_broad_synonyms.toSet.flatten[OBOAnnotations] -> (BroadSynonym, Some(overrides(BroadSynonym))),
-      dosdp.generated_related_synonyms.toSet.flatten[OBOAnnotations] -> (RelatedSynonym, Some(overrides(RelatedSynonym))))
-    ZIO.foreach(base.to(Iterable)) { case (value, (property, overrideColumnOpt)) =>
-      ZIO.foreach(value)(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
+    // (annotation-values-from-DOSDP, target-OWL-property, override-column-name)
+    val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
+      (dosdp.name,                                       Name,           Some(overrides(Name))),
+      (dosdp.comment,                                    Comment,        Some(overrides(Comment))),
+      (dosdp.`def`,                                      Def,            Some(overrides(Def))),
+      (dosdp.namespace,                                  Namespace,      Some(overrides(Namespace))),
+      (dosdp.exact_synonym,                              ExactSynonym,   None),
+      (dosdp.narrow_synonym,                             NarrowSynonym,  None),
+      (dosdp.related_synonym,                            RelatedSynonym, None),
+      (dosdp.broad_synonym,                              BroadSynonym,   None),
+      (dosdp.xref,                                       Xref,           None),
+      (dosdp.generated_synonyms.toList.flatten,          ExactSynonym,   Some(overrides(ExactSynonym))),
+      (dosdp.generated_narrow_synonyms.toList.flatten,   NarrowSynonym,  Some(overrides(NarrowSynonym))),
+      (dosdp.generated_broad_synonyms.toList.flatten,    BroadSynonym,   Some(overrides(BroadSynonym))),
+      (dosdp.generated_related_synonyms.toList.flatten,  RelatedSynonym, Some(overrides(RelatedSynonym))))
+    ZIO.foreach(fields) { case (anns, property, overrideColumnOpt) =>
+      ZIO.foreach(anns)(ann => normalizeOBOAnnotation(ann, property, overrideColumnOpt))
     }.map(_.flatten.to(Set))
   }
 
