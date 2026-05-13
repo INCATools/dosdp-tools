@@ -75,12 +75,12 @@ ORDER BY ?defined_class_label
       (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
       annotationTriples <- if (queryAnnotations) for {
         annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
-        triples <- ZIO.foreach(annotationAxioms.to(Seq))(triples(_, props))
+        triples <- ZIO.foreach(annotationAxioms.to(Seq))(triplesForAxiom(_, props))
       } yield triples.flatten
       else ZIO.succeed(Nil)
       axiomTriples <- if (queryLogical) for {
         filledAxioms <- dosdp.filledLogicalAxioms(None, None)
-        triples <- ZIO.foreach(filledAxioms.to(Seq))(triples(_, props))
+        triples <- ZIO.foreach(filledAxioms.to(Seq))(triplesForAxiom(_, props))
       } yield triples.flatten
       else ZIO.succeed(Nil)
       varExpressions <- dosdp.varExpressions
@@ -107,10 +107,10 @@ ORDER BY ?defined_class_label
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
-  def triples(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Logging, Seq[String]] = axiom match {
+  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Logging, Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
-      val (subClass, subClassTriples) = triples(subClassOf.getSubClass)
-      val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
+      val (subClass, subClassTriples) = triplesForClassExpression(subClassOf.getSubClass)
+      val (superClass, superClassTriples) = triplesForClassExpression(subClassOf.getSuperClass)
       ZIO.succeed(Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples)
     case equivalentTo: OWLEquivalentClassesAxiom          =>
       log.warn("More than two operands or missing named class in equivalent class axiom unexpected")
@@ -120,8 +120,8 @@ ORDER BY ?defined_class_label
             named <- equivalentTo.getNamedClasses.asScala.headOption
             expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
           } yield {
-            val (namedClass, namedClassTriples) = triples(named)
-            val (equivClass, equivClassTriples) = triples(expression)
+            val (namedClass, namedClassTriples) = triplesForClassExpression(named)
+            val (equivClass, equivClassTriples) = triplesForClassExpression(expression)
             Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
           }).toSeq.flatten
         }
@@ -133,15 +133,15 @@ ORDER BY ?defined_class_label
             named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
             expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
           } yield {
-            val (namedClass, namedClassTriples) = triples(named)
-            val (equivClass, equivClassTriples) = triples(expression)
+            val (namedClass, namedClassTriples) = triplesForClassExpression(named)
+            val (equivClass, equivClassTriples) = triplesForClassExpression(expression)
             Seq(s"$namedClass owl:disjointWith $equivClass .") ++ namedClassTriples ++ equivClassTriples
           }).toSeq.flatten
         }
     case annotationAssertion: OWLAnnotationAssertionAxiom =>
-      val (subject, subjecTriples) = triples(factory.getOWLClass(annotationAssertion.getSubject.asInstanceOf[IRI]))
+      val (subject, subjecTriples) = triplesForClassExpression(factory.getOWLClass(annotationAssertion.getSubject.asInstanceOf[IRI]))
       val property = s"<${annotationAssertion.getProperty.getIRI}>"
-      val (value, valueTriples) = triples(annotationAssertion.getValue, readableIdentifierProperties)
+      val (value, valueTriples) = triplesForAnnotationValue(annotationAssertion.getValue, readableIdentifierProperties)
       ZIO.succeed(Seq(s"$subject $property $value .") ++ subjecTriples ++ valueTriples)
 
   }
@@ -154,7 +154,7 @@ ORDER BY ?defined_class_label
     pss.toString
   }
 
-  def triples(annotationValue: OWLAnnotationValue, readableIdentifierProperties: Set[OWLAnnotationProperty]): (String, Seq[String]) = annotationValue match {
+  def triplesForAnnotationValue(annotationValue: OWLAnnotationValue, readableIdentifierProperties: Set[OWLAnnotationProperty]): (String, Seq[String]) = annotationValue match {
     case iri: IRI            =>
       iri.toString match {
         case DOSDPVariable(variable) => (s"?$variable", List(s"FILTER(isIRI(?$variable))"))
@@ -178,7 +178,7 @@ ORDER BY ?defined_class_label
       (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
   }
 
-  def triples(expression: OWLClassExpression): (String, Seq[String]) = expression match {
+  def triplesForClassExpression(expression: OWLClassExpression): (String, Seq[String]) = expression match {
     case named: OWLClass              =>
       named.getIRI.toString match {
         case DOSDPVariable(variable) => (s"?$variable", List(s"FILTER(isIRI(?$variable))"))
@@ -186,14 +186,14 @@ ORDER BY ?defined_class_label
       }
     case svf: OWLObjectSomeValuesFrom =>
       val node = genVar
-      val (filler, fillerTriples) = triples(svf.getFiller)
+      val (filler, fillerTriples) = triplesForClassExpression(svf.getFiller)
       (node, Seq(
         //this assumes named object property
         s"$node owl:onProperty <${svf.getProperty.asOWLObjectProperty.getIRI}> .",
         s"$node owl:someValuesFrom $filler .") ++ fillerTriples)
     case avf: OWLObjectAllValuesFrom  =>
       val node = genVar
-      val (filler, fillerTriples) = triples(avf.getFiller)
+      val (filler, fillerTriples) = triplesForClassExpression(avf.getFiller)
       (node, Seq(
         //this assumes named object property
         s"$node owl:onProperty <${avf.getProperty.asOWLObjectProperty.getIRI}> .",
@@ -201,7 +201,7 @@ ORDER BY ?defined_class_label
     case and: OWLObjectIntersectionOf =>
       val node = genVar
       val (intersectionTriples, operandTriplesList, operands) = and.getOperands.iterator().asScala.toList.map { o =>
-        val (operand, operandTriples) = triples(o)
+        val (operand, operandTriples) = triplesForClassExpression(o)
         (s"$node owl:intersectionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }.unzip3
       val filters = operands.combinations(2).map { pair =>
@@ -212,7 +212,7 @@ ORDER BY ?defined_class_label
     case or: OWLObjectUnionOf         =>
       val node = genVar
       val (unionTriples, operandTriplesList, operands) = or.getOperands.asScala.map { o =>
-        val (operand, operandTriples) = triples(o)
+        val (operand, operandTriples) = triplesForClassExpression(o)
         (s"$node owl:unionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }.unzip3
       val filters = operands.toSeq.combinations(2).map { pair =>
