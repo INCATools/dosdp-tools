@@ -108,7 +108,7 @@ object Generate {
         bindings.dataVarBindings ++
         bindings.dataListBindings +
         iriBinding
-      expandedBindings <- ZIO.foldLeft(eDOSDP.substitutions)(initialAnnotationBindings)((bs, sub) => sub.expandBindings(bs))
+      expandedBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bs, sub) => sub.expandBindings(bs))
       annotationBindings = expandedBindings ++ bindings.additionalBindings
       axiomKinds <- resolveAxiomKinds(restrictAxiomsColumnName, row, outputLogicalAxioms, outputAnnotationAxioms)
       (localOutputLogicalAxioms, localOutputAnnotationAxioms) = axiomKinds
@@ -261,7 +261,7 @@ object Generate {
    * `localLabels` captures `<var>_label` columns — user-supplied display labels
    * that are applied during annotation rendering ahead of any ontology lookup.
    */
-  private[cli] final case class RowBindings(
+  private[dosdp] final case class RowBindings(
     varBindings: Map[String, SingleValue],
     listVarBindings: Map[String, MultiValue],
     dataVarBindings: Map[String, SingleValue],
@@ -277,7 +277,7 @@ object Generate {
 
   }
 
-  private[cli] object RowBindings {
+  private[dosdp] object RowBindings {
 
     private def collect[V <: Binding](dict: Option[Map[String, String]], row: Map[String, String])(mkBinding: String => V): Map[String, V] =
       dict.toSeq.flatMap(_.keys).flatMap(name => row.get(name).flatMap(stripToOption).map(name -> mkBinding(_))).toMap

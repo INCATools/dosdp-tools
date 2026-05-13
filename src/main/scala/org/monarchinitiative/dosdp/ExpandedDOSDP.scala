@@ -312,26 +312,16 @@ final case class ExpandedRegexSub(regexSub: RegexSub) {
 
   private val regex = regexSub.`match`.r
 
-  def substitute(value: String): URIO[Logging, String] = {
-    val valueMatchOpt = regex.findFirstMatchIn(value)
-    val substitutedOpt = valueMatchOpt.map { valueMatch =>
-      groupFinder.replaceAllIn(regexSub.sub, (placeholder: Match) => {
-        val group = placeholder.group(1).toInt
-        valueMatch.group(group)
-      })
-    }
-    substitutedOpt match {
-      case Some(substitution) =>
-        ZIO.succeed(substitution)
-      case None               =>
-        log.info(s"Regex sub '$regexSub' did not match on '$value'").as(value)
-    }
-  }
+  /** Apply `regexSub` to a value; if the pattern does not match, return the value unchanged. */
+  def substitute(value: String): String =
+    regex.findFirstMatchIn(value).map { valueMatch =>
+      groupFinder.replaceAllIn(regexSub.sub, (placeholder: Match) => valueMatch.group(placeholder.group(1).toInt))
+    }.getOrElse(value)
 
-  def expandBindings(bindings: Map[String, Binding]): URIO[Logging, Map[String, Binding]] =
-    ZIO.foreach(bindings.get(regexSub.in)) {
-      case SingleValue(value) => substitute(value).map(v => regexSub.out -> SingleValue(v))
-      case MultiValue(values) => ZIO.foreach(values)(substitute).map(set => regexSub.out -> MultiValue(set))
-    }.map(bindings ++ _)
+  def expandBindings(bindings: Map[String, Binding]): Map[String, Binding] =
+    bindings.get(regexSub.in).map {
+      case SingleValue(value) => regexSub.out -> SingleValue(substitute(value))
+      case MultiValue(values) => regexSub.out -> MultiValue(values.map(substitute))
+    }.fold(bindings)(bindings + _)
 
 }
