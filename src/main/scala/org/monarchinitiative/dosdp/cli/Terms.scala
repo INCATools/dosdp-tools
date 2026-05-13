@@ -4,7 +4,7 @@ import better.files._
 import com.github.tototoshi.csv.CSVReader
 import org.monarchinitiative.dosdp.cli.DOSDPError.logError
 import org.monarchinitiative.dosdp.cli.Main.loggingContext
-import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, Prefixes}
+import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, PatternCompiler, Prefixes}
 import zio._
 import zio.logging._
 
@@ -18,7 +18,8 @@ object Terms {
       for {
         dosdp <- config.common.inputDOSDP
         prefixes <- config.common.prefixesMap
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes)
+        compiled <- PatternCompiler.compile(dosdp, prefixes)
+        eDOSDP = ExpandedDOSDP(dosdp, prefixes, Some(compiled))
         sepFormat <- Config.tabularFormat(config.common.tableFormat)
         patternAxioms <- eDOSDP.filledLogicalAxioms(None, None)
         patternTerms = patternAxioms.flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith("urn:dosdp:")))
