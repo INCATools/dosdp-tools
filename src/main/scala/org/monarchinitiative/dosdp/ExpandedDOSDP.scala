@@ -128,14 +128,15 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private def annotationsFor(element: PrintfText, annotationBindings: Option[Map[String, Binding]], logicalBindings: Option[Map[String, Binding]]): Set[OWLAnnotation] =
     precomputedAnnotationsFor(element).flatMap(translateAnnotations(_, annotationBindings, logicalBindings))
 
-  // Templates land in CompiledPattern by reference: equivalentTo/subClassOf/disjointWith/gci/logical_axioms
-  // each get a CompiledExpression or CompiledLogicalAxiom holding the same PrintfText instance.
+  // Templates land in CompiledPattern by reference: each compiled value holds the same
+  // PrintfText instance that the caller passes in here, so a reference-equality match
+  // recovers the right annotation set.
   private def precomputedAnnotationsFor(template: PrintfText): Set[NormalizedAnnotation] = {
-    val fromExpressions = List(compiled.equivalentTo, compiled.subClassOf, compiled.disjointWith, compiled.gci).flatten
+    val classExprMatches = List(compiled.equivalentTo, compiled.subClassOf, compiled.disjointWith).flatten
       .collectFirst { case ce if ce.template eq template => ce.annotations }
-    fromExpressions
-      .orElse(compiled.logicalAxioms.collectFirst { case la if la.template eq template => la.annotations })
-      .getOrElse(Set.empty)
+    val gciMatch = compiled.gci.collect { case ax if ax.template eq template => ax.annotations }
+    val logicalAxMatch = compiled.logicalAxioms.collectFirst { case la if la.template eq template => la.annotations }
+    classExprMatches.orElse(gciMatch).orElse(logicalAxMatch).getOrElse(Set.empty)
   }
 
   def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], permutationIndex: PermutationIndex = Map.empty): ZIO[Logging, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = ZIO.succeed {
