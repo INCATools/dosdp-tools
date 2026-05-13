@@ -274,35 +274,47 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       printAnnotation(text, vars, multiClause, annotationBindings)
     else {
       val permutationsByVar: Map[String, NormalizedPermutation] = permutations.map(p => p.`var` -> p).toMap
-
-      // For each variable, collect label value (always first) plus any permutation values.
-      val valueLists: List[List[String]] = variableList.map { varName =>
-        val labelValue: Option[String] = for {
-          bindings <- annotationBindings
-          SingleValue(value) <- bindings.get(varName)
-        } yield value
-
-        val fillerIRI: Option[IRI] = for {
-          bindings <- logicalBindings
-          SingleValue(value) <- bindings.get(varName)
-          iri <- Prefixes.idToIRI(value, prefixes)
-        } yield iri
-
-        val permutationValues: Set[String] = (for {
-          perm <- permutationsByVar.get(varName)
-          iri <- fillerIRI
-          termAnnos <- permutationIndex.get(iri)
-        } yield perm.annotationProperties.flatMap(prop => termAnnos.getOrElse(prop.getIRI, Set.empty)).toSet)
-          .getOrElse(Set.empty)
-
-        labelValue.toList ++ permutationValues.toList
-      }
-
-      cartesianProduct(valueLists).flatMap { values =>
-        val bindingsForCombination = variableList.zip(values).map { case (varName, value) => varName -> SingleValue(value) }.toMap
+      val valuesPerVar = variableList.map(v =>
+        valuesForVar(v, permutationsByVar, annotationBindings, logicalBindings, permutationIndex))
+      cartesianProduct(valuesPerVar).flatMap { combination =>
+        val bindingsForCombination = variableList.zip(combination).map { case (n, v) => n -> SingleValue(v) }.toMap
         PrintfText.replaced(text, vars, multiClause, Some(bindingsForCombination), quote = false)
       }.distinct
     }
+  }
+
+  /**
+   * Candidate values for one variable in a permuted annotation: the label always
+   * comes first (so its combination shows up before any permutation-only combination),
+   * followed by values pulled from the filler term's annotation properties named by
+   * any matching permutation spec.
+   */
+  private def valuesForVar(
+    varName: String,
+    permutationsByVar: Map[String, NormalizedPermutation],
+    annotationBindings: Option[Bindings],
+    logicalBindings: Option[Bindings],
+    permutationIndex: PermutationIndex
+  ): List[String] = {
+    val labelValue: Option[String] = for {
+      bindings <- annotationBindings
+      SingleValue(value) <- bindings.get(varName)
+    } yield value
+
+    val fillerIRI: Option[IRI] = for {
+      bindings <- logicalBindings
+      SingleValue(value) <- bindings.get(varName)
+      iri <- Prefixes.idToIRI(value, prefixes)
+    } yield iri
+
+    val permutationValues: Set[String] = (for {
+      perm <- permutationsByVar.get(varName)
+      iri <- fillerIRI
+      termAnnos <- permutationIndex.get(iri)
+    } yield perm.annotationProperties.flatMap(prop => termAnnos.getOrElse(prop.getIRI, Set.empty)).toSet)
+      .getOrElse(Set.empty)
+
+    labelValue.toList ++ permutationValues.toList
   }
 
   /**
