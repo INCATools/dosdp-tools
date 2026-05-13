@@ -15,9 +15,16 @@ import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex.Match
 
 /**
- * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs
+ * Wraps a DOSDP data structure with functionality dependent on expanding IDs into IRIs.
+ *
+ * When constructed with a `compiled: Some(CompiledPattern)` whose `source` is the same
+ * `dosdp`, every pattern-time lookup (OBO annotation normalization, custom annotation
+ * normalization, readable-identifier resolution, permutation-property resolution) is
+ * read from that precomputed value rather than redone per call. Without it, the methods
+ * fall back to per-call computation — the historical behavior, retained for call sites
+ * that have not yet been rewired.
  */
-final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String]) {
+final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String], compiled: Option[CompiledPattern] = None) {
 
   lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   lazy val safeChecker = new SafeOWLEntityChecker(checker)
@@ -32,7 +39,8 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
    */
   type PermutationIndex = Map[IRI, Map[IRI, Set[String]]]
 
-  val substitutions: Seq[ExpandedRegexSub] = dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub)
+  val substitutions: Seq[ExpandedRegexSub] =
+    compiled.map(_.substitutions).getOrElse(dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub))
 
   def allObjectProperties: Map[String, String] = dosdp.relations.getOrElse(Map.empty) ++ dosdp.objectProperties.getOrElse(Map.empty)
 
@@ -40,9 +48,9 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   // facets (e.g. `xsd:short[>= %s]`). They must NOT be wrapped in the Manchester-syntax
   // name-quoting that PrintfText applies to class/property name fillers — otherwise the
   // resulting literal has stray apostrophes in its lexical form and is ill-typed.
-  private val dataVarNames: Set[String] =
+  private val dataVarNames: Set[String] = compiled.map(_.dataVarNames).getOrElse(
     dosdp.data_vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
-      dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet))
 
   private def parseExpression(exp: Option[PrintfOWLConvenience], logicalBindings: Option[Map[String, Binding]], annotationBindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Option[(OWLClassExpression, Set[OWLAnnotation])]] =
     ZIO.foreach(exp) { eq =>
@@ -137,13 +145,21 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
       ZIO.effect(axiomParser.parse(text)).flatMapError(e => logError(s"Failed to parse axiom: $text", e))
     }
 
-  private def annotationsFor(element: PrintfText, annotationBindings: Option[Map[String, Binding]], logicalBindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Set[OWLAnnotation]] = {
-    val owlAnnotations = for {
-      annotations <- element.annotations.to(List)
-      annotation <- annotations
-      maybeNormalizedAnnotation = AnnotationCompiler.normalizeAnnotation(annotation, safeChecker)
-    } yield maybeNormalizedAnnotation.map(normalizedAnnotation => translateAnnotations(normalizedAnnotation, annotationBindings, logicalBindings))
-    ZIO.collectAll(owlAnnotations).map(_.to(Set).flatten)
+  private def annotationsFor(element: PrintfText, annotationBindings: Option[Map[String, Binding]], logicalBindings: Option[Map[String, Binding]]): ZIO[Logging, DOSDPError, Set[OWLAnnotation]] =
+    normalizedAnnotationsFor(element).map(_.flatMap(translateAnnotations(_, annotationBindings, logicalBindings)))
+
+  private def normalizedAnnotationsFor(element: PrintfText): ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] =
+    compiled.flatMap(precomputedAnnotationsFor(element, _)) match {
+      case Some(precomputed) => ZIO.succeed(precomputed)
+      case None              => ZIO.foreach(element.annotations.to(List).flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker)).map(_.toSet)
+    }
+
+  // Templates land in CompiledPattern by reference: equivalentTo/subClassOf/disjointWith/gci/logical_axioms
+  // each get a CompiledExpression or CompiledLogicalAxiom holding the same PrintfText instance.
+  private def precomputedAnnotationsFor(template: PrintfText, c: CompiledPattern): Option[Set[NormalizedAnnotation]] = {
+    val fromExpressions = List(c.equivalentTo, c.subClassOf, c.disjointWith, c.gci).flatten
+      .collectFirst { case ce if ce.template eq template => ce.annotations }
+    fromExpressions.orElse(c.logicalAxioms.collectFirst { case la if la.template eq template => la.annotations })
   }
 
   def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], permutationIndex: PermutationIndex = Map.empty): ZIO[Logging, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
@@ -154,7 +170,7 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     } yield Class(iri)).getOrElse(term)
     for {
       oboAnns <- normalizedOBOAnnotations
-      otherAnns <- ZIO.foreach(dosdp.annotations.to(List).flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker))
+      otherAnns <- normalizedTopLevelAnnotations
       allNormalizedAnns = oboAnns ++ otherAnns
     } yield {
       for {
@@ -164,27 +180,32 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
     }
   }
 
-  private def normalizedOBOAnnotations: ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] = {
-    import PrintfAnnotationOBO._
-    // (annotation-values-from-DOSDP, target-OWL-property, override-column-name)
-    val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
-      (dosdp.name,                                       Name,           Some(overrides(Name))),
-      (dosdp.comment,                                    Comment,        Some(overrides(Comment))),
-      (dosdp.`def`,                                      Def,            Some(overrides(Def))),
-      (dosdp.namespace,                                  Namespace,      Some(overrides(Namespace))),
-      (dosdp.exact_synonym,                              ExactSynonym,   None),
-      (dosdp.narrow_synonym,                             NarrowSynonym,  None),
-      (dosdp.related_synonym,                            RelatedSynonym, None),
-      (dosdp.broad_synonym,                              BroadSynonym,   None),
-      (dosdp.xref,                                       Xref,           None),
-      (dosdp.generated_synonyms.toList.flatten,          ExactSynonym,   Some(overrides(ExactSynonym))),
-      (dosdp.generated_narrow_synonyms.toList.flatten,   NarrowSynonym,  Some(overrides(NarrowSynonym))),
-      (dosdp.generated_broad_synonyms.toList.flatten,    BroadSynonym,   Some(overrides(BroadSynonym))),
-      (dosdp.generated_related_synonyms.toList.flatten,  RelatedSynonym, Some(overrides(RelatedSynonym))))
-    ZIO.foreach(fields) { case (anns, property, overrideColumnOpt) =>
-      ZIO.foreach(anns)(ann => AnnotationCompiler.normalizeOBOAnnotation(ann, property, overrideColumnOpt, safeChecker))
-    }.map(_.flatten.to(Set))
-  }
+  private def normalizedOBOAnnotations: ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] =
+    compiled.map(c => ZIO.succeed(c.oboAnnotations)).getOrElse {
+      import PrintfAnnotationOBO._
+      // (annotation-values-from-DOSDP, target-OWL-property, override-column-name)
+      val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
+        (dosdp.name,                                       Name,           Some(overrides(Name))),
+        (dosdp.comment,                                    Comment,        Some(overrides(Comment))),
+        (dosdp.`def`,                                      Def,            Some(overrides(Def))),
+        (dosdp.namespace,                                  Namespace,      Some(overrides(Namespace))),
+        (dosdp.exact_synonym,                              ExactSynonym,   None),
+        (dosdp.narrow_synonym,                             NarrowSynonym,  None),
+        (dosdp.related_synonym,                            RelatedSynonym, None),
+        (dosdp.broad_synonym,                              BroadSynonym,   None),
+        (dosdp.xref,                                       Xref,           None),
+        (dosdp.generated_synonyms.toList.flatten,          ExactSynonym,   Some(overrides(ExactSynonym))),
+        (dosdp.generated_narrow_synonyms.toList.flatten,   NarrowSynonym,  Some(overrides(NarrowSynonym))),
+        (dosdp.generated_broad_synonyms.toList.flatten,    BroadSynonym,   Some(overrides(BroadSynonym))),
+        (dosdp.generated_related_synonyms.toList.flatten,  RelatedSynonym, Some(overrides(RelatedSynonym))))
+      ZIO.foreach(fields) { case (anns, property, overrideColumnOpt) =>
+        ZIO.foreach(anns)(ann => AnnotationCompiler.normalizeOBOAnnotation(ann, property, overrideColumnOpt, safeChecker))
+      }.map(_.flatten.to(Set))
+    }
+
+  private def normalizedTopLevelAnnotations: ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] =
+    compiled.map(c => ZIO.succeed(c.annotations)).getOrElse(
+      ZIO.foreach(dosdp.annotations.to(List).flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker)).map(_.toSet))
 
   private def translateAnnotations(annotationField: NormalizedAnnotation, annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], permutationIndex: PermutationIndex = Map.empty): Set[OWLAnnotation] = annotationField match {
     case NormalizedPrintfAnnotation(prop, text, vars, multiClause, overrideColumnOpt, subAnnotations, permutations) =>
@@ -336,15 +357,17 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
   private def multiValueBindings(bindings: Bindings): Map[String, MultiValue] = bindings.collect { case (key, value: MultiValue) => key -> value }
 
   val readableIdentifierProperties: ZIO[Logging, DOSDPError, List[OWLAnnotationProperty]] =
-    ZIO.foreach(dosdp.readable_identifiers) { identifiers =>
-      ZIO.foreach(identifiers) { name =>
-        safeChecker.getOWLAnnotationProperty(name)
-          .orElse(logErrorFail(s"No annotation property mapping for '$name'"))
-      }
-    }.map(_.getOrElse(RDFSLabel :: Nil))
+    compiled.map(c => ZIO.succeed(c.readableIdentifierProperties)).getOrElse(
+      ZIO.foreach(dosdp.readable_identifiers) { identifiers =>
+        ZIO.foreach(identifiers) { name =>
+          safeChecker.getOWLAnnotationProperty(name)
+            .orElse(logErrorFail(s"No annotation property mapping for '$name'"))
+        }
+      }.map(_.getOrElse(RDFSLabel :: Nil)))
 
   val permutationAnnotationProperties: URIO[Logging, Set[OWLAnnotationProperty]] =
-    AnnotationCompiler.permutationAnnotationProperties(dosdp, safeChecker)
+    compiled.map(c => ZIO.succeed(c.permutationProperties))
+      .getOrElse(AnnotationCompiler.permutationAnnotationProperties(dosdp, safeChecker))
 
 }
 
