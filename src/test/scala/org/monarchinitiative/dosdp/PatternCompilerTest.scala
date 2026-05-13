@@ -1,0 +1,96 @@
+package org.monarchinitiative.dosdp
+
+import org.monarchinitiative.dosdp.cli.DOSDPError
+import org.phenoscape.scowl._
+import zio.logging._
+import zio.test.Assertion._
+import zio.test._
+
+object PatternCompilerTest extends DefaultRunnableSpec {
+
+  private val labelAnnotated: DOSDP = DOSDP.empty.copy(
+    pattern_name = Some("trivial"),
+    pattern_iri = Some("http://example.org/pattern/trivial"),
+    classes = Some(Map("thing" -> "owl:Thing")),
+    vars = Some(Map("x" -> "'thing'")),
+    name = Some(PrintfAnnotationOBO(
+      annotations = None,
+      xrefs = None,
+      text = Some("name of %s"),
+      vars = Some(List("x")))))
+
+  def spec = suite("PatternCompiler")(
+    testM("compiles a minimal pattern with an OBO name annotation") {
+      for {
+        compiled <- PatternCompiler.compile(labelAnnotated, OBOPrefixes)
+      } yield {
+        assert(compiled.source)(equalTo(labelAnnotated)) &&
+          assert(compiled.patternIRI.map(_.toString))(isSome(equalTo("http://example.org/pattern/trivial"))) &&
+          assert(compiled.oboAnnotations.exists {
+            case NormalizedPrintfAnnotation(prop, _, _, _, _, _, _) => prop == PrintfAnnotationOBO.Name
+            case _                                                  => false
+          })(isTrue) &&
+          assert(compiled.readableIdentifierProperties)(equalTo(List(RDFSLabel))) &&
+          assert(compiled.dataVarNames)(isEmpty)
+      }
+    },
+    testM("rejects a custom annotation that names an undeclared property") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-custom-ann"),
+        annotations = Some(List(PrintfAnnotation(
+          annotations = None,
+          annotationProperty = "made_up_property",
+          text = Some("x"),
+          vars = None,
+          `override` = None))))
+      compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
+    },
+    testM("rejects a permutation that names an undeclared property") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-permutation-prop"),
+        vars = Some(Map("x" -> "owl:Thing")),
+        name = Some(PrintfAnnotationOBO(
+          annotations = None,
+          xrefs = None,
+          text = Some("%s"),
+          vars = Some(List("x")),
+          permutations = Some(List(Permutation("x", List("made_up_property")))))))
+      compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
+    },
+    testM("rejects a permutation whose var is not in the annotation's vars list") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-permutation-var"),
+        annotationProperties = Some(Map("exact_synonym" -> "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")),
+        vars = Some(Map("x" -> "owl:Thing", "y" -> "owl:Thing")),
+        name = Some(PrintfAnnotationOBO(
+          annotations = None,
+          xrefs = None,
+          text = Some("%s"),
+          vars = Some(List("x")),
+          permutations = Some(List(Permutation("y", List("exact_synonym")))))))
+      compileError(pattern).map(msg => assert(msg)(containsString("Permutation vars not found")))
+    },
+    testM("rejects a readable_identifiers entry that names an undeclared property") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-readable-id"),
+        readable_identifiers = Some(List("made_up_property")))
+      compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
+    },
+    testM("populates dataVarNames from data_vars and data_list_vars") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("data-vars"),
+        data_vars = Some(Map("rate_min" -> "xsd:short")),
+        data_list_vars = Some(Map("rates" -> "xsd:short")))
+      for {
+        compiled <- PatternCompiler.compile(pattern, OBOPrefixes)
+      } yield assert(compiled.dataVarNames)(equalTo(Set("rate_min", "rates")))
+    }
+  ).provideCustomLayer(Logging.consoleErr())
+
+  private def compileError(pattern: DOSDP) =
+    PatternCompiler.compile(pattern, OBOPrefixes).either.map {
+      case Left(err) => err.msg
+      case Right(_)  => "compilation unexpectedly succeeded"
+    }
+
+}
