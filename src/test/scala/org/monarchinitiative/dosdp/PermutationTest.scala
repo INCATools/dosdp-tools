@@ -97,11 +97,8 @@ object PermutationTest extends DefaultRunnableSpec {
       } yield axioms
       assertM(program.flip.map(_.msg))(containsString("undeclared_property"))
     },
-    // Pins the rule that `override:` short-circuits `permutations:` for the same annotation:
-    // a row with a non-empty override value yields exactly that string, and the permutation
-    // expansion (and template rendering) is skipped for that row. Without this test, a future
-    // refactor of the `.orElse` in ExpandedDOSDP.translateAnnotations could silently change
-    // overridden rows to also emit synonym permutations.
+    // A non-empty `override:` value short-circuits `permutations:` on the same annotation:
+    // the row emits exactly the override string, and permutation expansion is skipped.
     testM("Override value short-circuits permutations for that row") {
       val overridden  = Class("http://purl.obolibrary.org/obo/TEST_9999992")
       val notOverridden = Class("http://purl.obolibrary.org/obo/TEST_9999991")

@@ -59,18 +59,27 @@ object Generate {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
         logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
       compiled <- PatternCompiler.compile(dosdp, prefixes)
-      eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
       permutationProperties = compiled.permutationProperties
       permutationIndex =
         if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
         else ontOpt.map(createPermutationIndex(_, permutationProperties)).getOrElse(Map.empty)
       readableIdentifiers = compiled.readableIdentifierProperties
-      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
+      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, ont)).getOrElse(Map.empty)
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
       readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
+      expansionContext = Expansion.ExpansionContext(
+        readableIDIndex = readableIDIndex,
+        permutationIndex = permutationIndex,
+        outputLogicalAxioms = outputLogicalAxioms,
+        outputAnnotationAxioms = outputAnnotationAxioms,
+        restrictAxiomsColumn = restrictAxiomsColumnName,
+        generateDefinedClass = generateDefinedClass,
+        readableIdentifiers = readableIdentifiers,
+        localLabelProperty = LocalLabelProperty)
       generatedAxioms <- ZIO.foreach(fillers) { row =>
-        renderRow(eDOSDP, dosdp, prefixes, knownColumns, row, readableIdentifiers, readableIDIndex, permutationIndex,
-          outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, generateDefinedClass)
+        val bindings = RowBindings.fromRow(dosdp, prefixes, knownColumns, row)
+        ZIO.fromEither(Expansion.expandRow(compiled, bindings, row, expansionContext))
+          .flatMapError(e => logError(e.message))
       }
       allAxioms = generatedAxioms.to(Set).flatten
       res <- if (annotateAxiomSource) {
@@ -83,66 +92,6 @@ object Generate {
       else ZIO.succeed(allAxioms)
     } yield res
   }
-
-  private def renderRow(eDOSDP: ExpandedDOSDP,
-                        dosdp: DOSDP,
-                        prefixes: PartialFunction[String, String],
-                        knownColumns: Set[String],
-                        row: Map[String, String],
-                        readableIdentifiers: List[OWLAnnotationProperty],
-                        readableIDIndex: Map[IRI, Map[IRI, String]],
-                        permutationIndex: Map[IRI, Map[IRI, Set[String]]],
-                        outputLogicalAxioms: Boolean,
-                        outputAnnotationAxioms: Boolean,
-                        restrictAxiomsColumnName: Option[String],
-                        generateDefinedClass: Boolean): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
-    val bindings = RowBindings.fromRow(dosdp, prefixes, knownColumns, row)
-    for {
-      definedClass <- resolveDefinedClass(dosdp, prefixes, row, bindings, generateDefinedClass)
-      iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
-      logicalBindings = bindings.varBindings ++ bindings.listVarBindings ++ bindings.dataVarBindings ++ bindings.dataListBindings + iriBinding
-      readableIDIndexPlusLocalLabels = readableIDIndex + (LocalLabelProperty -> bindings.localLabels)
-      initialAnnotationBindings = bindings.varBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.listVarBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.internalVarBindings.view.mapValues(v => resolveIrisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.dataVarBindings ++
-        bindings.dataListBindings +
-        iriBinding
-      expandedBindings = eDOSDP.substitutions.foldLeft(initialAnnotationBindings)((bs, sub) => sub.expandBindings(bs))
-      annotationBindings = expandedBindings ++ bindings.additionalBindings
-      axiomKinds <- resolveAxiomKinds(restrictAxiomsColumnName, row, outputLogicalAxioms, outputAnnotationAxioms)
-      (localOutputLogicalAxioms, localOutputAnnotationAxioms) = axiomKinds
-      logicalAxioms <- if (localOutputLogicalAxioms)
-        eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings))
-      else ZIO.succeed(Set.empty)
-      annotationAxioms <- if (localOutputAnnotationAxioms)
-        eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings), permutationIndex)
-      else ZIO.succeed(Set.empty)
-    } yield logicalAxioms ++ annotationAxioms
-  }
-
-  private def resolveDefinedClass(dosdp: DOSDP,
-                                  prefixes: PartialFunction[String, String],
-                                  row: Map[String, String],
-                                  bindings: RowBindings,
-                                  generateDefinedClass: Boolean): ZIO[Logging, DOSDPError, String] =
-    if (generateDefinedClass)
-      ZIO.fromOption(dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
-        DOSDP.computeDefinedIRI(patternIRI, bindings.bindingsForDefinedClassIRI).toString
-      }).orElse(logErrorFail("Pattern must have an IRI if generate-defined-class is requested."))
-    else
-      ZIO.fromOption(row.get(DOSDP.DefinedClassVariable).map(_.trim))
-        .orElse(logErrorFail(s"No input column provided for ${DOSDP.DefinedClassVariable}"))
-
-  private def resolveAxiomKinds(restrictAxiomsColumnName: Option[String],
-                                row: Map[String, String],
-                                outputLogicalAxioms: Boolean,
-                                outputAnnotationAxioms: Boolean): ZIO[Logging, DOSDPError, (Boolean, Boolean)] =
-    ZIO.fromEither(restrictAxiomsColumnName.flatMap(column => row.get(column).flatMap(value => stripToOption(value)))
-      .map(Config.parseAxiomKind)
-      .map(maybeAxiomKind => maybeAxiomKind.map(axiomsOutputChoice))
-      .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))))
-      .flatMapError(e => logError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
 
   private def determineTargets(config: GenerateConfig): ZIO[Blocking with Logging, DOSDPError, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
@@ -184,7 +133,7 @@ object Generate {
     case AnnotationAxioms => (false, true)
   }
 
-  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
+  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
     val properties = readableIdentifiers.to(Set)
     val mappings = for {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
@@ -205,32 +154,6 @@ object Generate {
       if properties(prop)
     } yield Map(subj -> Map(prop.getIRI -> Set(value)))
     mappings.fold(Map.empty)(_ combine _)
-  }
-
-  private def irisToLabels(readableIdentifiers: List[OWLAnnotationProperty], binding: Binding, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = binding match {
-    case SingleValue(value) => SingleValue(Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(readableIdentifiers, iri, dosdp, index)).getOrElse(value))
-    case MultiValue(values) => MultiValue(values.map(value => Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(readableIdentifiers, iri, dosdp, index)).getOrElse(value)))
-  }
-
-  private def resolveIrisToLabels(readableIdentifiers: List[OWLAnnotationProperty], binding: SingleValue, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = {
-    val CURIEList = "([^ ,:]*):([^ ,]*)".r
-    val CURIEListEmbed = CURIEList.unanchored
-    val value = binding.value
-    var resolvedValue = value
-    if (CURIEListEmbed.matches(value)) {
-      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri =>
-        resolvedValue = resolvedValue.replaceFirst(matching.group(1) + ":" + matching.group(2),
-          readableIdentifierForIRI(readableIdentifiers, IRI.create(uri + matching.group(2)), dosdp, index))))
-    }
-    SingleValue(resolvedValue)
-  }
-
-  private def readableIdentifierForIRI(readableIdentifiers: List[OWLAnnotationProperty], iri: IRI, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): String = {
-    val properties = readableIdentifiers.map(_.getIRI) ::: LocalLabelProperty :: Nil
-    val labelOpt = properties.collectFirst {
-      case prop if index.get(prop).exists(_.isDefinedAt(iri)) => index(prop)(iri)
-    }
-    labelOpt.getOrElse(iri.toString)
   }
 
   private def stripToOption(text: String): Option[String] = {

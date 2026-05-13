@@ -231,7 +231,7 @@ private[dosdp] object Expansion {
       substituteSinglePiece(piece, bindings, prefixes, multiValueOverride = None)
     case CompiledMultiClassExpression(_, clauses, op, _) =>
       clauses.flatTraverse(clause => expandClauseWithMultiValue(clause, bindings, prefixes))
-        .map(combineClauses(_, op))
+        .map(CompiledClassExpression.combine(_, op))
   }
 
   private def substituteAxiom(
@@ -265,15 +265,6 @@ private[dosdp] object Expansion {
     }
   }
 
-  private def combineClauses(clauses: List[OWLClassExpression], op: LogicalOperator): OWLClassExpression =
-    clauses.distinct match {
-      case Nil          => factory.getOWLThing
-      case head :: Nil  => head
-      case multiple     => op match {
-        case LogicalOperator.And => factory.getOWLObjectIntersectionOf(multiple.toSet.asJava)
-        case LogicalOperator.Or  => factory.getOWLObjectUnionOf(multiple.toSet.asJava)
-      }
-    }
 
   /**
    * Apply a parsed template's substitution slots against the row bindings.

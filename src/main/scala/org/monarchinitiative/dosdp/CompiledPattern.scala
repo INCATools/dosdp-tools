@@ -65,20 +65,43 @@ private[dosdp] object LogicalOperator {
 private[dosdp] sealed trait CompiledClassExpression {
   def template: PrintfText
   def annotations: Set[NormalizedAnnotation]
+  /** Placeholder-form class expression (variable slots left as `urn:dosdp:` IRIs). */
+  def parsed: OWLClassExpression
 }
 
 private[dosdp] final case class CompiledSimpleClassExpression(
   template: PrintfText,
   piece: ParsedPiece[OWLClassExpression],
   annotations: Set[NormalizedAnnotation]
-) extends CompiledClassExpression
+) extends CompiledClassExpression {
+  def parsed: OWLClassExpression = piece.parsed
+}
 
 private[dosdp] final case class CompiledMultiClassExpression(
   template: PrintfText,
   clauses: List[ParsedPiece[OWLClassExpression]],
   operator: LogicalOperator,
   annotations: Set[NormalizedAnnotation]
-) extends CompiledClassExpression
+) extends CompiledClassExpression {
+  lazy val parsed: OWLClassExpression = CompiledClassExpression.combine(clauses.map(_.parsed), operator)
+}
+
+private[dosdp] object CompiledClassExpression {
+
+  private val factory = OWLManager.getOWLDataFactory
+
+  /** Combine clauses with the given operator. Single clause passes through; empty yields `owl:Thing`. */
+  def combine(clauses: List[OWLClassExpression], op: LogicalOperator): OWLClassExpression =
+    clauses.distinct match {
+      case Nil         => factory.getOWLThing
+      case head :: Nil => head
+      case multiple    => op match {
+        case LogicalOperator.And => factory.getOWLObjectIntersectionOf(multiple.toSet.asJava)
+        case LogicalOperator.Or  => factory.getOWLObjectUnionOf(multiple.toSet.asJava)
+      }
+    }
+
+}
 
 /**
  * A compiled full-axiom template (used for GCI, where the Manchester text
