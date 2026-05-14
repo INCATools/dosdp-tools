@@ -301,17 +301,23 @@ private[dosdp] object PatternCompiler {
     } yield CompiledSubExpression(clauses, op)
 
   /**
-   * Resolve a `multi_clause` separator to a logical operator. The separator
-   * only matters when two or more clauses must be joined; a single-clause (or
-   * empty) `multi_clause` may omit `sep` entirely — `CompiledClassExpression.combine`
-   * passes a lone clause through unchanged, so the operator is never consulted.
+   * Resolve a `multi_clause` separator to a logical operator. An explicit
+   * `sep` is always honored: even a single `PrintfClause` can expand to
+   * several expressions at row time (a `list_var` filler), and those
+   * expansions must be joined with the declared operator. `sep` may only be
+   * omitted when there is at most one clause — then nothing is joined and the
+   * operator is never consulted (`CompiledClassExpression.combine` passes a
+   * lone expression through). Omitting `sep` with two or more clauses is an
+   * error.
    */
   private def operatorFor(sep: Option[String], clauseCount: Int): ZIO[Logging, DOSDPError, LogicalOperator] =
-    if (clauseCount <= 1) ZIO.succeed(LogicalOperator.And)
-    else sep.getOrElse("") match {
-      case " and " => ZIO.succeed(LogicalOperator.And)
-      case " or "  => ZIO.succeed(LogicalOperator.Or)
-      case other   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
+    sep match {
+      case Some(" and ") => ZIO.succeed(LogicalOperator.And)
+      case Some(" or ")  => ZIO.succeed(LogicalOperator.Or)
+      case Some(other)   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
+      case None          =>
+        if (clauseCount <= 1) ZIO.succeed(LogicalOperator.And)
+        else logErrorFail("Logical multi_clause with multiple clauses requires a separator (' and ' or ' or ')")
     }
 
   private def compileAxiomTemplate(
