@@ -147,7 +147,17 @@ private[dosdp] object PatternCompiler {
   import PrintfAnnotationOBO._
 
   private val factory = OWLManager.getOWLDataFactory
-  private val PlaceholderLiteralPattern = """^'\$(.+)'$""".r
+  // Compile-time substitution renders class slots as the placeholder entity-name string
+  // `'$<name>'` (Manchester resolves these to `urn:dosdp:<name>` via DOSDPEntityChecker)
+  // and renders data-var slots as a typed literal `"$<name>"^^<datatype>` so the
+  // Manchester parser accepts them in any context that expects a literal — facet,
+  // `value`, etc. — not only the facet-coercion case. Row-time substitution then
+  // matches placeholder literals by their `$<name>` lexical form.
+  //
+  // Cardinality slots (`min N`, `max N`, `exactly N`) require a bare integer that
+  // OWLObjectDuplicator cannot substitute via the literal map, so a `data_var` in a
+  // cardinality position is not supported and will fail at pattern compile time.
+  private val PlaceholderLiteralPattern = """^\$(.+)$""".r
 
   def compile(dosdp: DOSDP, prefixes: PartialFunction[String, String]): ZIO[Logging, DOSDPError, CompiledPattern] = {
     val checker = new DOSDPEntityChecker(dosdp, prefixes)
@@ -155,12 +165,13 @@ private[dosdp] object PatternCompiler {
     val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(factory, checker)
     val axiomParser = new ManchesterOWLSyntaxInlineAxiomParser(factory, checker)
     val dataVarNames = dataVarNamesOf(dosdp)
+    val placeholderBindings = compileTimeBindings(dosdp)
     for {
-      equivalentTo          <- compileClassExpressionTemplate(dosdp.equivalentTo, expressionParser, dataVarNames, safeChecker)
-      subClassOf            <- compileClassExpressionTemplate(dosdp.subClassOf, expressionParser, dataVarNames, safeChecker)
-      disjointWith          <- compileClassExpressionTemplate(dosdp.disjointWith, expressionParser, dataVarNames, safeChecker)
-      gci                   <- compileAxiomTemplate(dosdp.GCI, axiomParser, dataVarNames, safeChecker)
-      logicalAxioms         <- ZIO.foreach(dosdp.logical_axioms.toList.flatten)(compileLogicalAxiom(_, expressionParser, axiomParser, dataVarNames, safeChecker))
+      equivalentTo          <- compileClassExpressionTemplate(dosdp.equivalentTo, expressionParser, dataVarNames, safeChecker, placeholderBindings)
+      subClassOf            <- compileClassExpressionTemplate(dosdp.subClassOf, expressionParser, dataVarNames, safeChecker, placeholderBindings)
+      disjointWith          <- compileClassExpressionTemplate(dosdp.disjointWith, expressionParser, dataVarNames, safeChecker, placeholderBindings)
+      gci                   <- compileAxiomTemplate(dosdp.GCI, axiomParser, dataVarNames, safeChecker, placeholderBindings)
+      logicalAxioms         <- ZIO.foreach(dosdp.logical_axioms.toList.flatten)(compileLogicalAxiom(_, expressionParser, axiomParser, dataVarNames, safeChecker, placeholderBindings))
       oboAnnotations        <- compileOBOAnnotations(dosdp, safeChecker)
       annotations           <- ZIO.foreach(dosdp.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker)).map(_.toSet)
       readableIDProperties  <- compileReadableIdentifierProperties(dosdp, safeChecker)
@@ -186,12 +197,13 @@ private[dosdp] object PatternCompiler {
     templateOpt: Option[PrintfOWLConvenience],
     parser: ManchesterOWLSyntaxClassExpressionParser,
     dataVarNames: Set[String],
-    checker: SafeOWLEntityChecker
+    checker: SafeOWLEntityChecker,
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, Option[CompiledClassExpression]] =
     ZIO.foreach(templateOpt) { template =>
       for {
         annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
-        compiledExpr <- compileClassExpressionBody(template, parser, dataVarNames, annotations)
+        compiledExpr <- compileClassExpressionBody(template, parser, dataVarNames, annotations, placeholderBindings)
       } yield compiledExpr
     }
 
@@ -199,14 +211,15 @@ private[dosdp] object PatternCompiler {
     template: PrintfText,
     parser: ManchesterOWLSyntaxClassExpressionParser,
     dataVarNames: Set[String],
-    annotations: Set[NormalizedAnnotation]
+    annotations: Set[NormalizedAnnotation],
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, CompiledClassExpression] =
     (template.text, template.multi_clause) match {
       case (Some(_), _) =>
-        parseClauseText(template.text, template.vars, template.multi_clause, dataVarNames, parser, template.shouldQuote)
+        parseClauseText(template.text, template.vars, template.multi_clause, dataVarNames, parser, template.shouldQuote, placeholderBindings)
           .map(piece => CompiledSimpleClassExpression(template, piece, annotations))
       case (None, Some(mc)) =>
-        compileMultiClause(template, mc, dataVarNames, parser, template.shouldQuote, annotations)
+        compileMultiClause(template, mc, dataVarNames, parser, template.shouldQuote, annotations, placeholderBindings)
       case _ =>
         // No text and no multi_clause — treat as no compiled body.
         ZIO.succeed(CompiledSimpleClassExpression(template, emptyClassPiece, annotations))
@@ -218,7 +231,8 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     parser: ManchesterOWLSyntaxClassExpressionParser,
     quote: Boolean,
-    annotations: Set[NormalizedAnnotation]
+    annotations: Set[NormalizedAnnotation],
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, CompiledMultiClassExpression] = {
     val sep = mc.sep.getOrElse("")
     val operator: ZIO[Logging, DOSDPError, LogicalOperator] = sep match {
@@ -228,29 +242,57 @@ private[dosdp] object PatternCompiler {
     }
     for {
       op <- operator
-      _ <- ZIO.foreach_(mc.clauses.toList.flatten) { clause =>
-        if (clause.sub_clauses.exists(_.nonEmpty))
-          logErrorFail(s"sub_clauses are not supported in logical-template multi_clause entries")
-        else ZIO.unit
-      }
       pieces <- ZIO.foreach(mc.clauses.toList.flatten) { clause =>
-        parseClauseText(Some(clause.text), clause.vars, None, dataVarNames, parser, quote)
+        // Render each top-level clause together with its `sub_clauses` so the
+        // resulting parsed expression covers all of them. The parent separator
+        // also joins clause text and sub-clause text (matching the legacy
+        // `PrintfText.replaceMultiClause` semantics: sub-clauses become
+        // additional conjuncts/disjuncts of their parent clause).
+        val wrapper = MultiClausePrintf(mc.sep, Some(List(clause)))
+        parseAssembledClause(wrapper, allClauseVars(clause), dataVarNames, parser, quote, placeholderBindings)
       }
     } yield CompiledMultiClassExpression(template, pieces, op, annotations)
+  }
+
+  /** Vars declared on a clause plus all vars declared on its nested sub-clauses. */
+  private def allClauseVars(clause: PrintfClause): List[String] = {
+    val nested = clause.sub_clauses.toSeq.flatten.flatMap { mc =>
+      mc.clauses.toSeq.flatten.flatMap(allClauseVars)
+    }
+    clause.vars.getOrElse(Nil) ++ nested.toList
+  }
+
+  private def parseAssembledClause(
+    multi: MultiClausePrintf,
+    declaredVars: List[String],
+    dataVarNames: Set[String],
+    parser: ManchesterOWLSyntaxClassExpressionParser,
+    quote: Boolean,
+    placeholderBindings: Map[String, Binding]
+  ): ZIO[Logging, DOSDPError, ParsedPiece[OWLClassExpression]] = {
+    val effective = withFallbackPlaceholders(declaredVars, placeholderBindings)
+    val resolved = PrintfText.replaced(None, None, Some(multi), Some(effective), quote, dataVarNames)
+    ZIO.fromOption(resolved).orElse(logErrorFail("Could not assemble Manchester template text for parsing"))
+      .flatMap { rendered =>
+        ZIO.effect(parser.parse(rendered))
+          .flatMapError(e => DOSDPError.logError(s"Failed to parse class expression: $rendered", e))
+          .map(ce => describePiece(ce, Some(declaredVars)))
+      }
   }
 
   private def compileAxiomTemplate(
     templateOpt: Option[PrintfOWLConvenience],
     parser: ManchesterOWLSyntaxInlineAxiomParser,
     dataVarNames: Set[String],
-    checker: SafeOWLEntityChecker
+    checker: SafeOWLEntityChecker,
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, Option[CompiledAxiom]] =
     ZIO.foreach(templateOpt) { template =>
       for {
         _ <- ZIO.when(template.multi_clause.isDefined)(
           logErrorFail("multi_clause is not supported on full-axiom (GCI) templates"))
         annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
-        piece <- parseAxiomText(template.text, template.vars, dataVarNames, parser, template.shouldQuote)
+        piece <- parseAxiomText(template.text, template.vars, dataVarNames, parser, template.shouldQuote, placeholderBindings)
       } yield CompiledAxiom(template, piece, annotations)
     }
 
@@ -259,7 +301,8 @@ private[dosdp] object PatternCompiler {
     expressionParser: ManchesterOWLSyntaxClassExpressionParser,
     axiomParser: ManchesterOWLSyntaxInlineAxiomParser,
     dataVarNames: Set[String],
-    checker: SafeOWLEntityChecker
+    checker: SafeOWLEntityChecker,
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, CompiledLogicalAxiom] = {
     for {
       annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
@@ -268,10 +311,10 @@ private[dosdp] object PatternCompiler {
           for {
             _ <- ZIO.when(template.multi_clause.isDefined)(
               logErrorFail("multi_clause is not supported on logical_axioms entries with axiom_type GCI"))
-            piece <- parseAxiomText(template.text, template.vars, dataVarNames, axiomParser, template.shouldQuote)
+            piece <- parseAxiomText(template.text, template.vars, dataVarNames, axiomParser, template.shouldQuote, placeholderBindings)
           } yield CompiledLogicalGCIAxiom(template, CompiledAxiom(template, piece, Set.empty), annotations)
         case _ =>
-          compileClassExpressionBody(template, expressionParser, dataVarNames, Set.empty)
+          compileClassExpressionBody(template, expressionParser, dataVarNames, Set.empty, placeholderBindings)
             .map(expr => CompiledLogicalClassAxiom(template, expr, annotations))
       }
     } yield compiled
@@ -283,9 +326,11 @@ private[dosdp] object PatternCompiler {
     multi: Option[MultiClausePrintf],
     dataVarNames: Set[String],
     parser: ManchesterOWLSyntaxClassExpressionParser,
-    quote: Boolean
+    quote: Boolean,
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, ParsedPiece[OWLClassExpression]] = {
-    val resolved = PrintfText.replaced(text, vars, multi, bindings = None, quote, dataVarNames)
+    val effective = withFallbackPlaceholders(referencedVars(vars, multi), placeholderBindings)
+    val resolved = PrintfText.replaced(text, vars, multi, Some(effective), quote, dataVarNames)
     ZIO.fromOption(resolved).orElse(logErrorFail(s"Could not assemble Manchester template text for parsing"))
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
@@ -299,9 +344,11 @@ private[dosdp] object PatternCompiler {
     vars: Option[List[String]],
     dataVarNames: Set[String],
     parser: ManchesterOWLSyntaxInlineAxiomParser,
-    quote: Boolean
+    quote: Boolean,
+    placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, ParsedPiece[OWLAxiom]] = {
-    val resolved = PrintfText.replaced(text, vars, multi_clause = None, bindings = None, quote, dataVarNames)
+    val effective = withFallbackPlaceholders(vars.getOrElse(Nil), placeholderBindings)
+    val resolved = PrintfText.replaced(text, vars, multi_clause = None, Some(effective), quote, dataVarNames)
     ZIO.fromOption(resolved).orElse(logErrorFail("Could not assemble Manchester axiom text for parsing"))
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
@@ -310,9 +357,47 @@ private[dosdp] object PatternCompiler {
       }
   }
 
-  // The placeholder entities in `parsed` always come from `urn:dosdp:<name>`. The
-  // placeholder literals always have lexical form `'$<name>'`. Scan once at compile
-  // so row-time substitution can look up by variable name.
+  /**
+   * Add `name → SingleValue("$name")` fallback bindings for any referenced
+   * variable not declared in `dosdp.vars` / `list_vars` / `data_vars` /
+   * `data_list_vars`. Patterns can reference derived placeholder names
+   * (`__attribute`, etc.) in their templates without declaring them; the
+   * legacy no-bindings rendering treated all such names as placeholder
+   * entities. The fallback preserves that.
+   */
+  private def withFallbackPlaceholders(referenced: List[String], bindings: Map[String, Binding]): Map[String, Binding] =
+    bindings ++ referenced.filterNot(bindings.contains).map(name => name -> SingleValue("$" + name))
+
+  private def referencedVars(vars: Option[List[String]], multi: Option[MultiClausePrintf]): List[String] = {
+    val top = vars.getOrElse(Nil)
+    val nested = multi.toList.flatMap(multiClauseVars)
+    top ++ nested
+  }
+
+  private def multiClauseVars(mc: MultiClausePrintf): List[String] =
+    mc.clauses.toList.flatten.flatMap(allClauseVars)
+
+  /**
+   * Synthetic per-variable bindings used to render templates at compile time.
+   * Class-typed vars get the bare placeholder name (`$name`), which
+   * `PrintfText` wraps in single quotes so the Manchester parser sees an
+   * entity reference and the `DOSDPEntityChecker` resolves it to
+   * `urn:dosdp:<name>`. Data-typed vars (declared in `data_vars` /
+   * `data_list_vars`) get a typed-literal token `"$<name>"^^<datatype>` so the
+   * parser accepts them in any context that expects a literal, not only the
+   * facet-coercion case.
+   */
+  private def compileTimeBindings(dosdp: DOSDP): Map[String, Binding] = {
+    val classVars = (dosdp.vars.toSeq.flatMap(_.keys) ++ dosdp.list_vars.toSeq.flatMap(_.keys))
+      .map(name => name -> SingleValue("$" + name)).toMap
+    val dataBindings = (dosdp.data_vars.toSeq.flatten ++ dosdp.data_list_vars.toSeq.flatten)
+      .map { case (name, datatype) => name -> SingleValue(s""""$$$name"^^$datatype""") }.toMap
+    classVars ++ dataBindings
+  }
+
+  // Placeholder entities in `parsed` come from `urn:dosdp:<name>`. Placeholder
+  // literals (data-var slots) have lexical form `$<name>`. Scan once at compile
+  // time so row-time substitution can look up by variable name.
   private def describePiece[T <: OWLObject](parsed: T, declaredVars: Option[List[String]]): ParsedPiece[T] = {
     val placeholderEntities = parsed.getSignature.asScala.collect {
       case e: OWLEntity if e.getIRI.toString.startsWith(DOSDP.variablePrefix) =>
@@ -351,27 +436,22 @@ private[dosdp] object PatternCompiler {
   private def collectFromClassExpression(ce: OWLClassExpression, builder: scala.collection.mutable.Set[OWLLiteral]): Unit =
     ce.getNestedClassExpressions.asScala.foreach { nested =>
       nested match {
-        case dr: OWLDataRange =>
-          dr.asInstanceOf[OWLObject] match {
-            case dtr: OWLDatatypeRestriction =>
-              dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
-            case _ => ()
-          }
+        case dr: OWLDatatypeRestriction =>
+          dr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
         case dsv: OWLDataSomeValuesFrom =>
-          dsv.getFiller match {
-            case dtr: OWLDatatypeRestriction =>
-              dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
-            case _ => ()
-          }
+          collectFromDataRange(dsv.getFiller, builder)
         case dav: OWLDataAllValuesFrom =>
-          dav.getFiller match {
-            case dtr: OWLDatatypeRestriction =>
-              dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
-            case _ => ()
-          }
+          collectFromDataRange(dav.getFiller, builder)
+        case dhv: OWLDataHasValue =>
+          builder += dhv.getFiller
         case _ => ()
       }
     }
+
+  private def collectFromDataRange(range: OWLDataRange, builder: scala.collection.mutable.Set[OWLLiteral]): Unit = range match {
+    case dtr: OWLDatatypeRestriction => dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
+    case _                           => ()
+  }
 
   private val emptyClassPiece: ParsedPiece[OWLClassExpression] =
     ParsedPiece(factory.getOWLThing, Map.empty, Map.empty, Nil)

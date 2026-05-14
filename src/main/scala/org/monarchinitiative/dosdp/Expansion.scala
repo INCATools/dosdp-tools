@@ -164,10 +164,10 @@ private[dosdp] object Expansion {
   ): Either[ExpansionError, Set[OWLAxiom]] = {
     val definedTerm = definedTermOf(logicalBindings, pattern.prefixes)
     for {
-      equivalentTo <- pattern.equivalentTo.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes))
-      subClassOf   <- pattern.subClassOf.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes))
-      disjointWith <- pattern.disjointWith.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes))
-      gci          <- pattern.gci.traverse(substituteAxiom(_, logicalBindings, pattern.prefixes))
+      equivalentTo <- pattern.equivalentTo.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes)).map(_.flatten)
+      subClassOf   <- pattern.subClassOf.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes)).map(_.flatten)
+      disjointWith <- pattern.disjointWith.traverse(substituteClassExpression(_, logicalBindings, pattern.prefixes)).map(_.flatten)
+      gci          <- pattern.gci.traverse(substituteAxiom(_, logicalBindings, pattern.prefixes)).map(_.flatten)
       logicalAxs   <- pattern.logicalAxioms.traverse(substituteLogicalAxiom(_, logicalBindings, annotationBindings, definedTerm, pattern.prefixes))
     } yield {
       val classExprAxioms: Set[OWLAxiom] = Set(
@@ -206,7 +206,7 @@ private[dosdp] object Expansion {
   ): Either[ExpansionError, Option[OWLAxiom]] =
     compiled match {
       case CompiledLogicalClassAxiom(_, expr, anns) =>
-        substituteClassExpression(expr, logicalBindings, prefixes).map { ce =>
+        substituteClassExpression(expr, logicalBindings, prefixes).map(_.flatMap { ce =>
           val translated = translateAxiomAnnotations(anns, annotationBindings, logicalBindings, prefixes)
           compiled.axiomType match {
             case AxiomType.EquivalentTo => Some(EquivalentClasses(translated.toSeq: _*)(definedTerm, ce))
@@ -214,31 +214,39 @@ private[dosdp] object Expansion {
             case AxiomType.DisjointWith => Some(DisjointClasses(translated.toSeq: _*)(definedTerm, ce))
             case AxiomType.GCI          => None
           }
-        }
+        })
       case CompiledLogicalGCIAxiom(_, ax, anns) =>
-        substituteAxiom(ax, logicalBindings, prefixes).map { axiom =>
+        substituteAxiom(ax, logicalBindings, prefixes).map(_.map { axiom =>
           val translated = translateAxiomAnnotations(anns, annotationBindings, logicalBindings, prefixes)
-          Some(axiom.getAnnotatedAxiom(translated.asJava))
-        }
+          axiom.getAnnotatedAxiom(translated.asJava)
+        })
     }
 
+  /**
+   * Substitute bindings into a class-expression template. Returns `None` when
+   * the template's required variables are not all bound — matching the legacy
+   * behavior of `PrintfText.replaced` returning `None` and dropping the
+   * axiom. For multi-clause templates, unsatisfied clauses fall out and the
+   * survivors combine; if no clause is satisfied, the whole expression is
+   * dropped.
+   */
   private def substituteClassExpression(
     compiled: CompiledClassExpression,
     bindings: Map[String, Binding],
     prefixes: PartialFunction[String, String]
-  ): Either[ExpansionError, OWLClassExpression] = compiled match {
+  ): Either[ExpansionError, Option[OWLClassExpression]] = compiled match {
     case CompiledSimpleClassExpression(_, piece, _) =>
       substituteSinglePiece(piece, bindings, prefixes, multiValueOverride = None)
     case CompiledMultiClassExpression(_, clauses, op, _) =>
       clauses.flatTraverse(clause => expandClauseWithMultiValue(clause, bindings, prefixes))
-        .map(CompiledClassExpression.combine(_, op))
+        .map(exprs => if (exprs.isEmpty) None else Some(CompiledClassExpression.combine(exprs, op)))
   }
 
   private def substituteAxiom(
     compiled: CompiledAxiom,
     bindings: Map[String, Binding],
     prefixes: PartialFunction[String, String]
-  ): Either[ExpansionError, OWLAxiom] =
+  ): Either[ExpansionError, Option[OWLAxiom]] =
     substituteSinglePiece(compiled.piece, bindings, prefixes, multiValueOverride = None)
 
   /**
@@ -259,34 +267,42 @@ private[dosdp] object Expansion {
     }
     multiValueOverride match {
       case None =>
-        substituteSinglePiece(piece, bindings, prefixes, None).map(List(_))
+        substituteSinglePiece(piece, bindings, prefixes, None).map(_.toList)
       case Some((varName, values)) =>
-        values.traverse(value => substituteSinglePiece(piece, bindings, prefixes, Some(varName -> value)))
+        values.traverse(value => substituteSinglePiece(piece, bindings, prefixes, Some(varName -> value))).map(_.flatten)
     }
   }
-
 
   /**
    * Apply a parsed template's substitution slots against the row bindings.
    * `multiValueOverride`, when supplied, pins the named variable to a single
    * value drawn from a multi-value binding; the rest of the bindings resolve
-   * normally.
+   * normally. Returns `None` when any class or literal slot in `piece` lacks
+   * a usable single-value binding — those rows produce no axiom from this
+   * piece (matching the legacy `PrintfText.replaced` drop-on-missing-var
+   * behavior).
    */
   private def substituteSinglePiece[T <: OWLObject](
     piece: ParsedPiece[T],
     bindings: Map[String, Binding],
     prefixes: PartialFunction[String, String],
     multiValueOverride: Option[(String, String)]
-  ): Either[ExpansionError, T] = {
+  ): Either[ExpansionError, Option[T]] = {
     val effectiveBindings: Map[String, Binding] = multiValueOverride match {
       case Some((name, value)) => bindings.updated(name, SingleValue(value))
       case None                => bindings
     }
-    for {
+    if (!allSlotsBound(piece, effectiveBindings)) Right(None)
+    else for {
       entityMap <- buildEntitySubstitutions(piece, effectiveBindings, prefixes)
       literalMap = buildLiteralSubstitutions(piece, effectiveBindings)
       duplicator = new OWLObjectDuplicator(entityMap.asJava, factory, literalMap.asJava)
-    } yield duplicator.duplicateObject(piece.parsed).asInstanceOf[T]
+    } yield Some(duplicator.duplicateObject(piece.parsed).asInstanceOf[T])
+  }
+
+  private def allSlotsBound(piece: ParsedPiece[_], bindings: Map[String, Binding]): Boolean = {
+    val required = piece.classVarSlots.keySet ++ piece.dataVarSlots.keySet
+    required.forall(v => bindings.get(v).exists(_.isInstanceOf[SingleValue]))
   }
 
   private def buildEntitySubstitutions[T <: OWLObject](
