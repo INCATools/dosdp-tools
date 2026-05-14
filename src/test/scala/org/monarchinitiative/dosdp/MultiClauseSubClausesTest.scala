@@ -55,6 +55,65 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         assert(subAxioms.exists(ax => hasNamedClass(ax, anatomy) && hasNamedClass(ax, region)))(isTrue) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(partOf)) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(develops))
+    },
+    testM("missing nested sub_clause binding keeps the parent clause (drop only the sub-clause)") {
+      // Parent clause `'part_of' some %s` is bound; nested sub_clause `'develops_from' some %s`
+      // is unbound. Legacy `PrintfText.replaceMultiClause` kept the parent and dropped only the
+      // sub-clause.
+      val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
+      val topClause = PrintfClause(
+        "'part_of' some %s",
+        Some(List("structure")),
+        Some(List(MultiClausePrintf(Some(" and "), Some(List(sub))))))
+      val multi = MultiClausePrintf(Some(" and "), Some(List(topClause)))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("multi_clause_sub_partial"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        relations = Some(Map(
+          "part_of" -> "BFO:0000050",
+          "develops_from" -> "RO:0002202")),
+        vars = Some(Map("structure" -> "'thing'", "origin" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(multi)))
+      )
+      val row = Map(
+        "defined_class" -> "EX:0001",
+        "structure" -> "UBERON:0000001") // origin missing
+      val placeholderIRIs = (axs: Set[OWLAxiom]) =>
+        axs.flatMap(_.getSignature.asScala.map(_.getIRI.toString)).filter(_.startsWith(DOSDP.variablePrefix))
+      for {
+        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+        subAxioms = axioms.collect { case sc: OWLSubClassOfAxiom => sc }
+      } yield assert(subAxioms.exists(_.getSubClass == term))(isTrue) &&
+        assert(subAxioms.exists(ax => hasNamedClass(ax, anatomy)))(isTrue) &&
+        assert(placeholderIRIs(axioms))(isEmpty) &&
+        assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(partOf)) &&
+        assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala).contains(develops))(isFalse)
+    },
+    testM("missing parent clause binding drops the entire clause-group even if sub_clauses are bound") {
+      val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
+      val topClause = PrintfClause(
+        "'part_of' some %s",
+        Some(List("structure")),
+        Some(List(MultiClausePrintf(Some(" and "), Some(List(sub))))))
+      val multi = MultiClausePrintf(Some(" and "), Some(List(topClause)))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("multi_clause_parent_miss"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        relations = Some(Map(
+          "part_of" -> "BFO:0000050",
+          "develops_from" -> "RO:0002202")),
+        vars = Some(Map("structure" -> "'thing'", "origin" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(multi)))
+      )
+      val row = Map(
+        "defined_class" -> "EX:0001",
+        "origin" -> "UBERON:0000002") // structure missing
+      val placeholderIRIs = (axs: Set[OWLAxiom]) =>
+        axs.flatMap(_.getSignature.asScala.map(_.getIRI.toString)).filter(_.startsWith(DOSDP.variablePrefix))
+      for {
+        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+      } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
+        assert(placeholderIRIs(axioms))(isEmpty)
     }
   ).provideCustomLayer(Logging.consoleErr())
 

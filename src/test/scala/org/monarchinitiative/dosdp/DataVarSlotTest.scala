@@ -63,6 +63,48 @@ object DataVarSlotTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dataPropertyValuePattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(hasDataValueLiteral(axioms, "42"))(isTrue)
     },
+    testM("data_var inside a cardinality filler is substituted at row time") {
+      // The facet literal lives inside an OWLDataMinCardinality; the walker must
+      // descend into the cardinality's filler to identify the placeholder.
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("data_var_in_cardinality_filler"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        dataProperties = Some(Map("has_age" -> "RO:0002000")),
+        data_vars = Some(Map("age" -> "xsd:integer")),
+        subClassOf = Some(PrintfOWLConvenience(None,
+          Some("'has_age' min 1 xsd:integer[>= %s]"),
+          Some(List("age"))))
+      )
+      val row = Map("defined_class" -> "EX:0001", "age" -> "5")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+        cardinalityFacetValues = axioms.flatMap(_.getNestedClassExpressions.asScala.collect {
+          case dmc: OWLDataMinCardinality => dmc.getFiller
+        }.collect {
+          case dtr: OWLDatatypeRestriction => dtr.getFacetRestrictions.asScala.map(_.getFacetValue.getLiteral)
+        }.flatten.toSet)
+      } yield assert(cardinalityFacetValues)(contains("5"))
+    },
+    testM("data_var inside a DataOneOf is substituted at row time") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("data_var_in_oneof"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        dataProperties = Some(Map("has_age" -> "RO:0002000")),
+        data_vars = Some(Map("age" -> "xsd:integer")),
+        subClassOf = Some(PrintfOWLConvenience(None,
+          Some("'has_age' some {%s}"),
+          Some(List("age"))))
+      )
+      val row = Map("defined_class" -> "EX:0001", "age" -> "5")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+        oneOfLiterals = axioms.flatMap(_.getNestedClassExpressions.asScala.collect {
+          case dsv: OWLDataSomeValuesFrom => dsv.getFiller
+        }.collect {
+          case doo: OWLDataOneOf => doo.getValues.asScala.map(_.getLiteral)
+        }.flatten.toSet)
+      } yield assert(oneOfLiterals)(contains("5"))
+    },
     testM("'xsd:integer[>= <data_var>]' facet (regression for issue #504) still works") {
       val row = Map("defined_class" -> "EX:0001", "age" -> "5")
       for {

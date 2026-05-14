@@ -79,11 +79,42 @@ private[dosdp] final case class CompiledSimpleClassExpression(
 
 private[dosdp] final case class CompiledMultiClassExpression(
   template: PrintfText,
-  clauses: List[ParsedPiece[OWLClassExpression]],
+  clauses: List[CompiledPrintfClause],
   operator: LogicalOperator,
   annotations: Set[NormalizedAnnotation]
 ) extends CompiledClassExpression {
-  lazy val parsed: OWLClassExpression = CompiledClassExpression.combine(clauses.map(_.parsed), operator)
+  lazy val parsed: OWLClassExpression =
+    CompiledClassExpression.combine(clauses.flatMap(_.allParsed), operator)
+}
+
+/**
+ * One top-level `PrintfClause` of a logical `multi_clause`: its main parsed
+ * piece plus zero or more compiled sub-clause expressions. The legacy
+ * `PrintfText.replaceMultiClause` rendered each sub-clause `MultiClausePrintf`
+ * separately and joined the survivors with the parent's separator, so each
+ * sub-expression is its own combinable unit. If the main piece's bindings
+ * are missing, the whole clause-group is dropped (sub-clauses cannot anchor
+ * themselves without their parent).
+ */
+private[dosdp] final case class CompiledPrintfClause(
+  main: ParsedPiece[OWLClassExpression],
+  subExpressions: List[CompiledSubExpression]
+) {
+  def allParsed: List[OWLClassExpression] =
+    main.parsed :: subExpressions.flatMap(_.allParsed)
+}
+
+/**
+ * A compiled sub-clause `MultiClausePrintf`: its clauses combined via its own
+ * separator (`and` or `or`). Surviving clauses combine into one expression at
+ * row time; if all clauses miss bindings, the sub-expression contributes
+ * nothing to its parent clause-group.
+ */
+private[dosdp] final case class CompiledSubExpression(
+  clauses: List[CompiledPrintfClause],
+  operator: LogicalOperator
+) {
+  def allParsed: List[OWLClassExpression] = clauses.flatMap(_.allParsed)
 }
 
 private[dosdp] object CompiledClassExpression {
@@ -233,51 +264,40 @@ private[dosdp] object PatternCompiler {
     quote: Boolean,
     annotations: Set[NormalizedAnnotation],
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Logging, DOSDPError, CompiledMultiClassExpression] = {
-    val sep = mc.sep.getOrElse("")
-    val operator: ZIO[Logging, DOSDPError, LogicalOperator] = sep match {
-      case " and " => ZIO.succeed(LogicalOperator.And)
-      case " or "  => ZIO.succeed(LogicalOperator.Or)
-      case other   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
-    }
+  ): ZIO[Logging, DOSDPError, CompiledMultiClassExpression] =
     for {
-      op <- operator
-      pieces <- ZIO.foreach(mc.clauses.toList.flatten) { clause =>
-        // Render each top-level clause together with its `sub_clauses` so the
-        // resulting parsed expression covers all of them. The parent separator
-        // also joins clause text and sub-clause text (matching the legacy
-        // `PrintfText.replaceMultiClause` semantics: sub-clauses become
-        // additional conjuncts/disjuncts of their parent clause).
-        val wrapper = MultiClausePrintf(mc.sep, Some(List(clause)))
-        parseAssembledClause(wrapper, allClauseVars(clause), dataVarNames, parser, quote, placeholderBindings)
-      }
-    } yield CompiledMultiClassExpression(template, pieces, op, annotations)
-  }
+      op      <- operatorFor(mc.sep.getOrElse(""))
+      clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
+    } yield CompiledMultiClassExpression(template, clauses, op, annotations)
 
-  /** Vars declared on a clause plus all vars declared on its nested sub-clauses. */
-  private def allClauseVars(clause: PrintfClause): List[String] = {
-    val nested = clause.sub_clauses.toSeq.flatten.flatMap { mc =>
-      mc.clauses.toSeq.flatten.flatMap(allClauseVars)
-    }
-    clause.vars.getOrElse(Nil) ++ nested.toList
-  }
-
-  private def parseAssembledClause(
-    multi: MultiClausePrintf,
-    declaredVars: List[String],
+  private def compilePrintfClause(
+    clause: PrintfClause,
     dataVarNames: Set[String],
     parser: ManchesterOWLSyntaxClassExpressionParser,
     quote: Boolean,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Logging, DOSDPError, ParsedPiece[OWLClassExpression]] = {
-    val effective = withFallbackPlaceholders(declaredVars, placeholderBindings)
-    val resolved = PrintfText.replaced(None, None, Some(multi), Some(effective), quote, dataVarNames)
-    ZIO.fromOption(resolved).orElse(logErrorFail("Could not assemble Manchester template text for parsing"))
-      .flatMap { rendered =>
-        ZIO.effect(parser.parse(rendered))
-          .flatMapError(e => DOSDPError.logError(s"Failed to parse class expression: $rendered", e))
-          .map(ce => describePiece(ce, Some(declaredVars)))
-      }
+  ): ZIO[Logging, DOSDPError, CompiledPrintfClause] =
+    for {
+      main <- parseClauseText(Some(clause.text), clause.vars, None, dataVarNames, parser, quote, placeholderBindings)
+      subs <- ZIO.foreach(clause.sub_clauses.toList.flatten)(compileSubExpression(_, dataVarNames, parser, quote, placeholderBindings))
+    } yield CompiledPrintfClause(main, subs)
+
+  private def compileSubExpression(
+    mc: MultiClausePrintf,
+    dataVarNames: Set[String],
+    parser: ManchesterOWLSyntaxClassExpressionParser,
+    quote: Boolean,
+    placeholderBindings: Map[String, Binding]
+  ): ZIO[Logging, DOSDPError, CompiledSubExpression] =
+    for {
+      op      <- operatorFor(mc.sep.getOrElse(""))
+      clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
+    } yield CompiledSubExpression(clauses, op)
+
+  private def operatorFor(sep: String): ZIO[Logging, DOSDPError, LogicalOperator] = sep match {
+    case " and " => ZIO.succeed(LogicalOperator.And)
+    case " or "  => ZIO.succeed(LogicalOperator.Or)
+    case other   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
   }
 
   private def compileAxiomTemplate(
@@ -377,6 +397,12 @@ private[dosdp] object PatternCompiler {
   private def multiClauseVars(mc: MultiClausePrintf): List[String] =
     mc.clauses.toList.flatten.flatMap(allClauseVars)
 
+  /** Vars declared on a clause plus all vars declared on its nested sub-clauses. */
+  private def allClauseVars(clause: PrintfClause): List[String] = {
+    val nested = clause.sub_clauses.toList.flatten.flatMap(multiClauseVars)
+    clause.vars.getOrElse(Nil) ++ nested
+  }
+
   /**
    * Synthetic per-variable bindings used to render templates at compile time.
    * Class-typed vars get the bare placeholder name (`$name`), which
@@ -434,22 +460,22 @@ private[dosdp] object PatternCompiler {
   }
 
   private def collectFromClassExpression(ce: OWLClassExpression, builder: scala.collection.mutable.Set[OWLLiteral]): Unit =
-    ce.getNestedClassExpressions.asScala.foreach { nested =>
-      nested match {
-        case dr: OWLDatatypeRestriction =>
-          dr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
-        case dsv: OWLDataSomeValuesFrom =>
-          collectFromDataRange(dsv.getFiller, builder)
-        case dav: OWLDataAllValuesFrom =>
-          collectFromDataRange(dav.getFiller, builder)
-        case dhv: OWLDataHasValue =>
-          builder += dhv.getFiller
-        case _ => ()
-      }
+    ce.getNestedClassExpressions.asScala.foreach {
+      case dsv: OWLDataSomeValuesFrom   => collectFromDataRange(dsv.getFiller, builder)
+      case dav: OWLDataAllValuesFrom    => collectFromDataRange(dav.getFiller, builder)
+      case dmc: OWLDataMinCardinality   => collectFromDataRange(dmc.getFiller, builder)
+      case dxc: OWLDataMaxCardinality   => collectFromDataRange(dxc.getFiller, builder)
+      case dec: OWLDataExactCardinality => collectFromDataRange(dec.getFiller, builder)
+      case dhv: OWLDataHasValue         => builder += dhv.getFiller
+      case _                            => ()
     }
 
   private def collectFromDataRange(range: OWLDataRange, builder: scala.collection.mutable.Set[OWLLiteral]): Unit = range match {
     case dtr: OWLDatatypeRestriction => dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
+    case doo: OWLDataOneOf           => doo.getValues.asScala.foreach(builder += _)
+    case din: OWLDataIntersectionOf  => din.getOperands.asScala.foreach(collectFromDataRange(_, builder))
+    case dun: OWLDataUnionOf         => dun.getOperands.asScala.foreach(collectFromDataRange(_, builder))
+    case dco: OWLDataComplementOf    => collectFromDataRange(dco.getDataRange, builder)
     case _                           => ()
   }
 

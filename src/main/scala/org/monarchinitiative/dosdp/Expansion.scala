@@ -238,9 +238,35 @@ private[dosdp] object Expansion {
     case CompiledSimpleClassExpression(_, piece, _) =>
       substituteSinglePiece(piece, bindings, prefixes, multiValueOverride = None)
     case CompiledMultiClassExpression(_, clauses, op, _) =>
-      clauses.flatTraverse(clause => expandClauseWithMultiValue(clause, bindings, prefixes))
+      clauses.flatTraverse(clause => expandPrintfClause(clause, bindings, prefixes))
         .map(exprs => if (exprs.isEmpty) None else Some(CompiledClassExpression.combine(exprs, op)))
   }
+
+  /**
+   * Expand one top-level `CompiledPrintfClause` against the row bindings.
+   * Returns the expression for the main piece (one entry per multi-value
+   * expansion) followed by each surviving sub-expression's combined result.
+   * If the main piece has missing bindings, the entire clause-group is
+   * dropped — sub-clauses cannot anchor without their parent.
+   */
+  private def expandPrintfClause(
+    clause: CompiledPrintfClause,
+    bindings: Map[String, Binding],
+    prefixes: PartialFunction[String, String]
+  ): Either[ExpansionError, List[OWLClassExpression]] =
+    expandClauseWithMultiValue(clause.main, bindings, prefixes).flatMap { mainExprs =>
+      if (mainExprs.isEmpty) Right(Nil)
+      else clause.subExpressions.traverse(expandSubExpression(_, bindings, prefixes))
+        .map(subOpts => mainExprs ++ subOpts.flatten)
+    }
+
+  private def expandSubExpression(
+    sub: CompiledSubExpression,
+    bindings: Map[String, Binding],
+    prefixes: PartialFunction[String, String]
+  ): Either[ExpansionError, Option[OWLClassExpression]] =
+    sub.clauses.flatTraverse(expandPrintfClause(_, bindings, prefixes))
+      .map(exprs => if (exprs.isEmpty) None else Some(CompiledClassExpression.combine(exprs, sub.operator)))
 
   private def substituteAxiom(
     compiled: CompiledAxiom,
