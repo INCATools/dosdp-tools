@@ -114,6 +114,76 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
         assert(placeholderIRIs(axioms))(isEmpty)
+    },
+    testM("a single-clause nested sub_clause may omit its separator") {
+      // The nested sub_clause has exactly one clause and no `sep`; the operator
+      // is never used to join anything, so compilation must not demand a separator.
+      val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
+      val topClause = PrintfClause(
+        "'part_of' some %s",
+        Some(List("structure")),
+        Some(List(MultiClausePrintf(None, Some(List(sub))))))
+      val multi = MultiClausePrintf(Some(" and "), Some(List(topClause)))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("multi_clause_single_sub_no_sep"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        relations = Some(Map(
+          "part_of" -> "BFO:0000050",
+          "develops_from" -> "RO:0002202")),
+        vars = Some(Map("structure" -> "'thing'", "origin" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(multi)))
+      )
+      val row = Map(
+        "defined_class" -> "EX:0001",
+        "structure" -> "UBERON:0000001",
+        "origin" -> "UBERON:0000002")
+      for {
+        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+        subAxioms = axioms.collect { case sc: OWLSubClassOfAxiom => sc }
+      } yield assert(subAxioms.exists(ax => hasNamedClass(ax, anatomy) && hasNamedClass(ax, region)))(isTrue)
+    },
+    testM("nested operator differs from parent: row-time and placeholder forms agree") {
+      // Parent `and`, nested sub_clause `or`. The output must nest a union inside
+      // the intersection — not flatten — for both the row-time axioms and the
+      // placeholder-form axioms that Query/Terms consume.
+      val subOr = MultiClausePrintf(Some(" or "), Some(List(
+        PrintfClause("'develops_from' some %s", Some(List("origin_a")), None),
+        PrintfClause("'develops_from' some %s", Some(List("origin_b")), None))))
+      val topClause = PrintfClause(
+        "'part_of' some %s",
+        Some(List("structure")),
+        Some(List(subOr)))
+      val multi = MultiClausePrintf(Some(" and "), Some(List(topClause)))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("multi_clause_mixed_operators"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        relations = Some(Map(
+          "part_of" -> "BFO:0000050",
+          "develops_from" -> "RO:0002202")),
+        vars = Some(Map("structure" -> "'thing'", "origin_a" -> "'thing'", "origin_b" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(multi)))
+      )
+      val row = Map(
+        "defined_class" -> "EX:0001",
+        "structure" -> "UBERON:0000001",
+        "origin_a" -> "UBERON:0000002",
+        "origin_b" -> "UBERON:0000003")
+      // The superclass of a SubClassOf axiom must be an intersection that
+      // *contains* a union as one of its operands (nested, not flattened).
+      def superHasNestedUnion(ax: OWLSubClassOfAxiom): Boolean =
+        ax.getSuperClass match {
+          case inter: OWLObjectIntersectionOf =>
+            inter.getOperands.asScala.exists(_.isInstanceOf[OWLObjectUnionOf])
+          case _ => false
+        }
+      for {
+        prefixes <- zio.ZIO.succeed(OBOPrefixes)
+        compiled <- PatternCompiler.compile(dosdp, prefixes)
+        rowAxioms <- Generate.renderPattern(dosdp, prefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
+        rowSub = rowAxioms.collect { case sc: OWLSubClassOfAxiom => sc }
+        placeholderSub = ExpandedDOSDP(dosdp, prefixes, compiled).filledLogicalAxioms.collect { case sc: OWLSubClassOfAxiom => sc }
+      } yield assert(rowSub.exists(superHasNestedUnion))(isTrue) &&
+        assert(placeholderSub.exists(superHasNestedUnion))(isTrue)
     }
   ).provideCustomLayer(Logging.consoleErr())
 

@@ -84,7 +84,7 @@ private[dosdp] final case class CompiledMultiClassExpression(
   annotations: Set[NormalizedAnnotation]
 ) extends CompiledClassExpression {
   lazy val parsed: OWLClassExpression =
-    CompiledClassExpression.combine(clauses.flatMap(_.allParsed), operator)
+    CompiledClassExpression.combine(clauses.flatMap(_.parsedParts), operator)
 }
 
 /**
@@ -100,8 +100,12 @@ private[dosdp] final case class CompiledPrintfClause(
   main: ParsedPiece[OWLClassExpression],
   subExpressions: List[CompiledSubExpression]
 ) {
-  def allParsed: List[OWLClassExpression] =
-    main.parsed :: subExpressions.flatMap(_.allParsed)
+  /** The pieces this clause contributes to its parent's combine: the main
+    * piece plus each sub-expression collapsed (via its own operator) into one
+    * expression. Combining these at the parent's operator preserves nested
+    * `and` / `or` structure. */
+  def parsedParts: List[OWLClassExpression] =
+    main.parsed :: subExpressions.map(_.parsed)
 }
 
 /**
@@ -114,7 +118,9 @@ private[dosdp] final case class CompiledSubExpression(
   clauses: List[CompiledPrintfClause],
   operator: LogicalOperator
 ) {
-  def allParsed: List[OWLClassExpression] = clauses.flatMap(_.allParsed)
+  /** Placeholder-form expression for this sub-clause, combined with its own operator. */
+  def parsed: OWLClassExpression =
+    CompiledClassExpression.combine(clauses.flatMap(_.parsedParts), operator)
 }
 
 private[dosdp] object CompiledClassExpression {
@@ -266,8 +272,8 @@ private[dosdp] object PatternCompiler {
     placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, CompiledMultiClassExpression] =
     for {
-      op      <- operatorFor(mc.sep.getOrElse(""))
       clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
+      op      <- operatorFor(mc.sep, clauses.size)
     } yield CompiledMultiClassExpression(template, clauses, op, annotations)
 
   private def compilePrintfClause(
@@ -290,15 +296,23 @@ private[dosdp] object PatternCompiler {
     placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, CompiledSubExpression] =
     for {
-      op      <- operatorFor(mc.sep.getOrElse(""))
       clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
+      op      <- operatorFor(mc.sep, clauses.size)
     } yield CompiledSubExpression(clauses, op)
 
-  private def operatorFor(sep: String): ZIO[Logging, DOSDPError, LogicalOperator] = sep match {
-    case " and " => ZIO.succeed(LogicalOperator.And)
-    case " or "  => ZIO.succeed(LogicalOperator.Or)
-    case other   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
-  }
+  /**
+   * Resolve a `multi_clause` separator to a logical operator. The separator
+   * only matters when two or more clauses must be joined; a single-clause (or
+   * empty) `multi_clause` may omit `sep` entirely — `CompiledClassExpression.combine`
+   * passes a lone clause through unchanged, so the operator is never consulted.
+   */
+  private def operatorFor(sep: Option[String], clauseCount: Int): ZIO[Logging, DOSDPError, LogicalOperator] =
+    if (clauseCount <= 1) ZIO.succeed(LogicalOperator.And)
+    else sep.getOrElse("") match {
+      case " and " => ZIO.succeed(LogicalOperator.And)
+      case " or "  => ZIO.succeed(LogicalOperator.Or)
+      case other   => logErrorFail(s"Logical multi_clause separator must be ' and ' or ' or ', found: '$other'")
+    }
 
   private def compileAxiomTemplate(
     templateOpt: Option[PrintfOWLConvenience],
