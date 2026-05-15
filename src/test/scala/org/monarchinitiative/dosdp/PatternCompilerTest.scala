@@ -84,6 +84,20 @@ object PatternCompilerTest extends DefaultRunnableSpec {
       for {
         compiled <- PatternCompiler.compile(pattern, OBOPrefixes)
       } yield assert(compiled.dataVarNames)(equalTo(Set("rate_min", "rates")))
+    },
+    testM("rejects a data_var in a cardinality slot (`min %s`) — known capability regression") {
+      // Manchester requires a bare integer at the cardinality, but the compile-time
+      // placeholder for a data_var is a typed-literal token `"$name"^^xsd:integer`,
+      // which the parser does not accept in that position. Pinning this as an
+      // explicit non-support: if a real pattern needs cardinality data_vars, the
+      // fix is a row-time-parse fallback rather than relaxing this check.
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("data-var-cardinality"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        dataProperties = Some(Map("has_age" -> "RO:0002000")),
+        data_vars = Some(Map("count" -> "xsd:integer")),
+        subClassOf = Some(PrintfOWLConvenience(None, Some("'has_age' min %s xsd:integer"), Some(List("count")))))
+      compileError(pattern).map(msg => assert(msg)(containsString("Failed to parse class expression")))
     }
   ).provideCustomLayer(Logging.consoleErr())
 

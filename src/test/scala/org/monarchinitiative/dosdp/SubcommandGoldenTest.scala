@@ -81,15 +81,33 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     } yield Harness.assertTextMatchesGolden(md, s"$R/$name.docs.golden.md")
   }
 
-  // Query coverage is currently narrow: only fixtures whose Manchester
-  // templates compile cleanly under faddaf8's placeholder-form parser
-  // (no GCI, no logical_axioms with multi_clause, no annotated subClassOf,
-  // no data_vars in expressions) can be baselined against faddaf8.
-  // Most new complex fixtures fall outside that envelope. Extending query
-  // coverage either anchors on refactoring-3 or waits on a richer baseline.
+  // Query coverage on the complex fixtures (axiom_kinds, list_var_logical,
+  // annotated_axioms) is anchored on refactoring-3, not on faddaf8: the legacy
+  // placeholder-form Manchester parser errors on GCI, multi_clause-on-logical,
+  // annotated subClassOf, and list_vars in expressions, so faddaf8 has nothing
+  // to baseline against. These goldens lock the current behavior and will be
+  // re-verified end-to-end once Phase 3.0 collapses the two expansion paths.
+  //
+  // Two complex fixtures are intentionally absent from query coverage:
+  //
+  //   * `data_var_slots` — `SPARQL.triplesForClassExpression` has no case for
+  //     `OWLDataHasValue` / `OWLDataSomeValuesFrom` / data cardinalities, so
+  //     the query generator MatchErrors on data_var-bearing templates. That
+  //     gap pre-dates the refactor — the refactor just exposed it by letting
+  //     these templates compile. Fixing it is out of scope for Phase 0.3.
+  //
+  //   * `multi_clause_sub` — nested intersection/union operand ordering comes
+  //     from OWL API `Set` iteration, which isn't stable across runs. The
+  //     SPARQL is semantically equivalent (constraints are unordered) but the
+  //     UUID-normalized text golden flakes when operands swap. Stabilizing
+  //     this would mean sorting operands in `SPARQL.triplesForClassExpression`
+  //     — a user-visible output-ordering change reserved for Phase 3.0.
   def spec = suite("Subcommand golden snapshots")(
     queryTest("OverrideTest"),
     queryTest("test_blank_lines"),
+    queryTest("axiom_kinds"),
+    queryTest("list_var_logical"),
+    queryTest("annotated_axioms"),
     termsTest("axiom_kinds"),
     termsTest("multi_clause_sub"),
     prototypeTest("annotated_axioms"),

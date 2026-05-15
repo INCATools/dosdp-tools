@@ -125,27 +125,47 @@ object Harness {
     assert(placeholderLiterals(axioms))(isEmpty ?? "no $placeholder literals in rendered output")
 
   /**
+   * Normalize the UUID-named intermediate variables emitted by
+   * `SPARQL.genVar` to deterministic `?_v0`, `?_v1`, … placeholders in
+   * first-appearance order. Jena's `Query.equals` is variable-name
+   * sensitive, so without this step a golden whose intermediates are
+   * fresh per run never matches itself.
+   */
+  private val UUIDVarPattern = """\?([0-9a-f]{32})\b""".r
+  private[dosdp] def normalizeSPARQL(text: String): String = {
+    val ids = collection.mutable.LinkedHashMap.empty[String, Int]
+    UUIDVarPattern.replaceAllIn(text, m => {
+      val key = m.group(1)
+      val idx = ids.getOrElseUpdate(key, ids.size)
+      s"?_v$idx"
+    })
+  }
+
+  /**
    * Assert that `actual` parses to a SPARQL query structurally equal to the one
-   * stored at `goldenPath`. Jena's `Query.equals` compares parsed structure, so
-   * differences in whitespace or prefix ordering do not cause spurious failures.
+   * stored at `goldenPath`. Both sides are normalized to replace the SPARQL
+   * generator's UUID-named intermediates with deterministic placeholders, then
+   * compared structurally via Jena's `Query.equals` so whitespace and prefix
+   * ordering remain incidental.
    */
   def assertSPARQLMatchesGolden(actual: String, goldenPath: String): TestResult = {
     val path = Paths.get(goldenPath)
+    val normalizedActual = normalizeSPARQL(actual)
     if (sys.env.contains(UpdateGoldenEnvVar) || !Files.exists(path)) {
-      Files.write(path, actual.getBytes(StandardCharsets.UTF_8))
+      Files.write(path, normalizedActual.getBytes(StandardCharsets.UTF_8))
       assertCompletes
     } else {
       val expectedText = new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
-      val expected = QueryFactory.create(expectedText)
-      val produced = QueryFactory.create(actual)
+      val expected = QueryFactory.create(normalizeSPARQL(expectedText))
+      val produced = QueryFactory.create(normalizedActual)
       val summary =
         if (expected == produced) ""
         else
           s"""|
               |golden SPARQL ($goldenPath):
               |$expectedText
-              |produced SPARQL:
-              |$actual
+              |produced SPARQL (normalized):
+              |$normalizedActual
               |""".stripMargin
       assert(summary)(isEmptyString ?? s"SPARQL matches golden file $goldenPath")
     }
