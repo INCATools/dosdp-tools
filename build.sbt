@@ -33,7 +33,7 @@ libraryDependencies ++= {
     Seq(
       "dev.zio"                    %% "zio"                    % zioVersion,
       "dev.zio"                    %% "zio-streams"            % zioVersion,
-      "com.github.alexarchambault" %% "case-app"               % "2.0.6",
+      "com.github.alexarchambault" %% "case-app"               % "2.1.0",
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.29",
       "org.phenoscape"             %% "scowl"                  % "1.4.1",
       "org.phenoscape"             %% "owlet"                  % "1.9" exclude("org.slf4j", "slf4j-log4j12"),
