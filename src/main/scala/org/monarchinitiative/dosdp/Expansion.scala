@@ -47,7 +47,15 @@ private[dosdp] object Expansion {
     for {
       definedClass <- resolveDefinedClass(pattern, bindings, row, context.generateDefinedClass)
       iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
-      logicalBindings = bindings.varBindings ++ bindings.listVarBindings ++ bindings.dataVarBindings ++ bindings.dataListBindings + iriBinding
+      classMap = pattern.source.classes.getOrElse(Map.empty)
+      // Class-var bindings may carry quoted-label range expressions like `'thing'`
+      // (notably when callers — Prototype — synthesize fillers from `dosdp.vars`).
+      // Resolve those to IRIs via the pattern's classes map for OWL substitution,
+      // but feed the unresolved values into annotation rendering so labels still
+      // appear in the rendered text.
+      logicalVarBindings = bindings.varBindings.view.mapValues(resolveBindingLabels(_, classMap, pattern.prefixes)).toMap
+      logicalListBindings = bindings.listVarBindings.view.mapValues(resolveBindingLabels(_, classMap, pattern.prefixes)).toMap
+      logicalBindings = logicalVarBindings ++ logicalListBindings ++ bindings.dataVarBindings ++ bindings.dataListBindings + iriBinding
       readableIDIndexPlusLocal = context.readableIDIndex + (context.localLabelProperty -> bindings.localLabels)
       annotationBindings = buildAnnotationBindings(bindings, pattern, iriBinding, readableIDIndexPlusLocal, context.readableIdentifiers, context.localLabelProperty)
       axiomKinds <- resolveAxiomKinds(context.restrictAxiomsColumn, row, context.outputLogicalAxioms, context.outputAnnotationAxioms)
@@ -87,6 +95,23 @@ private[dosdp] object Expansion {
   private def stripToOption(text: String): Option[String] = {
     val trimmed = text.trim
     if (trimmed.isEmpty) None else Some(trimmed)
+  }
+
+  /**
+   * Replace a binding value with its resolved IRI when the value is a quoted
+   * class-label reference that maps through the pattern's `classes` map.
+   * Values that already parse as CURIEs or IRIs are left alone, as are values
+   * that don't resolve through either route — those propagate unchanged so
+   * the existing UnresolvableBinding error fires downstream.
+   */
+  private def resolveBindingLabels(binding: Binding, classMap: Map[String, String], prefixes: PartialFunction[String, String]): Binding = {
+    def resolve(value: String): String =
+      if (Prefixes.idToIRI(value, prefixes).isDefined) value
+      else Prefixes.nameOrVariableToIRI(value, classMap, prefixes).map(_.toString).getOrElse(value)
+    binding match {
+      case SingleValue(v) => SingleValue(resolve(v))
+      case MultiValue(vs) => MultiValue(vs.map(resolve))
+    }
   }
 
   private def buildAnnotationBindings(

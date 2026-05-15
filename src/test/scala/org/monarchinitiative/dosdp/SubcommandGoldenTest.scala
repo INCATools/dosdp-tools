@@ -60,13 +60,17 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     } yield Harness.assertLineSetMatchesGolden(lines, s"$R/$name.terms.golden.txt")
   }
 
-  // `prototype` is deliberately omitted: refactoring-3's renderPattern errors
-  // ("Binding for '<var>' did not resolve to an IRI: 'thing'") when given the
-  // synthetic fillers Prototype.axiomsFor constructs from a pattern's `vars`
-  // map (which stores class labels like 'thing', not IRIs). faddaf8's path
-  // resolved these through DOSDPEntityChecker via the `classes` map; the
-  // refactor's compile-time placeholder parser does not. The harness flagged
-  // this immediately. Re-enable once the prototype path is restored.
+  private def prototypeTest(name: String) = testM(s"prototype: $name") {
+    val out = tempFile("proto-", ".ofn")
+    val cfg = PrototypeConfig(commonFor(s"$R/$name.yaml", out))
+    for {
+      _ <- Prototype.run(cfg)
+      ofn <- ZIO.effect(new String(Files.readAllBytes(Paths.get(out)), StandardCharsets.UTF_8))
+      axioms = Harness.parse(ofn)
+    } yield Harness.assertMatchesGolden(axioms, s"$R/$name.prototype.golden.ofn") &&
+      Harness.assertNoPlaceholderIRIs(axioms) &&
+      Harness.assertNoPlaceholderLiterals(axioms)
+  }
 
   private def docsTest(name: String) = testM(s"docs: $name") {
     val out = tempFile("docs-", ".md")
@@ -88,6 +92,8 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     queryTest("test_blank_lines"),
     termsTest("axiom_kinds"),
     termsTest("multi_clause_sub"),
+    prototypeTest("annotated_axioms"),
+    prototypeTest("axiom_kinds"),
     docsTest("annotated_axioms")
   ).provideCustomLayer(Logging.consoleErr())
 
