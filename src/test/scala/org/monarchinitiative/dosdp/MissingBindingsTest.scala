@@ -3,12 +3,9 @@ package org.monarchinitiative.dosdp
 import org.monarchinitiative.dosdp.cli.Generate
 import org.monarchinitiative.dosdp.{AxiomType => DOSDPAxiomType}
 import org.phenoscape.scowl._
-import org.semanticweb.owlapi.model.OWLAxiom
 import zio.logging._
 import zio.test.Assertion._
 import zio.test._
-
-import scala.jdk.CollectionConverters._
 
 /**
  * A row missing a binding for a variable that appears in a logical template
@@ -18,9 +15,6 @@ import scala.jdk.CollectionConverters._
  * leak `urn:dosdp:` IRIs into the output ontology.
  */
 object MissingBindingsTest extends DefaultRunnableSpec {
-
-  private def placeholderIRIs(axioms: Set[OWLAxiom]): Set[String] =
-    axioms.flatMap(_.getSignature.asScala.map(_.getIRI.toString)).filter(_.startsWith(DOSDP.variablePrefix))
 
   private val basePattern: DOSDP = DOSDP.empty.copy(
     pattern_name = Some("missing_bindings"),
@@ -39,7 +33,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001") // taxon missing
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty) &&
+      } yield Harness.assertNoPlaceholderIRIs(axioms) &&
         assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLEquivalentClassesAxiom]))(isFalse)
     },
     testM("subClassOf with missing class var emits no axiom") {
@@ -49,7 +43,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001") // structure missing
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty) &&
+      } yield Harness.assertNoPlaceholderIRIs(axioms) &&
         assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLSubClassOfAxiom]))(isFalse)
     },
     testM("disjointWith with missing class var emits no axiom") {
@@ -59,7 +53,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001")
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty)
+      } yield Harness.assertNoPlaceholderIRIs(axioms)
     },
     testM("GCI with missing class var emits no axiom") {
       val pattern = basePattern.copy(
@@ -68,7 +62,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001")
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty)
+      } yield Harness.assertNoPlaceholderIRIs(axioms)
     },
     testM("logical_axioms entry with missing class var emits no axiom") {
       val pattern = basePattern.copy(
@@ -81,7 +75,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001")
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty)
+      } yield Harness.assertNoPlaceholderIRIs(axioms)
     },
     testM("data_var in a Manchester slot drops the axiom when missing") {
       val pattern = basePattern.copy(
@@ -105,7 +99,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       val row = Map("defined_class" -> "EX:0001", "taxon" -> "UBERON:0000001") // structure missing
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(placeholderIRIs(axioms))(isEmpty) &&
+      } yield Harness.assertNoPlaceholderIRIs(axioms) &&
         assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLSubClassOfAxiom]))(isTrue)
     },
     testM("multi_clause: all clauses missing drops the entire expression") {
@@ -119,7 +113,7 @@ object MissingBindingsTest extends DefaultRunnableSpec {
       for {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLSubClassOfAxiom]))(isFalse) &&
-        assert(placeholderIRIs(axioms))(isEmpty)
+        Harness.assertNoPlaceholderIRIs(axioms)
     }
   ).provideCustomLayer(Logging.consoleErr())
 

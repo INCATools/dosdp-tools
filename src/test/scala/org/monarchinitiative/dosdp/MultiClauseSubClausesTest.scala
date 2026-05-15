@@ -78,14 +78,12 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
       val row = Map(
         "defined_class" -> "EX:0001",
         "structure" -> "UBERON:0000001") // origin missing
-      val placeholderIRIs = (axs: Set[OWLAxiom]) =>
-        axs.flatMap(_.getSignature.asScala.map(_.getIRI.toString)).filter(_.startsWith(DOSDP.variablePrefix))
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
         subAxioms = axioms.collect { case sc: OWLSubClassOfAxiom => sc }
       } yield assert(subAxioms.exists(_.getSubClass == term))(isTrue) &&
         assert(subAxioms.exists(ax => hasNamedClass(ax, anatomy)))(isTrue) &&
-        assert(placeholderIRIs(axioms))(isEmpty) &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(partOf)) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala).contains(develops))(isFalse)
     },
@@ -108,12 +106,10 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
       val row = Map(
         "defined_class" -> "EX:0001",
         "origin" -> "UBERON:0000002") // structure missing
-      val placeholderIRIs = (axs: Set[OWLAxiom]) =>
-        axs.flatMap(_.getSignature.asScala.map(_.getIRI.toString)).filter(_.startsWith(DOSDP.variablePrefix))
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
-        assert(placeholderIRIs(axioms))(isEmpty)
+        Harness.assertNoPlaceholderIRIs(axioms)
     },
     testM("a single-clause nested sub_clause may omit its separator") {
       // The nested sub_clause has exactly one clause and no `sep`; the operator

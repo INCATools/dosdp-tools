@@ -4,8 +4,7 @@ import org.apache.jena.query.QueryFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
 import org.semanticweb.owlapi.io.{StringDocumentSource, StringDocumentTarget}
-import org.semanticweb.owlapi.model.{OWLAxiom, OWLDeclarationAxiom, OWLLiteral}
-import org.semanticweb.owlapi.util.OWLObjectComponentCollector
+import org.semanticweb.owlapi.model.{OWLAxiom, OWLDeclarationAxiom}
 import zio.test.Assertion._
 import zio.test._
 
@@ -88,33 +87,42 @@ object Harness {
   }
 
   /**
+   * Every `urn:dosdp:` IRI present anywhere in the axiom tree — entity IRIs as
+   * well as raw `IRI`s used as annotation-assertion subjects or IRI-valued
+   * annotations. `OWLAxiom.getSignature` covers only named entities, and the
+   * OWL API's component-collector doesn't reliably expose bare-IRI annotation
+   * values either; scanning the canonical functional-syntax serialization
+   * enumerates every IRI by construction and closes both gaps.
+   */
+  def placeholderIRIs(axioms: Set[OWLAxiom]): Set[String] =
+    PlaceholderIRIPattern.findAllIn(serialize(axioms)).toSet
+
+  /**
+   * All literal lexical forms with a placeholder shape (`$name` or `'$name'`).
+   * Functional syntax writes each literal as `"<lexical>"^^<datatype>`, so a
+   * regex over the serialization catches placeholders the OWL API leaf-level
+   * walker can miss.
+   */
+  def placeholderLiterals(axioms: Set[OWLAxiom]): Set[String] =
+    PlaceholderLiteralPattern.findAllMatchIn(serialize(axioms)).map(_.group(1)).toSet
+
+  private val PlaceholderIRIPattern = s"""${java.util.regex.Pattern.quote(DOSDP.variablePrefix)}[^>"\\s]+""".r
+  private val PlaceholderLiteralPattern = """"('?\$[^"]*)"""".r
+
+  /**
    * Assert that no rendered axiom mentions a `urn:dosdp:` placeholder IRI. A regression
    * that leaks a placeholder fails this at every test site exercising the broken path,
    * not only the one asserting on the specific axiom.
    */
-  def assertNoPlaceholderIRIs(axioms: Set[OWLAxiom]): TestResult = {
-    val leaked = axioms
-      .flatMap(_.getSignature.asScala)
-      .map(_.getIRI.toString)
-      .filter(_.startsWith(DOSDP.variablePrefix))
-    assert(leaked)(isEmpty ?? "no urn:dosdp: placeholder IRIs in rendered output")
-  }
+  def assertNoPlaceholderIRIs(axioms: Set[OWLAxiom]): TestResult =
+    assert(placeholderIRIs(axioms))(isEmpty ?? "no urn:dosdp: placeholder IRIs in rendered output")
 
   /**
    * Assert that no rendered literal has a placeholder lexical form (`$name` or `'$name'`).
    * Mirrors `assertNoPlaceholderIRIs` for the data-var substitution path.
    */
-  def assertNoPlaceholderLiterals(axioms: Set[OWLAxiom]): TestResult = {
-    val leaked = collectLiterals(axioms)
-      .map(_.getLiteral)
-      .filter(lex => lex.startsWith("$") || (lex.startsWith("'$") && lex.endsWith("'")))
-    assert(leaked)(isEmpty ?? "no $placeholder literals in rendered output")
-  }
-
-  private def collectLiterals(axioms: Set[OWLAxiom]): Set[OWLLiteral] = {
-    val collector = new OWLObjectComponentCollector()
-    axioms.flatMap(ax => collector.getComponents(ax).asScala).collect { case l: OWLLiteral => l }
-  }
+  def assertNoPlaceholderLiterals(axioms: Set[OWLAxiom]): TestResult =
+    assert(placeholderLiterals(axioms))(isEmpty ?? "no $placeholder literals in rendered output")
 
   /**
    * Assert that `actual` parses to a SPARQL query structurally equal to the one
