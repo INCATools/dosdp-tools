@@ -1,0 +1,33 @@
+pattern_name: multi_clause_sub
+pattern_iri: http://purl.obolibrary.org/obo/test/multi_clause_sub.yaml
+
+description: 'multi_clause with nested sub_clauses on a logical template, mixed and/or operators.'
+
+classes:
+  thing: "owl:Thing"
+
+relations:
+  part_of: "BFO:0000050"
+  develops_from: "RO:0002202"
+
+vars:
+  structure: "'thing'"
+  origin_a: "'thing'"
+  origin_b: "'thing'"
+
+subClassOf:
+  multi_clause:
+    sep: " and "
+    clauses:
+      - text: "'part_of' some %s"
+        vars:
+          - structure
+        sub_clauses:
+          - sep: " or "
+            clauses:
+              - text: "'develops_from' some %s"
+                vars:
+                  - origin_a
+              - text: "'develops_from' some %s"
+                vars:
+                  - origin_b

@@ -1,0 +1,80 @@
+Prefix(:=<urn:unnamed:ontology#ont1>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont1>
+
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159>))
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161>))
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34>))
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35>))
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36>))
+Declaration(Class(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011001>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011002>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011003>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011004>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011005>))
+Declaration(Class(<http://purl.obolibrary.org/obo/CL_0011006>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_0002162>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+
+
+
+############################
+#   Classes
+############################
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159> (Sample name with type list: MyEntity1_Label.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000042453,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000004366. These cells have projection type MyEntity1_Label. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_0000359 or http://purl.obolibrary.org/obo/CL_4023051 or http://purl.obolibrary.org/obo/CL_0000128.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159> "Entity label expansion test: MyEntity1_Label.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159> "Sample name with type list: MyEntity1_Label.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_159> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011005>))
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161> (Sample name with type list: http://purl.obolibrary.org/obo/CL_NotExists or MyEntity2_Label.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026676,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000029705,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000027210,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000062372. These cells have projection type http://purl.obolibrary.org/obo/CL_0011004. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_0000359 or http://purl.obolibrary.org/obo/CL_0000128.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161> "Entity label expansion test: http://purl.obolibrary.org/obo/CL_NotExists or MyEntity2_Label.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161> "Sample name with type list: http://purl.obolibrary.org/obo/CL_NotExists or MyEntity2_Label.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_161> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011004>))
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34> (Sample name with type list: MyEntity2_Label.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000019772. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000055214. These cells have projection type http://purl.obolibrary.org/obo/CL_0011006. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_4023051.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34> "Entity label expansion test: MyEntity2_Label.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34> "Sample name with type list: MyEntity2_Label.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_34> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011006>))
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35> (Sample name with type list: MyEntity2_Label or MyEntity1_Label.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000025537,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000030235. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000053930, http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000035105. These cells have projection type http://purl.obolibrary.org/obo/CL_0011003. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_0000359.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35> "Entity label expansion test: MyEntity2_Label or MyEntity1_Label.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35> "Sample name with type list: MyEntity2_Label or MyEntity1_Label.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_35> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011003>))
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36> (Sample name with type list: http://purl.obolibrary.org/obo/XX_00001.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026676,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000029705,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000027210,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000062372. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000050121. These cells have projection type http://purl.obolibrary.org/obo/CL_0011002.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36> "Entity label expansion test: http://purl.obolibrary.org/obo/XX_00001.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36> "Sample name with type list: http://purl.obolibrary.org/obo/XX_00001.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_36> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011002>))
+
+# Class: <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37> (Sample name with type list: http://purl.obolibrary.org/obo/CL_0011003 or http://purl.obolibrary.org/obo/CL_0011002 or http://purl.obolibrary.org/obo/CL_0011001.)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026697. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000050121. These cells have projection type http://purl.obolibrary.org/obo/CL_0011001. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_4023051.")
+AnnotationAssertion(rdfs:comment <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37> "Entity label expansion test: http://purl.obolibrary.org/obo/CL_0011003 or http://purl.obolibrary.org/obo/CL_0011002 or http://purl.obolibrary.org/obo/CL_0011001.")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37> "Sample name with type list: http://purl.obolibrary.org/obo/CL_0011003 or http://purl.obolibrary.org/obo/CL_0011002 or http://purl.obolibrary.org/obo/CL_0011001.")
+SubClassOf(<http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_37> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002162> <http://purl.obolibrary.org/obo/CL_0011001>))
+
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_164> "A MyEntity2_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026697.")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_165> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000098760,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000043659.")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_38> "A MyEntity1_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026697. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000043441. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_0000359.")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_39> "A MyEntity2_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000026697. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000050121. The soma of these cells in located in: http://purl.obolibrary.org/obo/CL_0000359.")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/AllenDendClass_CS202002013_40> "A MyEntity2_Label of the http://purl.obolibrary.org/obo/NCBITaxon_10090 http://purl.obolibrary.org/obo/UBERON_0001384. These cells can be distinguished from other cells in the http://purl.obolibrary.org/obo/UBERON_0001384 by their expression of http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000098760,http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000043659. These cells also express http://purl.obolibrary.org/obo/ensembl_ENSMUSG00000043441.")
+)

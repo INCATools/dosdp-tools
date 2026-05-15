@@ -1,0 +1,32 @@
+Prefix(:=<urn:unnamed:ontology#ont1>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont1>
+
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0001>))
+Declaration(Class(<http://purl.obolibrary.org/obo/UBERON_0000001>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/BFO_0000050>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+Declaration(AnnotationProperty(<http://purl.org/dc/terms/contributor>))
+Declaration(AnnotationProperty(<http://www.geneontology.org/formats/oboInOwl#source>))
+
+
+
+############################
+#   Classes
+############################
+
+# Class: <http://purl.obolibrary.org/obo/EX_0001> (part of http://purl.obolibrary.org/obo/UBERON_0000001)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/EX_0001> "Anything part of http://purl.obolibrary.org/obo/UBERON_0000001.")
+AnnotationAssertion(Annotation(<http://www.geneontology.org/formats/oboInOwl#source> "sub-annotation hand-curated") <http://purl.org/dc/terms/contributor> <http://purl.obolibrary.org/obo/EX_0001> "hand-curated")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/EX_0001> "part of http://purl.obolibrary.org/obo/UBERON_0000001")
+SubClassOf(Annotation(<http://www.geneontology.org/formats/oboInOwl#source> "hand-curated") <http://purl.obolibrary.org/obo/EX_0001> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/BFO_0000050> <http://purl.obolibrary.org/obo/UBERON_0000001>))
+
+
+)
