@@ -1,5 +1,6 @@
 package org.monarchinitiative.dosdp
 
+import org.apache.jena.query.QueryFactory
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
 import org.semanticweb.owlapi.io.{StringDocumentSource, StringDocumentTarget}
@@ -113,6 +114,73 @@ object Harness {
   private def collectLiterals(axioms: Set[OWLAxiom]): Set[OWLLiteral] = {
     val collector = new OWLObjectComponentCollector()
     axioms.flatMap(ax => collector.getComponents(ax).asScala).collect { case l: OWLLiteral => l }
+  }
+
+  /**
+   * Assert that `actual` parses to a SPARQL query structurally equal to the one
+   * stored at `goldenPath`. Jena's `Query.equals` compares parsed structure, so
+   * differences in whitespace or prefix ordering do not cause spurious failures.
+   */
+  def assertSPARQLMatchesGolden(actual: String, goldenPath: String): TestResult = {
+    val path = Paths.get(goldenPath)
+    if (sys.env.contains(UpdateGoldenEnvVar) || !Files.exists(path)) {
+      Files.write(path, actual.getBytes(StandardCharsets.UTF_8))
+      assertCompletes
+    } else {
+      val expectedText = new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
+      val expected = QueryFactory.create(expectedText)
+      val produced = QueryFactory.create(actual)
+      val summary =
+        if (expected == produced) ""
+        else
+          s"""|
+              |golden SPARQL ($goldenPath):
+              |$expectedText
+              |produced SPARQL:
+              |$actual
+              |""".stripMargin
+      assert(summary)(isEmptyString ?? s"SPARQL matches golden file $goldenPath")
+    }
+  }
+
+  /** Byte-exact text comparison against a golden file. */
+  def assertTextMatchesGolden(actual: String, goldenPath: String): TestResult = {
+    val path = Paths.get(goldenPath)
+    if (sys.env.contains(UpdateGoldenEnvVar) || !Files.exists(path)) {
+      Files.write(path, actual.getBytes(StandardCharsets.UTF_8))
+      assertCompletes
+    } else {
+      val expected = new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
+      assert(actual)(equalTo(expected) ?? s"text matches golden file $goldenPath")
+    }
+  }
+
+  /**
+   * Set-equality of newline-separated lines (empty lines ignored). Used where
+   * the order in which the producer emits lines is not part of the contract
+   * (e.g. `terms` output, which is an unordered set of IRIs).
+   */
+  def assertLineSetMatchesGolden(actualLines: Iterable[String], goldenPath: String): TestResult = {
+    val path = Paths.get(goldenPath)
+    if (sys.env.contains(UpdateGoldenEnvVar) || !Files.exists(path)) {
+      Files.write(path, actualLines.filter(_.nonEmpty).toSeq.sorted.mkString("\n").getBytes(StandardCharsets.UTF_8))
+      assertCompletes
+    } else {
+      val expected = new String(Files.readAllBytes(path), StandardCharsets.UTF_8).linesIterator.filter(_.nonEmpty).toSet
+      val produced = actualLines.filter(_.nonEmpty).toSet
+      val onlyExpected = expected diff produced
+      val onlyProduced = produced diff expected
+      val summary =
+        if (onlyExpected.isEmpty && onlyProduced.isEmpty) ""
+        else
+          s"""|
+              |${onlyExpected.size} line(s) in golden but not produced:
+              |${onlyExpected.toSeq.sorted.map("  - " + _).mkString("\n")}
+              |${onlyProduced.size} line(s) produced but not in golden:
+              |${onlyProduced.toSeq.sorted.map("  + " + _).mkString("\n")}
+              |""".stripMargin
+      assert(summary)(isEmptyString ?? s"line set matches golden file $goldenPath")
+    }
   }
 
 }
