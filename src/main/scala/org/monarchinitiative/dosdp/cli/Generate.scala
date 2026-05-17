@@ -208,6 +208,44 @@ object Generate {
     private def parseMultiValue(filler: String): MultiValue =
       MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))
 
+    /**
+     * Synthetic placeholder row: binds every declared variable to its
+     * `urn:dosdp:` IRI (class / list vars) or `$<name>` literal placeholder
+     * (data / data-list vars). Feeding this row to `Expansion.expandRow`
+     * leaves every variable slot in `compiled.parsed` untouched (each
+     * substitution maps the placeholder to itself), so the resulting axioms
+     * are byte-equivalent to what `ExpandedDOSDP.filledLogicalAxioms` and
+     * `filledAnnotationAxioms(varsOnlyIRIBindings, None)` produce — the
+     * placeholder-form output that drives `query` and `terms`.
+     *
+     * The companion `defined_class` placeholder lives in the row map
+     * (see `placeholderRow`) rather than here, so the existing
+     * `resolveDefinedClass` path resolves it like any other row.
+     */
+    def placeholder(dosdp: DOSDP): RowBindings = {
+      def placeholderIRI(name: String): String = DOSDP.variableToIRI(name).toString
+      def placeholderLiteral(name: String): String = "$" + name
+      val varBindings = dosdp.vars.getOrElse(Map.empty).keys
+        .map(name => name -> SingleValue(placeholderIRI(name))).toMap
+      val listVarBindings = dosdp.list_vars.getOrElse(Map.empty).keys
+        .map(name => name -> MultiValue(Set(placeholderIRI(name)))).toMap
+      val dataVarBindings = dosdp.data_vars.getOrElse(Map.empty).keys
+        .map(name => name -> SingleValue(placeholderLiteral(name))).toMap
+      val dataListBindings = dosdp.data_list_vars.getOrElse(Map.empty).keys
+        .map(name => name -> MultiValue(Set(placeholderLiteral(name)))).toMap
+      RowBindings(varBindings, listVarBindings, dataVarBindings, dataListBindings,
+        Map.empty, Map.empty, Map.empty)
+    }
+
+    /**
+     * Row map paired with `placeholder(dosdp)`: supplies the `defined_class`
+     * placeholder so `resolveDefinedClass` returns the pattern's
+     * `urn:dosdp:defined_class` IRI without taking the row-missing-column
+     * path.
+     */
+    def placeholderRow: Map[String, String] =
+      Map(DOSDP.DefinedClassVariable -> DOSDP.variableToIRI(DOSDP.DefinedClassVariable).toString)
+
     def fromRow(dosdp: DOSDP, prefixes: PartialFunction[String, String], knownColumns: Set[String], row: Map[String, String]): RowBindings = {
       val (varBindingsItems, localLabelItems) = (for {
         vars <- dosdp.vars.toSeq
