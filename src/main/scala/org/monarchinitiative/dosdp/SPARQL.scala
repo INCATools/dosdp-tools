@@ -161,7 +161,7 @@ ORDER BY ?defined_class_label
     case literal: OWLLiteral =>
       literal.getLiteral match {
         case DOSDPLiteralPlaceholder(variable) =>
-          (s"?$variable", Nil)
+          (s"?$variable", List(s"FILTER(isLiteral(?$variable))"))
         case text                              =>
           val node = genVar
           val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")

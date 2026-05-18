@@ -14,8 +14,10 @@ VALUES ?structure__match_property { <http://www.w3.org/2000/01/rdf-schema#label>
 ?structure ?structure__match_property ?_v1 .
 ?defined_class <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?synonym .
 FILTER(isIRI(?defined_class))
+FILTER(isLiteral(?synonym))
 ?defined_class <http://www.w3.org/2000/01/rdf-schema#seeAlso> ?synonym .
 FILTER(isIRI(?defined_class))
+FILTER(isLiteral(?synonym))
 ?defined_class rdfs:subClassOf ?_v2 .
 FILTER(isIRI(?defined_class))
 ?_v2 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
