@@ -209,36 +209,65 @@ object Generate {
       MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))
 
     /**
-     * Synthetic placeholder row: binds every declared variable to its
-     * `urn:dosdp:` IRI (class / list vars) or `$<name>` literal placeholder
-     * (data / data-list vars). Feeding this row to `Expansion.expandRow`
-     * leaves every variable slot in `compiled.parsed` untouched (each
-     * substitution maps the placeholder to itself), so the resulting axioms
-     * are byte-equivalent to what `ExpandedDOSDP.filledLogicalAxioms` and
-     * `filledAnnotationAxioms(varsOnlyIRIBindings, None)` produce — the
-     * placeholder-form output that drives `query` and `terms`.
+     * Synthetic placeholder bindings used by `query` and `terms` to render
+     * the pattern as placeholder-form OWL. Every class slot maps to its
+     * `urn:dosdp:` IRI, every data slot to its `$<name>` lexical placeholder;
+     * `Expansion.expandRow` then substitutes each slot for itself (a no-op),
+     * leaving the parsed templates intact.
+     *
+     * Two sources feed the class-slot set, both required:
+     *   - Slot names found in compiled logical pieces — covers fallback
+     *     placeholders the compiler inserted for template vars not declared
+     *     on the DOSDP (`__attribute` and friends); otherwise `allSlotsBound`
+     *     would drop the axiom.
+     *   - `vars` / `list_vars` declared on the DOSDP — covers vars referenced
+     *     only in annotation templates (no logical pieces to walk), without
+     *     which their annotations would lose their bindings and drop.
      *
      * The companion `defined_class` placeholder lives in the row map
-     * (see `placeholderRow`) rather than here, so the existing
-     * `resolveDefinedClass` path resolves it like any other row.
+     * (see `placeholderRow`) so the existing `resolveDefinedClass` path
+     * resolves it like any other row.
      */
-    def placeholder(dosdp: DOSDP): RowBindings = {
+    def placeholder(compiled: CompiledPattern): RowBindings = {
       def placeholderIRI(name: String): String = DOSDP.variableToIRI(name).toString
-      def placeholderLiteral(name: String): String = "$" + name
-      val varBindings = dosdp.vars.getOrElse(Map.empty).keys
+      val logicalClassSlots = collectClassSlots(compiled)
+      val dosdp = compiled.source
+      val declaredClassNames = dosdp.vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
+        dosdp.list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val literalNames = compiled.dataVarNames
+      val classNames = (logicalClassSlots ++ declaredClassNames) -- literalNames
+      val dataVarBindings = literalNames.iterator
+        .map(name => name -> SingleValue(DOSDP.literalPlaceholder(name))).toMap
+      val varBindings = classNames.iterator
         .map(name => name -> SingleValue(placeholderIRI(name))).toMap
-      val listVarBindings = dosdp.list_vars.getOrElse(Map.empty).keys
-        .map(name => name -> MultiValue(Set(placeholderIRI(name)))).toMap
-      val dataVarBindings = dosdp.data_vars.getOrElse(Map.empty).keys
-        .map(name => name -> SingleValue(placeholderLiteral(name))).toMap
-      val dataListBindings = dosdp.data_list_vars.getOrElse(Map.empty).keys
-        .map(name => name -> MultiValue(Set(placeholderLiteral(name)))).toMap
-      RowBindings(varBindings, listVarBindings, dataVarBindings, dataListBindings,
+      RowBindings(varBindings, Map.empty, dataVarBindings, Map.empty,
         Map.empty, Map.empty, Map.empty)
     }
 
+    private def collectClassSlots(compiled: CompiledPattern): Set[String] = {
+      val classes = scala.collection.mutable.Set.empty[String]
+      def absorb(piece: ParsedPiece[_]): Unit = classes ++= piece.classVarSlots.keys
+      def fromClassExpression(ce: CompiledClassExpression): Unit = ce match {
+        case CompiledSimpleClassExpression(_, piece, _)     => absorb(piece)
+        case CompiledMultiClassExpression(_, clauses, _, _) => clauses.foreach(fromPrintfClause)
+      }
+      def fromPrintfClause(c: CompiledPrintfClause): Unit = {
+        absorb(c.main)
+        c.subExpressions.foreach(_.clauses.foreach(fromPrintfClause))
+      }
+      compiled.equivalentTo.foreach(fromClassExpression)
+      compiled.subClassOf.foreach(fromClassExpression)
+      compiled.disjointWith.foreach(fromClassExpression)
+      compiled.gci.foreach(ax => absorb(ax.piece))
+      compiled.logicalAxioms.foreach {
+        case CompiledLogicalClassAxiom(_, expr, _) => fromClassExpression(expr)
+        case CompiledLogicalGCIAxiom(_, ax, _)     => absorb(ax.piece)
+      }
+      classes.toSet
+    }
+
     /**
-     * Row map paired with `placeholder(dosdp)`: supplies the `defined_class`
+     * Row map paired with `placeholder(compiled)`: supplies the `defined_class`
      * placeholder so `resolveDefinedClass` returns the pattern's
      * `urn:dosdp:defined_class` IRI without taking the row-missing-column
      * path.

@@ -1,6 +1,6 @@
 package org.monarchinitiative.dosdp
 
-import org.monarchinitiative.dosdp.cli.Generate
+import org.monarchinitiative.dosdp.cli.{Config, Generate}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
 import zio.logging._
@@ -177,7 +177,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         compiled <- PatternCompiler.compile(dosdp, prefixes)
         rowAxioms <- Generate.renderPattern(dosdp, prefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
         rowSub = rowAxioms.collect { case sc: OWLSubClassOfAxiom => sc }
-        placeholderSub = ExpandedDOSDP(dosdp, prefixes, compiled).filledLogicalAxioms.collect { case sc: OWLSubClassOfAxiom => sc }
+        placeholderSub = ExpandedDOSDP(dosdp, prefixes, compiled).placeholderAxioms(Config.LogicalAxioms).collect { case sc: OWLSubClassOfAxiom => sc }
       } yield assert(rowSub.exists(superHasNestedUnion))(isTrue) &&
         assert(placeholderSub.exists(superHasNestedUnion))(isTrue)
     }

@@ -1,62 +1,53 @@
 package org.monarchinitiative.dosdp
 
-import org.monarchinitiative.dosdp.AxiomType
+import org.monarchinitiative.dosdp.cli.Config.{AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.monarchinitiative.dosdp.cli.DOSDPError.logError
-import org.phenoscape.scowl._
+import org.monarchinitiative.dosdp.cli.Generate
+import org.monarchinitiative.dosdp.cli.Generate.RowBindings
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
 import org.semanticweb.owlapi.model._
 import zio._
 import zio.logging._
 
-import scala.jdk.CollectionConverters._
 import scala.util.matching.Regex.Match
 
 /**
- * Pattern-template helper used by `Query`, `Terms`, and `Docs`: wraps a
- * `CompiledPattern` and assembles its precomputed parsed expressions into
- * placeholder-form OWL axioms anchored to the `urn:dosdp:` defined-class
- * term. Also provides `filledAnnotationAxioms` for SPARQL's annotation-query
- * branch, which substitutes placeholder bindings into annotation templates.
- * Row-time expansion lives in `Expansion`.
+ * Thin wrapper that carries a `CompiledPattern` alongside the var-range
+ * Manchester parser used by `SPARQL` and `Docs` to expand the bounds declared
+ * on `vars` / `list_vars`. Placeholder-form axioms — what `Query` and `Terms`
+ * consume — come from `placeholderAxioms`, which delegates to
+ * `Expansion.expandRow` with a synthetic placeholder row so the single pure
+ * expansion path owns OWL assembly for both row-time and template-time use.
  */
 final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, String], compiled: CompiledPattern) {
 
   private lazy val checker = new DOSDPEntityChecker(dosdp, prefixes)
   private lazy val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
 
-  private type Bindings = Map[String, Binding]
-  private type PermutationIndex = Map[IRI, Map[IRI, Set[String]]]
-
-  private val term = Class(DOSDP.variableToIRI(DOSDP.DefinedClassVariable))
-
   /**
-   * Pattern-template axioms with all variable slots left as `urn:dosdp:`
-   * placeholder IRIs. Used by Query/Terms to drive SPARQL generation and
-   * referenced-term extraction.
+   * Placeholder-form axioms for this pattern: every variable slot left as
+   * its `urn:dosdp:` IRI (class/list) or `$<name>` literal (data). Driven by
+   * `Expansion.expandRow` on the synthetic placeholder row so both row-time
+   * and template-time paths share one assembly.
    */
-  def filledLogicalAxioms: Set[OWLAxiom] = {
-    val classExprAxioms: Set[OWLAxiom] = Set(
-      compiled.equivalentTo.map(ce => EquivalentClasses(annotationsFor(ce.annotations).toSeq: _*)(term, ce.parsed): OWLAxiom),
-      compiled.subClassOf.map(ce => SubClassOf(annotationsFor(ce.annotations), term, ce.parsed): OWLAxiom),
-      compiled.disjointWith.map(ce => DisjointClasses(annotationsFor(ce.annotations).toSeq: _*)(term, ce.parsed): OWLAxiom),
-      compiled.gci.map(ax => ax.piece.parsed.getAnnotatedAxiom(annotationsFor(ax.annotations).asJava): OWLAxiom)
-    ).flatten
-    classExprAxioms ++ compiled.logicalAxioms.flatMap(logicalAxiom).toSet
-  }
-
-  private def logicalAxiom(compiled: CompiledLogicalAxiom): Option[OWLAxiom] = compiled match {
-    case CompiledLogicalClassAxiom(_, expr, anns) =>
-      val annotations = annotationsFor(anns)
-      compiled.axiomType match {
-        case AxiomType.EquivalentTo => Some(EquivalentClasses(annotations.toSeq: _*)(term, expr.parsed))
-        case AxiomType.SubClassOf   => Some(SubClassOf(annotations, term, expr.parsed))
-        case AxiomType.DisjointWith => Some(DisjointClasses(annotations.toSeq: _*)(term, expr.parsed))
-        case AxiomType.GCI          => None
-      }
-    case CompiledLogicalGCIAxiom(_, ax, anns) =>
-      Some(ax.piece.parsed.getAnnotatedAxiom(annotationsFor(anns).asJava))
+  def placeholderAxioms(kinds: AxiomKind): Set[OWLAxiom] = {
+    val (logical, annotations) = Generate.axiomsOutputChoice(kinds)
+    val context = Expansion.ExpansionContext(
+      readableIDIndex = Map.empty,
+      permutationIndex = Map.empty,
+      outputLogicalAxioms = logical,
+      outputAnnotationAxioms = annotations,
+      restrictAxiomsColumn = None,
+      generateDefinedClass = false,
+      readableIdentifiers = compiled.readableIdentifierProperties,
+      localLabelProperty = Generate.LocalLabelProperty)
+    // The placeholder row binds every slot the compiled pattern references,
+    // so `expandRow` cannot produce a binding-resolution error here — a
+    // `Left` indicates a bug in slot collection or in expansion.
+    Expansion.expandRow(compiled, RowBindings.placeholder(compiled), RowBindings.placeholderRow, context)
+      .fold(err => throw new IllegalStateException(s"Placeholder-row expansion failed: ${err.message}"), identity)
   }
 
   def varExpressions: ZIO[Logging, DOSDPError, Map[String, OWLClassExpression]] =
@@ -72,21 +63,6 @@ final case class ExpandedDOSDP(dosdp: DOSDP, prefixes: PartialFunction[String, S
         .flatMapError(e => logError(s"Failed to parse class expression: $v", e))
         .map(k -> _)
     }
-
-  private def annotationsFor(normalized: Set[NormalizedAnnotation]): Set[OWLAnnotation] =
-    normalized.flatMap(AnnotationTranslation.translate(_, None, None, Map.empty, prefixes))
-
-  def filledAnnotationAxioms(annotationBindings: Option[Bindings], logicalBindings: Option[Bindings], permutationIndex: PermutationIndex = Map.empty): Set[OWLAnnotationAssertionAxiom] = {
-    val definedTerm = (for {
-      actualBindings <- annotationBindings
-      SingleValue(value) <- actualBindings.get(DOSDP.DefinedClassVariable)
-      iri <- Prefixes.idToIRI(value, prefixes)
-    } yield Class(iri)).getOrElse(term)
-    for {
-      normalized <- compiled.oboAnnotations ++ compiled.annotations
-      annotation <- AnnotationTranslation.translate(normalized, annotationBindings, logicalBindings, permutationIndex, prefixes)
-    } yield AnnotationAssertion(annotation.getAnnotations.asScala.toSet, annotation.getProperty, definedTerm, annotation.getValue)
-  }
 
 }
 

@@ -21,7 +21,7 @@ object Terms {
         compiled <- PatternCompiler.compile(dosdp, prefixes)
         eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
         sepFormat <- Config.tabularFormat(config.common.tableFormat)
-        patternTerms = eDOSDP.filledLogicalAxioms.flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith("urn:dosdp:")))
+        patternTerms = eDOSDP.placeholderAxioms(Config.LogicalAxioms).flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith(DOSDP.variablePrefix)))
         rows <- ZIO.effect(CSVReader.open(config.infile, StandardCharsets.UTF_8.name())(sepFormat)).bracketAuto(csvReader => ZIO.effect(csvReader.iteratorWithHeaders.toList))
           .flatMapError(e => logError(s"Could not read fillers file at ${config.infile}", e))
         identifiers = rows.flatMap(identifiersForRow(_, dosdp)).to(Set)

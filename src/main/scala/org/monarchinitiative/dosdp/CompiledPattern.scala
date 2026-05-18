@@ -406,7 +406,7 @@ private[dosdp] object PatternCompiler {
    * entities. The fallback preserves that.
    */
   private def withFallbackPlaceholders(referenced: List[String], bindings: Map[String, Binding]): Map[String, Binding] =
-    bindings ++ referenced.filterNot(bindings.contains).map(name => name -> SingleValue("$" + name))
+    bindings ++ referenced.filterNot(bindings.contains).map(name => name -> SingleValue(DOSDP.literalPlaceholder(name)))
 
   private def referencedVars(vars: Option[List[String]], multi: Option[MultiClausePrintf]): List[String] = {
     val top = vars.getOrElse(Nil)
@@ -435,9 +435,9 @@ private[dosdp] object PatternCompiler {
    */
   private def compileTimeBindings(dosdp: DOSDP): Map[String, Binding] = {
     val classVars = (dosdp.vars.toSeq.flatMap(_.keys) ++ dosdp.list_vars.toSeq.flatMap(_.keys))
-      .map(name => name -> SingleValue("$" + name)).toMap
+      .map(name => name -> SingleValue(DOSDP.literalPlaceholder(name))).toMap
     val dataBindings = (dosdp.data_vars.toSeq.flatten ++ dosdp.data_list_vars.toSeq.flatten)
-      .map { case (name, datatype) => name -> SingleValue(s""""$$$name"^^$datatype""") }.toMap
+      .map { case (name, datatype) => name -> SingleValue(s""""${DOSDP.literalPlaceholder(name)}"^^$datatype""") }.toMap
     classVars ++ dataBindings
   }
 
