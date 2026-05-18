@@ -45,7 +45,8 @@ object PlaceholderRowTest extends DefaultRunnableSpec {
     placeholderTest("multi_clause_sub"),
     placeholderTest("data_var_slots"),
     placeholderTest("annotated_axioms"),
-    placeholderTest("permutation_test")
+    placeholderTest("permutation_test"),
+    placeholderTest("list_annotations")
   ).provideCustomLayer(Logging.consoleErr())
 
 }

@@ -44,11 +44,11 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     p.toString
   }
 
-  private def queryTest(name: String) = testM(s"query: $name") {
+  private def queryTest(name: String, axioms: Config.AxiomKind = Config.LogicalAxioms, goldenSuffix: String = "query") = testM(s"$goldenSuffix: $name") {
     for {
       dosdp <- Config.inputDOSDPFrom(s"$R/$name.yaml")
-      sparql <- Query.makeProcessedQuery(dosdp, OBOPrefixes, Config.LogicalAxioms, None)
-    } yield Harness.assertSPARQLMatchesGolden(sparql, s"$R/$name.query.golden.rq")
+      sparql <- Query.makeProcessedQuery(dosdp, OBOPrefixes, axioms, None)
+    } yield Harness.assertSPARQLMatchesGolden(sparql, s"$R/$name.$goldenSuffix.golden.rq")
   }
 
   private def termsTest(name: String) = testM(s"terms: $name") {
@@ -108,6 +108,7 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     queryTest("axiom_kinds"),
     queryTest("list_var_logical"),
     queryTest("annotated_axioms"),
+    queryTest("list_annotations", Config.AllAxioms, "query_all"),
     termsTest("axiom_kinds"),
     termsTest("multi_clause_sub"),
     prototypeTest("annotated_axioms"),

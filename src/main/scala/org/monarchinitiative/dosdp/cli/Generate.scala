@@ -215,14 +215,25 @@ object Generate {
      * `Expansion.expandRow` then substitutes each slot for itself (a no-op),
      * leaving the parsed templates intact.
      *
+     * Declared `list_vars` / `data_list_vars` are emitted as `MultiValue`
+     * placeholders (a one-element set wrapping the same placeholder token).
+     * `NormalizedListAnnotation` only consults the multi-value maps, so a
+     * single-value placeholder for a list-style annotation column would emit
+     * no annotation triples; the multi-value form ensures `exact_synonym` /
+     * `xref` / etc. survive into SPARQL annotation queries. Logical-axiom
+     * substitution remains correct because multi-value list bindings are
+     * consumed by `Expansion.expandClauseWithMultiValue`, which iterates
+     * each value into a single-value substitution (one value → one
+     * expression, matching the prior placeholder shape).
+     *
      * Two sources feed the class-slot set, both required:
      *   - Slot names found in compiled logical pieces — covers fallback
      *     placeholders the compiler inserted for template vars not declared
      *     on the DOSDP (`__attribute` and friends); otherwise `allSlotsBound`
      *     would drop the axiom.
-     *   - `vars` / `list_vars` declared on the DOSDP — covers vars referenced
-     *     only in annotation templates (no logical pieces to walk), without
-     *     which their annotations would lose their bindings and drop.
+     *   - `vars` declared on the DOSDP — covers vars referenced only in
+     *     annotation templates (no logical pieces to walk), without which
+     *     their annotations would lose their bindings and drop.
      *
      * The companion `defined_class` placeholder lives in the row map
      * (see `placeholderRow`) so the existing `resolveDefinedClass` path
@@ -232,15 +243,22 @@ object Generate {
       def placeholderIRI(name: String): String = DOSDP.variableToIRI(name).toString
       val logicalClassSlots = collectClassSlots(compiled)
       val dosdp = compiled.source
-      val declaredClassNames = dosdp.vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
-        dosdp.list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
-      val literalNames = compiled.dataVarNames
-      val classNames = (logicalClassSlots ++ declaredClassNames) -- literalNames
-      val dataVarBindings = literalNames.iterator
-        .map(name => name -> SingleValue(DOSDP.literalPlaceholder(name))).toMap
-      val varBindings = classNames.iterator
+      val declaredVarNames = dosdp.vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredListVarNames = dosdp.list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredDataVarNames = dosdp.data_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredDataListVarNames = dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val literalNames = declaredDataVarNames ++ declaredDataListVarNames
+      val singleValueClassNames =
+        (logicalClassSlots ++ declaredVarNames) -- declaredListVarNames -- literalNames
+      val varBindings = singleValueClassNames.iterator
         .map(name => name -> SingleValue(placeholderIRI(name))).toMap
-      RowBindings(varBindings, Map.empty, dataVarBindings, Map.empty,
+      val listVarBindings = declaredListVarNames.iterator
+        .map(name => name -> MultiValue(Set(placeholderIRI(name)))).toMap
+      val dataVarBindings = declaredDataVarNames.iterator
+        .map(name => name -> SingleValue(DOSDP.literalPlaceholder(name))).toMap
+      val dataListBindings = declaredDataListVarNames.iterator
+        .map(name => name -> MultiValue(Set(DOSDP.literalPlaceholder(name)))).toMap
+      RowBindings(varBindings, listVarBindings, dataVarBindings, dataListBindings,
         Map.empty, Map.empty, Map.empty)
     }
 

@@ -1,0 +1,38 @@
+pattern_name: list_annotations
+pattern_iri: http://purl.obolibrary.org/obo/test/list_annotations.yaml
+
+description: 'Pattern with list-style annotations (exact_synonym + xrefs and a custom value-list annotation) to verify placeholder expansion emits MultiValue bindings for list and data_list vars.'
+
+classes:
+  thing: "owl:Thing"
+
+relations:
+  part_of: "BFO:0000050"
+
+annotationProperties:
+  see_also: "http://www.w3.org/2000/01/rdf-schema#seeAlso"
+
+vars:
+  structure: "'thing'"
+
+data_list_vars:
+  synonym: "xsd:string"
+  xref_list: "xsd:string"
+
+name:
+  text: "part of %s"
+  vars:
+    - structure
+
+exact_synonym:
+  value: synonym
+  xrefs: xref_list
+
+annotations:
+  - annotationProperty: see_also
+    value: synonym
+
+subClassOf:
+  text: "'part_of' some %s"
+  vars:
+    - structure
