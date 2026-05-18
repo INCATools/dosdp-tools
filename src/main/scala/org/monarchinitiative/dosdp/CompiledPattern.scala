@@ -459,10 +459,29 @@ private[dosdp] object PatternCompiler {
     ParsedPiece(parsed, classVarSlots, dataVarSlots, declaredVars.getOrElse(Nil))
   }
 
-  // OWLObject.getSignature only returns entities; for literals we walk nested expressions.
-  private def collectLiterals(obj: OWLObject): Set[OWLLiteral] = {
-    // OWLObject doesn't expose its component literals directly. Walk nested class
-    // expressions and their datatype facets, plus annotation values.
+  /**
+   * Every `OWLLiteral` transitively reachable from `obj`. `OWLObject.getSignature`
+   * returns entities only, so literal slots — datatype facets, `DataOneOf`
+   * operands, `DataHasValue` fillers — need an explicit walk.
+   *
+   * Coverage is audited at test time (`LiteralWalkerAuditTest`) against the OWL
+   * API's `ClassExpressionType` and `DataRangeType` enums: every literal-bearing
+   * `ClassExpressionType` (the six `DATA_*` restrictions) and every literal-
+   * bearing `DataRangeType` (`DATA_ONE_OF`, `DATATYPE_RESTRICTION`) is exercised,
+   * and the recursive composers (`DATA_INTERSECTION_OF` / `DATA_UNION_OF` /
+   * `DATA_COMPLEMENT_OF`, plus every nested `OWLClassExpression` reachable
+   * through `getNestedClassExpressions`) are exercised too. Object restrictions
+   * (`OBJECT_SOME_VALUES_FROM`, cardinalities, `OBJECT_HAS_VALUE`, etc.) carry
+   * no literals — their fillers are class expressions or individuals.
+   *
+   * For `OWLAxiom`, top-level axiom annotations are walked one level deep.
+   * Sub-annotations and non-class-expression axiom subjects/values are not
+   * walked: the inline Manchester parser used at pattern-compile time produces
+   * `OWLSubClassOfAxiom` (for GCI templates) and `OWLClassExpression` instances,
+   * neither of which carries those constructs in practice. Annotation-axiom
+   * literals are handled by the annotation rendering path, not by this walker.
+   */
+  private[dosdp] def collectLiterals(obj: OWLObject): Set[OWLLiteral] = {
     val builder = scala.collection.mutable.Set.empty[OWLLiteral]
     obj match {
       case ce: OWLClassExpression => collectFromClassExpression(ce, builder)
@@ -479,7 +498,7 @@ private[dosdp] object PatternCompiler {
     builder.toSet
   }
 
-  private def collectFromClassExpression(ce: OWLClassExpression, builder: scala.collection.mutable.Set[OWLLiteral]): Unit =
+  private[dosdp] def collectFromClassExpression(ce: OWLClassExpression, builder: scala.collection.mutable.Set[OWLLiteral]): Unit =
     ce.getNestedClassExpressions.asScala.foreach {
       case dsv: OWLDataSomeValuesFrom   => collectFromDataRange(dsv.getFiller, builder)
       case dav: OWLDataAllValuesFrom    => collectFromDataRange(dav.getFiller, builder)
@@ -490,7 +509,7 @@ private[dosdp] object PatternCompiler {
       case _                            => ()
     }
 
-  private def collectFromDataRange(range: OWLDataRange, builder: scala.collection.mutable.Set[OWLLiteral]): Unit = range match {
+  private[dosdp] def collectFromDataRange(range: OWLDataRange, builder: scala.collection.mutable.Set[OWLLiteral]): Unit = range match {
     case dtr: OWLDatatypeRestriction => dtr.getFacetRestrictions.asScala.foreach(fr => builder += fr.getFacetValue)
     case doo: OWLDataOneOf           => doo.getValues.asScala.foreach(builder += _)
     case din: OWLDataIntersectionOf  => din.getOperands.asScala.foreach(collectFromDataRange(_, builder))
