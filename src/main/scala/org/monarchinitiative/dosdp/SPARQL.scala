@@ -135,6 +135,17 @@ ORDER BY ?defined_class_label
 
   private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\w+)\\b".r
 
+  /**
+   * A literal whose entire lexical form is a `$<name>` data placeholder —
+   * the shape `NormalizedListAnnotation` emits for a `data_list_var` filler,
+   * and that `Expansion.expandRow` substitutes at row time. SPARQL must
+   * treat this as a captured variable, not as a literal text to regex-match,
+   * or queries for list-style annotations (`exact_synonym`, `xref`, custom
+   * value-list annotations) would require the real value to literally equal
+   * `$name` and never bind.
+   */
+  private val DOSDPLiteralPlaceholder = """\A\$(\w+)\z""".r
+
   private def escape(text: String): String = {
     val pss = new ParameterizedSparqlString()
     pss.appendLiteral(text)
@@ -148,21 +159,25 @@ ORDER BY ?defined_class_label
         case _                       => (s"<$iri>", Nil)
       }
     case literal: OWLLiteral =>
-      val node = genVar
-      val text = literal.getLiteral
-      val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")
-      val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
-      val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
-      val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
-        val predicateVar = s"${variableName}__match_property"
-        val variableMatchLabel = genVar
-        List(
-          s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS $variableMatchLabel)""",
-          s"VALUES ?$predicateVar { $predicates }",
-          s"?$variableName ?$predicateVar $variableMatchLabel ."
-        )
+      literal.getLiteral match {
+        case DOSDPLiteralPlaceholder(variable) =>
+          (s"?$variable", Nil)
+        case text                              =>
+          val node = genVar
+          val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")
+          val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
+          val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
+          val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
+            val predicateVar = s"${variableName}__match_property"
+            val variableMatchLabel = genVar
+            List(
+              s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS $variableMatchLabel)""",
+              s"VALUES ?$predicateVar { $predicates }",
+              s"?$variableName ?$predicateVar $variableMatchLabel ."
+            )
+          }
+          (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
       }
-      (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
   }
 
   def triplesForClassExpression(expression: OWLClassExpression): (String, Seq[String]) = expression match {

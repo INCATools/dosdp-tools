@@ -12,16 +12,14 @@ FILTER(REGEX(?_v0, "\\Qpart of \\E(.+)\\Q\\E"))
 BIND((REPLACE(?_v0, "\\Qpart of \\E(.+)\\Q\\E", "$1")) AS ?_v1)
 VALUES ?structure__match_property { <http://www.w3.org/2000/01/rdf-schema#label> }
 ?structure ?structure__match_property ?_v1 .
-?defined_class <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?_v2 .
+?defined_class <http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> ?synonym .
 FILTER(isIRI(?defined_class))
-FILTER(REGEX(?_v2, "\\Q$synonym\\E"))
-?defined_class <http://www.w3.org/2000/01/rdf-schema#seeAlso> ?_v3 .
+?defined_class <http://www.w3.org/2000/01/rdf-schema#seeAlso> ?synonym .
 FILTER(isIRI(?defined_class))
-FILTER(REGEX(?_v3, "\\Q$synonym\\E"))
-?defined_class rdfs:subClassOf ?_v4 .
+?defined_class rdfs:subClassOf ?_v2 .
 FILTER(isIRI(?defined_class))
-?_v4 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
-?_v4 owl:someValuesFrom ?structure .
+?_v2 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v2 owl:someValuesFrom ?structure .
 FILTER(isIRI(?structure))
 OPTIONAL { ?defined_class rdfs:label ?defined_class__label . }
 OPTIONAL { ?structure rdfs:label ?structure__label . }
