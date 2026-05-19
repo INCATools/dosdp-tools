@@ -208,7 +208,7 @@ private[dosdp] object PatternCompiler {
       subClassOf            <- compileClassExpressionTemplate(dosdp.subClassOf, expressionParser, dataVarNames, safeChecker, placeholderBindings)
       disjointWith          <- compileClassExpressionTemplate(dosdp.disjointWith, expressionParser, dataVarNames, safeChecker, placeholderBindings)
       gci                   <- compileAxiomTemplate(dosdp.GCI, axiomParser, dataVarNames, safeChecker, placeholderBindings)
-      logicalAxioms         <- ZIO.foreach(dosdp.logical_axioms.toList.flatten)(compileLogicalAxiom(_, expressionParser, axiomParser, dataVarNames, safeChecker, placeholderBindings))
+      logicalAxioms         <- ZIO.foreach(dosdp.logical_axioms.toList.flatten)(compileLogicalAxiom(_, expressionParser, axiomParser, dataVarNames, safeChecker, placeholderBindings)).map(_.flatten)
       oboAnnotations        <- compileOBOAnnotations(dosdp, safeChecker)
       annotations           <- ZIO.foreach(dosdp.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, safeChecker)).map(_.toSet)
       readableIDProperties  <- compileReadableIdentifierProperties(dosdp, safeChecker)
@@ -242,7 +242,7 @@ private[dosdp] object PatternCompiler {
         annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
         compiledExpr <- compileClassExpressionBody(template, parser, dataVarNames, annotations, placeholderBindings)
       } yield compiledExpr
-    }
+    }.map(_.flatten)
 
   private def compileClassExpressionBody(
     template: PrintfText,
@@ -250,16 +250,17 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     annotations: Set[NormalizedAnnotation],
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Logging, DOSDPError, CompiledClassExpression] =
+  ): ZIO[Logging, DOSDPError, Option[CompiledClassExpression]] =
     (template.text, template.multi_clause) match {
       case (Some(_), _) =>
         parseClauseText(template.text, template.vars, template.multi_clause, dataVarNames, parser, template.shouldQuote, placeholderBindings)
-          .map(piece => CompiledSimpleClassExpression(template, piece, annotations))
+          .map(piece => Some(CompiledSimpleClassExpression(template, piece, annotations)))
       case (None, Some(mc)) =>
-        compileMultiClause(template, mc, dataVarNames, parser, template.shouldQuote, annotations, placeholderBindings)
+        compileMultiClause(template, mc, dataVarNames, parser, template.shouldQuote, annotations, placeholderBindings).map(Some(_))
       case _ =>
-        // No text and no multi_clause — treat as no compiled body.
-        ZIO.succeed(CompiledSimpleClassExpression(template, emptyClassPiece, annotations))
+        // A template with no body emits no axiom. Filling the slot with
+        // `owl:Thing` would surface as `EquivalentClasses(defined_class, owl:Thing)`.
+        ZIO.none
     }
 
   private def compileMultiClause(
@@ -343,7 +344,7 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     checker: SafeOWLEntityChecker,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Logging, DOSDPError, CompiledLogicalAxiom] = {
+  ): ZIO[Logging, DOSDPError, Option[CompiledLogicalAxiom]] = {
     for {
       annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
       compiled <- template.axiom_type match {
@@ -352,10 +353,11 @@ private[dosdp] object PatternCompiler {
             _ <- ZIO.when(template.multi_clause.isDefined)(
               logErrorFail("multi_clause is not supported on logical_axioms entries with axiom_type GCI"))
             piece <- parseAxiomText(template.text, template.vars, dataVarNames, axiomParser, template.shouldQuote, placeholderBindings)
-          } yield CompiledLogicalGCIAxiom(template, CompiledAxiom(template, piece, Set.empty), annotations)
+          } yield Option[CompiledLogicalAxiom](CompiledLogicalGCIAxiom(template, CompiledAxiom(template, piece, Set.empty), annotations))
         case _ =>
+          // An entry whose class-expression body collapses to nothing emits no axiom.
           compileClassExpressionBody(template, expressionParser, dataVarNames, Set.empty, placeholderBindings)
-            .map(expr => CompiledLogicalClassAxiom(template, expr, annotations))
+            .map(_.map(expr => CompiledLogicalClassAxiom(template, expr, annotations)))
       }
     } yield compiled
   }
@@ -375,7 +377,7 @@ private[dosdp] object PatternCompiler {
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
           .flatMapError(e => DOSDPError.logError(s"Failed to parse class expression: $rendered", e))
-          .map(ce => describePiece(ce, vars))
+          .map(ce => describePiece(ce, vars, effective.keySet))
       }
   }
 
@@ -393,7 +395,7 @@ private[dosdp] object PatternCompiler {
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
           .flatMapError(e => DOSDPError.logError(s"Failed to parse axiom: $rendered", e))
-          .map(ax => describePiece(ax, vars))
+          .map(ax => describePiece(ax, vars, effective.keySet))
       }
   }
 
@@ -441,13 +443,27 @@ private[dosdp] object PatternCompiler {
     classVars ++ dataBindings
   }
 
-  // Placeholder entities in `parsed` come from `urn:dosdp:<name>`. Placeholder
-  // literals (data-var slots) have lexical form `$<name>`. Scan once at compile
-  // time so row-time substitution can look up by variable name.
-  private def describePiece[T <: OWLObject](parsed: T, declaredVars: Option[List[String]]): ParsedPiece[T] = {
+  // Placeholder entities in `parsed` come from `urn:dosdp:<processedVariable(name)>`.
+  // Placeholder literals (data-var slots) have lexical form `$<name>`. Scan once
+  // at compile time so row-time substitution can look up by variable name.
+  //
+  // `variableNames` is the set of original variable names that were substituted
+  // into the template before parsing (declared `vars` plus fallback placeholders).
+  // `DOSDP.processedVariable` underscores spaces, so stripping the `urn:dosdp:`
+  // prefix loses any space in the original name and the row's bindings — keyed
+  // by the original TSV column name — would never be found. Build a reverse
+  // lookup from each candidate variable's IRI back to its original name so a
+  // pattern variable like `cell type` keeps its space in `classVarSlots`.
+  private def describePiece[T <: OWLObject](
+    parsed: T,
+    declaredVars: Option[List[String]],
+    variableNames: Set[String]
+  ): ParsedPiece[T] = {
+    val nameByIRI: Map[IRI, String] = variableNames.iterator
+      .map(name => DOSDP.variableToIRI(name) -> name).toMap
     val placeholderEntities = parsed.getSignature.asScala.collect {
       case e: OWLEntity if e.getIRI.toString.startsWith(DOSDP.variablePrefix) =>
-        val name = e.getIRI.toString.drop(DOSDP.variablePrefix.length)
+        val name = nameByIRI.getOrElse(e.getIRI, e.getIRI.toString.drop(DOSDP.variablePrefix.length))
         name -> e
     }.toSet
     val classVarSlots = placeholderEntities.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
@@ -517,9 +533,6 @@ private[dosdp] object PatternCompiler {
     case dco: OWLDataComplementOf    => collectFromDataRange(dco.getDataRange, builder)
     case _                           => ()
   }
-
-  private val emptyClassPiece: ParsedPiece[OWLClassExpression] =
-    ParsedPiece(factory.getOWLThing, Map.empty, Map.empty, Nil)
 
   private def compileOBOAnnotations(dosdp: DOSDP, checker: SafeOWLEntityChecker): ZIO[Logging, DOSDPError, Set[NormalizedAnnotation]] = {
     val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
