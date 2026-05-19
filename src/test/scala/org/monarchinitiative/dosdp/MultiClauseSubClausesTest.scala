@@ -177,7 +177,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         compiled <- PatternCompiler.compile(dosdp, prefixes)
         rowAxioms <- Generate.renderPattern(dosdp, prefixes, List(row), None, true, false, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
         rowSub = rowAxioms.collect { case sc: OWLSubClassOfAxiom => sc }
-        placeholderSub = ExpandedDOSDP(dosdp, prefixes, compiled).placeholderAxioms(Config.LogicalAxioms).collect { case sc: OWLSubClassOfAxiom => sc }
+        placeholderSub = Expansion.placeholderAxioms(compiled, Config.LogicalAxioms).collect { case sc: OWLSubClassOfAxiom => sc }
       } yield assert(rowSub.exists(superHasNestedUnion))(isTrue) &&
         assert(placeholderSub.exists(superHasNestedUnion))(isTrue)
     }

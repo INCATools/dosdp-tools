@@ -18,13 +18,13 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] = {
+  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] = {
     // Logical axioms always materialize even on an annotation-only query: the
     // `OPTIONAL { ?var rdfs:label ... }` clauses are derived from their
     // variable set. Compute once and share with `selectFor` / `triplesFor` so
     // the placeholder expansion runs only once per query.
-    val logicalAxioms = dosdp.placeholderAxioms(LogicalAxioms)
-    triplesFor(dosdp, axioms, logicalAxioms).map { triples =>
+    val logicalAxioms = Expansion.placeholderAxioms(compiled, LogicalAxioms)
+    triplesFor(compiled, axioms, logicalAxioms).map { triples =>
       val select = selectFor(axioms, logicalAxioms)
       s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -63,17 +63,17 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] =
-    triplesFor(dosdp, axioms, dosdp.placeholderAxioms(LogicalAxioms))
+  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] =
+    triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms))
 
-  private def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): ZIO[Logging, DOSDPError, Seq[String]] = {
-    val props = dosdp.compiled.readableIdentifierProperties.to(Set)
+  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): ZIO[Logging, DOSDPError, Seq[String]] = {
+    val props = compiled.readableIdentifierProperties.to(Set)
     val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
-    val annotationAxioms = if (queryAnnotations) dosdp.placeholderAxioms(AnnotationAxioms) else Set.empty[OWLAxiom]
+    val annotationAxioms = if (queryAnnotations) Expansion.placeholderAxioms(compiled, AnnotationAxioms) else Set.empty[OWLAxiom]
     for {
       annotationTriples <- ZIO.foreach(annotationAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten)
       axiomTriples <- if (queryLogical) ZIO.foreach(logicalAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten) else ZIO.succeed(Nil)
-      varExpressions <- dosdp.varExpressions
+      varExpressions <- VarRangeExpressions.varExpressions(compiled)
       variableTriples = varExpressions.toSeq.flatMap {
         case (_, Thing)                                                               =>
           Seq.empty // relationships to owl:Thing are not typically explicit in the ontology

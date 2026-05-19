@@ -2,6 +2,7 @@ package org.monarchinitiative.dosdp
 
 import cats.implicits._
 import org.monarchinitiative.dosdp.AxiomType
+import org.monarchinitiative.dosdp.cli.Config.AxiomKind
 import org.monarchinitiative.dosdp.cli.{Config, Generate}
 import org.monarchinitiative.dosdp.cli.Generate.RowBindings
 import org.phenoscape.scowl._
@@ -37,6 +38,30 @@ private[dosdp] object Expansion {
     readableIdentifiers: List[OWLAnnotationProperty],
     localLabelProperty: IRI
   )
+
+  /**
+   * Placeholder-form axioms for a compiled pattern, driven by `expandRow` on
+   * a synthetic placeholder row so row-time and template-time paths share one
+   * OWL-assembly path. Used by `SPARQL` and `Terms` to derive query/term
+   * inventories from the pattern alone.
+   */
+  def placeholderAxioms(pattern: CompiledPattern, kinds: AxiomKind): Set[OWLAxiom] = {
+    val (logical, annotations) = Generate.axiomsOutputChoice(kinds)
+    val context = ExpansionContext(
+      readableIDIndex = Map.empty,
+      permutationIndex = Map.empty,
+      outputLogicalAxioms = logical,
+      outputAnnotationAxioms = annotations,
+      restrictAxiomsColumn = None,
+      generateDefinedClass = false,
+      readableIdentifiers = pattern.readableIdentifierProperties,
+      localLabelProperty = Generate.LocalLabelProperty)
+    // The placeholder row binds every slot the compiled pattern references,
+    // so `expandRow` cannot produce a binding-resolution error here — a
+    // `Left` indicates a bug in slot collection or in expansion.
+    expandRow(pattern, RowBindings.placeholder(pattern), RowBindings.placeholderRow, context)
+      .fold(err => throw new IllegalStateException(s"Placeholder-row expansion failed: ${err.message}"), identity)
+  }
 
   def expandRow(
     pattern: CompiledPattern,

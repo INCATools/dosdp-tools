@@ -7,7 +7,7 @@ import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.cli.Generate.readFillers
 import org.monarchinitiative.dosdp.cli.Main.loggingContext
 import org.monarchinitiative.dosdp.cli.Prototype.OboInOwlSource
-import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ExpandedDOSDP, PatternCompiler, Prefixes}
+import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, PatternCompiler, Prefixes}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.io.OWLObjectRenderer
@@ -46,7 +46,6 @@ object Docs {
         prefixes <- config.common.prefixesMap
         dosdp <- Config.inputDOSDPFrom(target.templateFile)
         compiled <- PatternCompiler.compile(dosdp, prefixes)
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
         columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
         (columns, rows) = columnsAndFillers
         prefixes <- config.common.prefixesMap
@@ -63,7 +62,7 @@ object Docs {
         patternIRI = IRI.create(iri)
         docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
         data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
-        markdown <- DocsMarkdown.markdown(eDOSDP, docAxioms, renderer, data)
+        markdown <- DocsMarkdown.markdown(compiled, docAxioms, renderer, data)
         _ <- effectBlockingIO(new PrintWriter(target.outputFile, "utf-8")).bracketAuto { writer =>
           effectBlockingIO(writer.print(markdown))
         }.flatMapError(e => logError(s"Couldn't write Markdown to file ${target.outputFile}", e))
