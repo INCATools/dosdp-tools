@@ -29,7 +29,34 @@ object CompiledPatternCorrectnessTest extends DefaultRunnableSpec {
 
   private val emptyOWLSource = AxiomRestrictionsTest.OboInOwlSource
 
-  val spec = suite("CompiledPattern correctness") (
+  // H5 — `DOSDP.processedVariable` only rewrites spaces; the reverse-lookup in
+  // `describePiece` must still recover the original name for other non-alphanumeric
+  // characters that survive `variableToIRI` unchanged.
+  private val varNameTests = List("cell-type", "cell.type", "cell  type").map { varName =>
+    testM(s"var name '$varName' — equivalentTo emits axiom with row's binding") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some(s"varname_$varName"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map(varName -> "'thing'")),
+        equivalentTo = Some(PrintfOWLConvenience(
+          annotations = None,
+          text = Some("%s"),
+          vars = Some(List(varName)))))
+      val row = Map("defined_class" -> "EX:0001", varName -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield {
+        val equivAxioms = axioms.collect { case e: OWLEquivalentClassesAxiom => e }
+        val signature = equivAxioms.flatMap(_.getSignature.asScala).map(_.getIRI.toString)
+        assert(equivAxioms.size)(equalTo(1)) &&
+          assert(signature)(contains("http://purl.obolibrary.org/obo/UBERON_0000001")) &&
+          Harness.assertNoPlaceholderIRIs(axioms)
+      }
+    }
+  }
+
+  val spec = suite("CompiledPattern correctness") (List[zio.test.ZSpec[Logging, org.monarchinitiative.dosdp.cli.DOSDPError]](
     testM("var name with a space — equivalentTo emits axiom with row's binding") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("space_in_varname"),
@@ -157,7 +184,79 @@ object CompiledPatternCorrectnessTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
           true, false, None, false, emptyOWLSource, false, Map.empty)
       } yield assert(axioms.collect { case e: OWLEquivalentClassesAxiom => e }.size)(equalTo(0))
+    },
+    // H1 — empty multi_clause containers must not surface as `defined_class ≡ owl:Thing`.
+    testM("equivalentTo with empty multi_clause clauses list emits no axiom") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_multi_clause_list"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        equivalentTo = Some(PrintfOWLConvenience(None, None, None,
+          Some(MultiClausePrintf(Some(" and "), Some(Nil))))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.collect { case e: OWLEquivalentClassesAxiom => e }.size)(equalTo(0)) &&
+        Harness.assertNoPlaceholderIRIs(axioms)
+    },
+    testM("equivalentTo with multi_clause clauses=None emits no axiom") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_multi_clause_none"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        equivalentTo = Some(PrintfOWLConvenience(None, None, None,
+          Some(MultiClausePrintf(Some(" and "), None)))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.collect { case e: OWLEquivalentClassesAxiom => e }.size)(equalTo(0)) &&
+        Harness.assertNoPlaceholderIRIs(axioms)
+    },
+    // H2 — annotations declared on an otherwise-empty logical block do not anchor
+    // a spurious `defined_class ≡ owl:Thing` axiom.
+    testM("annotations-only equivalentTo (no text, no multi_clause) emits no logical axiom") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("annotations_only_equiv"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        annotationProperties = Some(Map("comment" -> "rdfs:comment")),
+        vars = Some(Map("structure" -> "'thing'")),
+        equivalentTo = Some(PrintfOWLConvenience(
+          annotations = Some(List(PrintfAnnotation(None, "comment", Some("note"), None, None, None, None))),
+          text = None, vars = None, multi_clause = None)))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, true, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.collect { case e: OWLEquivalentClassesAxiom => e }.size)(equalTo(0))
+    },
+    // H4 — empty `logical_axioms` entries for each non-GCI axiom_type drop silently
+    // through the same `Option[CompiledLogicalAxiom]` path.
+    testM("empty SubClassOf logical_axioms entry is skipped") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_logical_sub"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        logical_axioms = Some(List(PrintfOWL(None, DOSDPAxiomType.SubClassOf, None, None))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.collect { case s: OWLSubClassOfAxiom => s }.size)(equalTo(0))
+    },
+    testM("empty DisjointWith logical_axioms entry is skipped") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_logical_disjoint"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        logical_axioms = Some(List(PrintfOWL(None, DOSDPAxiomType.DisjointWith, None, None))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLDisjointClassesAxiom]))(isFalse)
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  ) ++ varNameTests: _*).provideCustomLayer(Logging.consoleErr())
 
 }
