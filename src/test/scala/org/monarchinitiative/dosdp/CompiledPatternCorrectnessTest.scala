@@ -256,6 +256,49 @@ object CompiledPatternCorrectnessTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
           true, false, None, false, emptyOWLSource, false, Map.empty)
       } yield assert(axioms.exists(_.isInstanceOf[org.semanticweb.owlapi.model.OWLDisjointClassesAxiom]))(isFalse)
+    },
+    // Empty GCI templates compile to no axiom — symmetric with the
+    // class-expression types, matching the legacy `PrintfText.replaced(None)`
+    // silent-drop behavior.
+    testM("empty top-level GCI body emits no axiom") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_gci"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        GCI = Some(PrintfOWLConvenience(None, None, None, None)),
+        subClassOf = Some(PrintfOWLConvenience(None, Some("%s"), Some(List("structure")))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.collect { case s: OWLSubClassOfAxiom => s }.size)(equalTo(1))
+    },
+    testM("empty GCI logical_axioms entry is skipped") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("empty_logical_gci"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("structure" -> "'thing'")),
+        logical_axioms = Some(List(PrintfOWL(None, DOSDPAxiomType.GCI, None, None))))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, false, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.size)(equalTo(0))
+    },
+    testM("annotations-only top-level GCI emits no axiom") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("annotations_only_gci"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        annotationProperties = Some(Map("comment" -> "rdfs:comment")),
+        vars = Some(Map("structure" -> "'thing'")),
+        GCI = Some(PrintfOWLConvenience(
+          annotations = Some(List(PrintfAnnotation(None, "comment", Some("note"), None, None, None, None))),
+          text = None, vars = None, multi_clause = None)))
+      val row = Map("defined_class" -> "EX:0001", "structure" -> "UBERON:0000001")
+      for {
+        axioms <- Generate.renderPattern(pattern, OBOPrefixes, List(row), None,
+          true, true, None, false, emptyOWLSource, false, Map.empty)
+      } yield assert(axioms.size)(equalTo(0))
     }
   ) ++ varNameTests: _*).provideCustomLayer(Logging.consoleErr())
 

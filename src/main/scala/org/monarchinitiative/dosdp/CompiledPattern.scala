@@ -328,7 +328,7 @@ private[dosdp] object PatternCompiler {
     checker: SafeOWLEntityChecker,
     placeholderBindings: Map[String, Binding]
   ): ZIO[Logging, DOSDPError, Option[CompiledAxiom]] =
-    ZIO.foreach(templateOpt) { template =>
+    ZIO.foreach(templateOpt.filter(_.text.isDefined)) { template =>
       for {
         _ <- ZIO.when(template.multi_clause.isDefined)(
           logErrorFail("multi_clause is not supported on full-axiom (GCI) templates"))
@@ -348,6 +348,10 @@ private[dosdp] object PatternCompiler {
     for {
       annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
       compiled <- template.axiom_type match {
+        case AxiomType.GCI if template.text.isEmpty =>
+          // Symmetric with the class-expression branch below: an entry with no
+          // body emits no axiom. `parseAxiomText` would otherwise fail loudly.
+          ZIO.none
         case AxiomType.GCI =>
           for {
             _ <- ZIO.when(template.multi_clause.isDefined)(
