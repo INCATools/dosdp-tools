@@ -457,7 +457,7 @@ private[dosdp] object PatternCompiler {
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
           .flatMapError(e => DOSDPError.logError(s"Failed to parse class expression: $rendered", e))
-          .map(ce => describePiece(ce, vars, effective.keySet))
+          .map(ce => describePiece(ce, vars))
       }
   }
 
@@ -475,7 +475,7 @@ private[dosdp] object PatternCompiler {
       .flatMap { rendered =>
         ZIO.effect(parser.parse(rendered))
           .flatMapError(e => DOSDPError.logError(s"Failed to parse axiom: $rendered", e))
-          .map(ax => describePiece(ax, vars, effective.keySet))
+          .map(ax => describePiece(ax, vars))
       }
   }
 
@@ -523,28 +523,19 @@ private[dosdp] object PatternCompiler {
     classVars ++ dataBindings
   }
 
-  // Placeholder entities in `parsed` come from `urn:dosdp:<processedVariable(name)>`.
-  // Placeholder literals (data-var slots) have lexical form `$<name>`. Scan once
-  // at compile time so row-time substitution can look up by variable name.
-  //
-  // `variableNames` is the set of original variable names that were substituted
-  // into the template before parsing (declared `vars` plus fallback placeholders).
-  // `DOSDP.processedVariable` underscores spaces, so stripping the `urn:dosdp:`
-  // prefix loses any space in the original name and the row's bindings — keyed
-  // by the original TSV column name — would never be found. Build a reverse
-  // lookup from each candidate variable's IRI back to its original name so a
-  // pattern variable like `cell type` keeps its space in `classVarSlots`.
+  // Placeholder entities in `parsed` come from `urn:dosdp:<name>`. Placeholder
+  // literals (data-var slots) have lexical form `$<name>`. Scan once at compile
+  // time so row-time substitution can look up by variable name. `validateVariableNames`
+  // restricts names to `[A-Za-z0-9_]+`, so `DOSDP.processedVariable` (the
+  // spaces-to-underscores rewrite inside `variableToIRI`) is a no-op for every
+  // accepted name and stripping the URN prefix recovers the original.
   private def describePiece[T <: OWLObject](
     parsed: T,
-    declaredVars: Option[List[String]],
-    variableNames: Set[String]
+    declaredVars: Option[List[String]]
   ): ParsedPiece[T] = {
-    val nameByIRI: Map[IRI, String] = variableNames.iterator
-      .map(name => DOSDP.variableToIRI(name) -> name).toMap
     val placeholderEntities = parsed.getSignature.asScala.collect {
       case e: OWLEntity if e.getIRI.toString.startsWith(DOSDP.variablePrefix) =>
-        val name = nameByIRI.getOrElse(e.getIRI, e.getIRI.toString.drop(DOSDP.variablePrefix.length))
-        name -> e
+        e.getIRI.toString.drop(DOSDP.variablePrefix.length) -> e
     }.toSet
     val classVarSlots = placeholderEntities.groupBy(_._1).view.mapValues(_.map(_._2)).toMap
     val placeholderLiterals = collectLiterals(parsed).collect {
