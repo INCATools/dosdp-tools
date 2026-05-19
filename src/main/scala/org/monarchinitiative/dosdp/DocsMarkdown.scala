@@ -10,6 +10,14 @@ import zio.logging.Logging
 
 import scala.jdk.CollectionConverters._
 
+/**
+ * Pure Markdown rendering of a compiled pattern plus its example fillers.
+ *
+ * Renders the variable / list-variable range expressions (via
+ * `VarRangeExpressions`) and the example data table for the `docs`
+ * subcommand. Does not load ontologies or write files; the surrounding
+ * `cli.Docs` runner handles I/O.
+ */
 object DocsMarkdown {
 
   def markdown(compiled: CompiledPattern, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): ZIO[Logging, DOSDPError, String] = {
