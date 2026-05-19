@@ -54,7 +54,7 @@ ORDER BY ?defined_class_label
   private def axiomVariables(axioms: Set[OWLAxiom]): Set[String] =
     axioms.flatMap(selectVariables)
 
-  private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
+  private val DOSDPVariable = s"^${DOSDP.variablePrefix}([A-Za-z0-9_]+)$$".r
 
   def selectVariables(axiom: OWLAxiom): Set[String] =
     axiom.getSignature.asScala.toSet[OWLEntity].map(_.getIRI.toString).collect {
@@ -133,7 +133,7 @@ ORDER BY ?defined_class_label
 
   }
 
-  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\w+)\\b".r
+  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}([A-Za-z0-9_]+)\\b".r
 
   /**
    * A literal whose entire lexical form is a `$<name>` data placeholder —
@@ -144,7 +144,7 @@ ORDER BY ?defined_class_label
    * value-list annotations) would require the real value to literally equal
    * `$name` and never bind.
    */
-  private val DOSDPLiteralPlaceholder = """\A\$(\w+)\z""".r
+  private val DOSDPLiteralPlaceholder = """\A\$([A-Za-z0-9_]+)\z""".r
 
   private def escape(text: String): String = {
     val pss = new ParameterizedSparqlString()

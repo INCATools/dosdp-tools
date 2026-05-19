@@ -195,6 +195,7 @@ private[dosdp] object PatternCompiler {
   // OWLObjectDuplicator cannot substitute via the literal map, so a `data_var` in a
   // cardinality position is not supported and will fail at pattern compile time.
   private val PlaceholderLiteralPattern = """^\$(.+)$""".r
+  private val VariableNamePattern = "^[A-Za-z0-9_]+$".r
 
   def compile(dosdp: DOSDP, prefixes: PartialFunction[String, String]): ZIO[Logging, DOSDPError, CompiledPattern] = {
     val checker = new DOSDPEntityChecker(dosdp, prefixes)
@@ -204,6 +205,7 @@ private[dosdp] object PatternCompiler {
     val dataVarNames = dataVarNamesOf(dosdp)
     val placeholderBindings = compileTimeBindings(dosdp)
     for {
+      _                     <- validateVariableNames(dosdp)
       equivalentTo          <- compileClassExpressionTemplate(dosdp.equivalentTo, expressionParser, dataVarNames, safeChecker, placeholderBindings)
       subClassOf            <- compileClassExpressionTemplate(dosdp.subClassOf, expressionParser, dataVarNames, safeChecker, placeholderBindings)
       disjointWith          <- compileClassExpressionTemplate(dosdp.disjointWith, expressionParser, dataVarNames, safeChecker, placeholderBindings)
@@ -228,6 +230,80 @@ private[dosdp] object PatternCompiler {
       permutationProperties = permutationProperties,
       substitutions = dosdp.substitutions.toSeq.flatten.map(ExpandedRegexSub),
       dataVarNames = dataVarNames)
+  }
+
+  private def validateVariableNames(dosdp: DOSDP): ZIO[Logging, DOSDPError, Unit] = {
+    val invalidNames = variableNames(dosdp)
+      .filterNot(name => VariableNamePattern.pattern.matcher(name).matches)
+      .toList.sorted
+    if (invalidNames.isEmpty) ZIO.unit
+    else logErrorFail("Pattern variable names may contain only letters, numbers, and underscores. Invalid names: " +
+      invalidNames.mkString(", "))
+  }
+
+  private def variableNames(dosdp: DOSDP): Set[String] =
+    declaredVariableNames(dosdp) ++
+      dosdp.internal_vars.toList.flatten.flatMap(internalVariableNames) ++
+      dosdp.substitutions.toList.flatten.flatMap(regexSubNames) ++
+      dosdp.equivalentTo.toList.flatMap(printfTextVariableNames) ++
+      dosdp.subClassOf.toList.flatMap(printfTextVariableNames) ++
+      dosdp.disjointWith.toList.flatMap(printfTextVariableNames) ++
+      dosdp.GCI.toList.flatMap(printfTextVariableNames) ++
+      dosdp.logical_axioms.toList.flatten.flatMap(printfTextVariableNames) ++
+      allOBOAnnotations(dosdp).flatMap(oboAnnotationVariableNames) ++
+      dosdp.annotations.toList.flatten.flatMap(annotationVariableNames)
+
+  private def declaredVariableNames(dosdp: DOSDP): Set[String] =
+    dosdp.vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
+      dosdp.list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
+      dosdp.data_vars.toSet.flatMap((m: Map[String, String]) => m.keySet) ++
+      dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+
+  private def allOBOAnnotations(dosdp: DOSDP): List[OBOAnnotations] =
+    List(dosdp.name, dosdp.comment, dosdp.`def`, dosdp.namespace,
+      dosdp.exact_synonym, dosdp.narrow_synonym, dosdp.related_synonym,
+      dosdp.broad_synonym, dosdp.xref).flatten ++
+      dosdp.generated_synonyms.toList.flatten ++
+      dosdp.generated_narrow_synonyms.toList.flatten ++
+      dosdp.generated_broad_synonyms.toList.flatten ++
+      dosdp.generated_related_synonyms.toList.flatten
+
+  private def internalVariableNames(internal: InternalVariable): List[String] =
+    internal.var_name :: internal.input :: internal.apply.toList.flatMap(functionVariableNames)
+
+  private def functionVariableNames(function: Function): List[String] = function match {
+    case RegexFunction(regex) => regexSubNames(regex)
+    case _                    => Nil
+  }
+
+  private def regexSubNames(regexSub: RegexSub): List[String] =
+    List(regexSub.in, regexSub.out)
+
+  private def printfTextVariableNames(template: PrintfText): List[String] =
+    template.vars.getOrElse(Nil) ++
+      template.multi_clause.toList.flatMap(multiClauseVars) ++
+      template.annotations.toList.flatten.flatMap(annotationVariableNames)
+
+  private def annotationVariableNames(annotation: Annotations): List[String] = annotation match {
+    case PrintfAnnotation(annotations, _, _, vars, _, multiClause, permutations) =>
+      vars.getOrElse(Nil) ++
+        multiClause.toList.flatMap(multiClauseVars) ++
+        permutations.toList.flatten.map(_.`var`) ++
+        annotations.toList.flatten.flatMap(annotationVariableNames)
+    case ListAnnotation(annotations, _, value)                                   =>
+      value :: annotations.toList.flatten.flatMap(annotationVariableNames)
+    case IRIValueAnnotation(annotations, _, value)                               =>
+      value :: annotations.toList.flatten.flatMap(annotationVariableNames)
+  }
+
+  private def oboAnnotationVariableNames(annotation: OBOAnnotations): List[String] = annotation match {
+    case PrintfAnnotationOBO(annotations, _, _, vars, multiClause, permutations) =>
+      vars.getOrElse(Nil) ++
+        multiClause.toList.flatMap(multiClauseVars) ++
+        permutations.toList.flatten.map(_.`var`) ++
+        annotations.toList.flatten.flatMap(annotationVariableNames)
+    case ListAnnotationOBO(value, _)                                             =>
+      List(value)
   }
 
   private def compileClassExpressionTemplate(

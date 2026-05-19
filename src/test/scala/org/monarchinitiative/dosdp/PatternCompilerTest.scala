@@ -85,6 +85,27 @@ object PatternCompilerTest extends DefaultRunnableSpec {
         compiled <- PatternCompiler.compile(pattern, OBOPrefixes)
       } yield assert(compiled.dataVarNames)(equalTo(Set("rate_min", "rates")))
     },
+    testM("rejects declared variable names outside letters, numbers, and underscores") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-var-name"),
+        vars = Some(Map("cell-type" -> "owl:Thing")),
+        data_list_vars = Some(Map("xref.value" -> "xsd:string")))
+      compileError(pattern).map(msg =>
+        assert(msg)(containsString("cell-type")) &&
+          assert(msg)(containsString("xref.value")) &&
+          assert(msg)(containsString("letters, numbers, and underscores")))
+    },
+    testM("rejects undeclared template variable names outside letters, numbers, and underscores") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-template-var-name"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        name = Some(PrintfAnnotationOBO(
+          annotations = None,
+          xrefs = None,
+          text = Some("name of %s"),
+          vars = Some(List("cell type")))))
+      compileError(pattern).map(msg => assert(msg)(containsString("cell type")))
+    },
     testM("rejects a data_var in a cardinality slot (`min %s`) — known capability regression") {
       // Manchester requires a bare integer at the cardinality, but the compile-time
       // placeholder for a data_var is a typed-literal token `"$name"^^xsd:integer`,
