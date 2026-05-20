@@ -9,7 +9,7 @@ name          := "dosdp-tools"
 
 version       := "0.20.0"
 
-scalaVersion  := "2.13.14"
+scalaVersion  := "2.13.18"
 
 scalacOptions := Seq("-unchecked", "-deprecation", "-encoding", "utf8")
 
@@ -53,8 +53,8 @@ libraryDependencies ++= {
         exclude("org.geneontology", "owl-diff_2.12"),
       "com.github.pathikrit"       %% "better-files"           % "3.9.2",
       "org.apache.jena"            %  "apache-jena-libs"       % "4.10.0" exclude("org.slf4j", "slf4j-log4j12"),
-      "com.github.tototoshi"       %% "scala-csv"              % "1.4.1",
-      "commons-codec"              %  "commons-codec"          % "1.17.1",
+      "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",
+      "commons-codec"              %  "commons-codec"          % "1.17.2",
       "dev.zio"                    %% "zio-logging"            % "0.5.16",
       "dev.zio"                    %% "zio-logging-slf4j-bridge" % "0.5.16",
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,

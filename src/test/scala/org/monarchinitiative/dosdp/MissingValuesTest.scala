@@ -26,7 +26,10 @@ object MissingValuesTest extends DefaultRunnableSpec {
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
+      } yield Harness.assertMatchesGolden(axioms, "src/test/resources/org/monarchinitiative/dosdp/missing_values_test.golden.ofn") &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
+        assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }
 
@@ -38,7 +41,10 @@ object MissingValuesTest extends DefaultRunnableSpec {
         (_, fillers) = columnsAndFillers
         // should not fail from missing values
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
+      } yield Harness.assertMatchesGolden(axioms, "src/test/resources/org/monarchinitiative/dosdp/missing_values_test.golden.ofn") &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
+        assert(axioms)(isNonEmpty) && assert(axioms)(contains(term0001)) && assert(axioms)(contains(termSubstituteMunged))
     }
   }
 

@@ -1,0 +1,30 @@
+Prefix(:=<urn:unnamed:ontology#ont1>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont1>
+
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+Declaration(AnnotationProperty(<http://purl.org/dc/elements/1.1/source>))
+
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://ex.org/1> "The definition of Entity 1.")
+AnnotationAssertion(<http://purl.org/dc/elements/1.1/source> <http://ex.org/1> "overridden source 1")
+AnnotationAssertion(rdfs:label <http://ex.org/1> "Entity 1 thing")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://ex.org/2> "The definition of http://example.org/Entity2.")
+AnnotationAssertion(<http://purl.org/dc/elements/1.1/source> <http://ex.org/2> "The source is source2")
+AnnotationAssertion(rdfs:label <http://ex.org/2> "Entity 2 TSV")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://ex.org/3> "The definition of http://example.org/Entity3.")
+AnnotationAssertion(<http://purl.org/dc/elements/1.1/source> <http://ex.org/3> "The source is source3")
+AnnotationAssertion(rdfs:label <http://ex.org/3> "http://example.org/Entity3 thing")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://ex.org/4> "The definition of Entity4LabelInTSV.")
+AnnotationAssertion(<http://purl.org/dc/elements/1.1/source> <http://ex.org/4> "The source is source4")
+AnnotationAssertion(rdfs:label <http://ex.org/4> "Entity4LabelInTSV thing")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://ex.org/5> "The definition of Entity5LabelInOnt.")
+AnnotationAssertion(<http://purl.org/dc/elements/1.1/source> <http://ex.org/5> "The source is source5")
+AnnotationAssertion(rdfs:label <http://ex.org/5> "Entity5LabelInOnt thing")
+)
