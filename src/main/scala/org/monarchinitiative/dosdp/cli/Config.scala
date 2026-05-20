@@ -270,7 +270,7 @@ object DOSDPError {
   def logError(msg: String, cause: Throwable): UIO[DOSDPError] =
     ZIO.logError(s"$msg:\n${cause.getMessage}").as(new DOSDPError(msg, cause))
 
-  def logError(msg: String): UIO[DOSDPError] = ZIO.logInfo(msg).as(DOSDPError(msg))
+  def logError(msg: String): UIO[DOSDPError] = ZIO.logError(msg).as(DOSDPError(msg))
 
   def logErrorFail(msg: String, cause: Throwable): IO[DOSDPError, Nothing] =
     logError(msg, cause).flip
