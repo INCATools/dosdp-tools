@@ -17,7 +17,7 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Any, DOSDPError, String] = {
+  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, String] = {
     // Logical axioms always materialize even on an annotation-only query: the
     // `OPTIONAL { ?var rdfs:label ... }` clauses are derived from their
     // variable set. Compute once and share with `selectFor` / `triplesFor` so
@@ -62,10 +62,10 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Any, DOSDPError, Seq[String]] =
+  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, Seq[String]] =
     triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms))
 
-  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): ZIO[Any, DOSDPError, Seq[String]] = {
+  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): IO[DOSDPError, Seq[String]] = {
     val props = compiled.readableIdentifierProperties.to(Set)
     val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
     val annotationAxioms = if (queryAnnotations) Expansion.placeholderAxioms(compiled, AnnotationAxioms) else Set.empty[OWLAxiom]
@@ -93,7 +93,7 @@ ORDER BY ?defined_class_label
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
-  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Any, Seq[String]] = axiom match {
+  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): UIO[Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
       val (subClass, subClassTriples) = triplesForClassExpression(subClassOf.getSubClass)
       val (superClass, superClassTriples) = triplesForClassExpression(subClassOf.getSuperClass)

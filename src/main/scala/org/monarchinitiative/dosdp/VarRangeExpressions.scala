@@ -15,13 +15,13 @@ import zio.{Config => _, _}
  */
 object VarRangeExpressions {
 
-  def varExpressions(compiled: CompiledPattern): ZIO[Any, DOSDPError, Map[String, OWLClassExpression]] =
+  def varExpressions(compiled: CompiledPattern): IO[DOSDPError, Map[String, OWLClassExpression]] =
     parse(compiled, compiled.source.vars.getOrElse(Map.empty))
 
-  def listVarExpressions(compiled: CompiledPattern): ZIO[Any, DOSDPError, Map[String, OWLClassExpression]] =
+  def listVarExpressions(compiled: CompiledPattern): IO[DOSDPError, Map[String, OWLClassExpression]] =
     parse(compiled, compiled.source.list_vars.getOrElse(Map.empty))
 
-  private def parse(compiled: CompiledPattern, ranges: Map[String, String]): ZIO[Any, DOSDPError, Map[String, OWLClassExpression]] = {
+  private def parse(compiled: CompiledPattern, ranges: Map[String, String]): IO[DOSDPError, Map[String, OWLClassExpression]] = {
     val checker = new DOSDPEntityChecker(compiled.source, compiled.prefixes)
     val parser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
     ZIO.foreach(ranges) { case (name, expr) =>

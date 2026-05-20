@@ -21,7 +21,7 @@ object ComplexStructureGoldenTest extends ZIOSpecDefault {
 
   private val resourceDir = "src/test/resources/org/monarchinitiative/dosdp"
 
-  private def renderFixture(name: String): zio.ZIO[Any, DOSDPError, Set[OWLAxiom]] =
+  private def renderFixture(name: String): zio.IO[DOSDPError, Set[OWLAxiom]] =
     for {
       dosdp <- Config.inputDOSDPFrom(s"$resourceDir/$name.yaml")
       columnsAndFillers <- Generate.readFillers(new File(s"$resourceDir/$name.tsv"), new TSVFormat {})

@@ -21,7 +21,7 @@ sealed trait Config {
 
   def common: CommonOptions
 
-  def run: ZIO[Any, DOSDPError, Unit]
+  def run: IO[DOSDPError, Unit]
 
 }
 
@@ -54,9 +54,9 @@ final case class CommonOptions(
                                 verbose: Boolean = false
                               ) {
 
-  def inputDOSDP: ZIO[Any, DOSDPError, DOSDP] = inputDOSDPFrom(template)
+  def inputDOSDP: IO[DOSDPError, DOSDP] = inputDOSDPFrom(template)
 
-  def prefixesMap: ZIO[Any, DOSDPError, PartialFunction[String, String]] = {
+  def prefixesMap: IO[DOSDPError, PartialFunction[String, String]] = {
     val possiblePrefixMap = prefixes.map { prefixesPath =>
       val prefixesFile = new File(prefixesPath)
       for {
@@ -74,7 +74,7 @@ final case class CommonOptions(
     } yield if (oboPrefixes.bool) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
   }
 
-  def ontologyOpt: ZIO[Any, DOSDPError, Option[OWLOntology]] =
+  def ontologyOpt: IO[DOSDPError, Option[OWLOntology]] =
     ZIO.foreach(ontology)(ontPath => Utilities.loadOntology(ontPath, catalog))
 
 }
@@ -87,7 +87,7 @@ final case class TermsConfig(@Recurse
                              @ValueDescription("file")
                              infile: String = "fillers.tsv") extends Config {
 
-  override def run: ZIO[Any, DOSDPError, Unit] = Terms.run(this)
+  override def run: IO[DOSDPError, Unit] = Terms.run(this)
 
 }
 
@@ -115,7 +115,7 @@ final case class GenerateConfig(@Recurse
                                 axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source"
                                ) extends Config {
 
-  override def run: ZIO[Any, DOSDPError, Unit] = Generate.run(this)
+  override def run: IO[DOSDPError, Unit] = Generate.run(this)
 
 }
 
@@ -124,7 +124,7 @@ final case class GenerateConfig(@Recurse
 final case class PrototypeConfig(@Recurse
                                  common: CommonOptions) extends Config {
 
-  override def run: ZIO[Any, DOSDPError, Unit] = Prototype.run(this)
+  override def run: IO[DOSDPError, Unit] = Prototype.run(this)
 
 }
 
@@ -139,7 +139,7 @@ final case class DocsConfig(@Recurse
                             @ValueDescription("URL")
                             dataLocationPrefix: String = "http://example.org/") extends Config {
 
-  override def run: ZIO[Any, DOSDPError, Unit] = Docs.run(this)
+  override def run: IO[DOSDPError, Unit] = Docs.run(this)
 
 }
 
@@ -164,20 +164,20 @@ final case class QueryConfig(@Recurse
                              parallelism: Int = 1
                             ) extends Config {
 
-  override def run: ZIO[Any, DOSDPError, Unit] = Query.run(this)
+  override def run: IO[DOSDPError, Unit] = Query.run(this)
 
 }
 
 object Config {
 
-  def tabularFormat(arg: String): ZIO[Any, DOSDPError, CSVFormat] = arg.toLowerCase match {
+  def tabularFormat(arg: String): IO[DOSDPError, CSVFormat] = arg.toLowerCase match {
     case "csv" => ZIO.succeed(new DefaultCSVFormat {})
     case "tsv" => ZIO.succeed(new TSVFormat {})
     case other => logErrorFail(s"Invalid tabular format requested: $other")
   }
 
-  def inputDOSDPFrom(location: String): ZIO[Any, DOSDPError, DOSDP] = {
-    def wrap[A](what: String)(z: ZIO[Any, Throwable, A]): ZIO[Any, DOSDPError, A] =
+  def inputDOSDPFrom(location: String): IO[DOSDPError, DOSDP] = {
+    def wrap[A](what: String)(z: Task[A]): IO[DOSDPError, A] =
       z.flatMapError(e => logError(s"$what at $location", e))
     for {
       file <- ZIO.succeed(new File(location))
@@ -267,15 +267,15 @@ object DOSDPError {
 
   private def apply(msg: String): DOSDPError = new DOSDPError(msg, new Exception(msg))
 
-  def logError(msg: String, cause: Throwable): URIO[Any, DOSDPError] =
+  def logError(msg: String, cause: Throwable): UIO[DOSDPError] =
     ZIO.logError(s"$msg:\n${cause.getMessage}").as(new DOSDPError(msg, cause))
 
-  def logError(msg: String): URIO[Any, DOSDPError] = ZIO.logInfo(msg).as(DOSDPError(msg))
+  def logError(msg: String): UIO[DOSDPError] = ZIO.logInfo(msg).as(DOSDPError(msg))
 
-  def logErrorFail(msg: String, cause: Throwable): ZIO[Any, DOSDPError, Nothing] =
+  def logErrorFail(msg: String, cause: Throwable): IO[DOSDPError, Nothing] =
     logError(msg, cause).flip
 
-  def logErrorFail(msg: String): ZIO[Any, DOSDPError, Nothing] =
+  def logErrorFail(msg: String): IO[DOSDPError, Nothing] =
     logError(msg).flip
 
 }

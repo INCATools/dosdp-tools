@@ -20,7 +20,7 @@ object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(config: GenerateConfig): ZIO[Any, DOSDPError, Unit] =
+  def run(config: GenerateConfig): IO[DOSDPError, Unit] =
     Main.withLogContext(Map("command" -> "generate")) {
       for {
         ontologyOpt <- config.common.ontologyOpt
@@ -47,10 +47,10 @@ object Generate {
       } yield ()
     }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Any, DOSDPError, Set[OWLAxiom]] =
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] =
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, extraReadableIdentifiers)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Any, DOSDPError, Set[OWLAxiom]] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] = {
     val knownColumns = dosdp.allVars
     for {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
@@ -90,7 +90,7 @@ object Generate {
     } yield res
   }
 
-  private def determineTargets(config: GenerateConfig): ZIO[Any, DOSDPError, List[GenerateTarget]] = {
+  private def determineTargets(config: GenerateConfig): IO[DOSDPError, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.logInfo("Running in batch mode")
@@ -108,7 +108,7 @@ object Generate {
     else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
   }
 
-  def readFillers(file: File, sepFormat: CSVFormat): ZIO[Any, DOSDPError, (Seq[String], List[Map[String, String]])] =
+  def readFillers(file: File, sepFormat: CSVFormat): IO[DOSDPError, (Seq[String], List[Map[String, String]])] =
     for {
       cleaned <- ZIO.attemptBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).acquireReleaseWithAuto { source =>
         ZIO.attemptBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))

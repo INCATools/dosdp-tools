@@ -196,7 +196,7 @@ private[dosdp] object PatternCompiler {
   private val PlaceholderLiteralPattern = """^\$(.+)$""".r
   private val VariableNamePattern = "^[A-Za-z0-9_]+$".r
 
-  def compile(dosdp: DOSDP, prefixes: PartialFunction[String, String]): ZIO[Any, DOSDPError, CompiledPattern] = {
+  def compile(dosdp: DOSDP, prefixes: PartialFunction[String, String]): IO[DOSDPError, CompiledPattern] = {
     val checker = new DOSDPEntityChecker(dosdp, prefixes)
     val safeChecker = new SafeOWLEntityChecker(checker)
     val expressionParser = new ManchesterOWLSyntaxClassExpressionParser(factory, checker)
@@ -231,7 +231,7 @@ private[dosdp] object PatternCompiler {
       dataVarNames = dataVarNames)
   }
 
-  private def validateVariableNames(dosdp: DOSDP): ZIO[Any, DOSDPError, Unit] = {
+  private def validateVariableNames(dosdp: DOSDP): IO[DOSDPError, Unit] = {
     val invalidNames = variableNames(dosdp)
       .filterNot(name => VariableNamePattern.pattern.matcher(name).matches)
       .toList.sorted
@@ -311,7 +311,7 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     checker: SafeOWLEntityChecker,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, Option[CompiledClassExpression]] =
+  ): IO[DOSDPError, Option[CompiledClassExpression]] =
     ZIO.foreach(templateOpt) { template =>
       for {
         annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
@@ -325,7 +325,7 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     annotations: Set[NormalizedAnnotation],
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, Option[CompiledClassExpression]] =
+  ): IO[DOSDPError, Option[CompiledClassExpression]] =
     (template.text, template.multi_clause) match {
       case (Some(_), _) =>
         parseClauseText(template.text, template.vars, template.multi_clause, dataVarNames, parser, template.shouldQuote, placeholderBindings)
@@ -346,7 +346,7 @@ private[dosdp] object PatternCompiler {
     quote: Boolean,
     annotations: Set[NormalizedAnnotation],
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, CompiledMultiClassExpression] =
+  ): IO[DOSDPError, CompiledMultiClassExpression] =
     for {
       clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
       op      <- operatorFor(mc.sep, clauses.size)
@@ -358,7 +358,7 @@ private[dosdp] object PatternCompiler {
     parser: ManchesterOWLSyntaxClassExpressionParser,
     quote: Boolean,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, CompiledPrintfClause] =
+  ): IO[DOSDPError, CompiledPrintfClause] =
     for {
       main <- parseClauseText(Some(clause.text), clause.vars, None, dataVarNames, parser, quote, placeholderBindings)
       subs <- ZIO.foreach(clause.sub_clauses.toList.flatten)(compileSubExpression(_, dataVarNames, parser, quote, placeholderBindings))
@@ -370,7 +370,7 @@ private[dosdp] object PatternCompiler {
     parser: ManchesterOWLSyntaxClassExpressionParser,
     quote: Boolean,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, CompiledSubExpression] =
+  ): IO[DOSDPError, CompiledSubExpression] =
     for {
       clauses <- ZIO.foreach(mc.clauses.toList.flatten)(compilePrintfClause(_, dataVarNames, parser, quote, placeholderBindings))
       op      <- operatorFor(mc.sep, clauses.size)
@@ -386,7 +386,7 @@ private[dosdp] object PatternCompiler {
    * lone expression through). Omitting `sep` with two or more clauses is an
    * error.
    */
-  private def operatorFor(sep: Option[String], clauseCount: Int): ZIO[Any, DOSDPError, LogicalOperator] =
+  private def operatorFor(sep: Option[String], clauseCount: Int): IO[DOSDPError, LogicalOperator] =
     sep match {
       case Some(" and ") => ZIO.succeed(LogicalOperator.And)
       case Some(" or ")  => ZIO.succeed(LogicalOperator.Or)
@@ -402,7 +402,7 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     checker: SafeOWLEntityChecker,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, Option[CompiledAxiom]] =
+  ): IO[DOSDPError, Option[CompiledAxiom]] =
     ZIO.foreach(templateOpt.filter(_.text.isDefined)) { template =>
       for {
         _ <- ZIO.when(template.multi_clause.isDefined)(
@@ -419,7 +419,7 @@ private[dosdp] object PatternCompiler {
     dataVarNames: Set[String],
     checker: SafeOWLEntityChecker,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, Option[CompiledLogicalAxiom]] = {
+  ): IO[DOSDPError, Option[CompiledLogicalAxiom]] = {
     for {
       annotations <- ZIO.foreach(template.annotations.toList.flatten)(AnnotationCompiler.normalizeAnnotation(_, checker)).map(_.toSet)
       compiled <- template.axiom_type match {
@@ -449,7 +449,7 @@ private[dosdp] object PatternCompiler {
     parser: ManchesterOWLSyntaxClassExpressionParser,
     quote: Boolean,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, ParsedPiece[OWLClassExpression]] = {
+  ): IO[DOSDPError, ParsedPiece[OWLClassExpression]] = {
     val effective = withFallbackPlaceholders(referencedVars(vars, multi), placeholderBindings)
     val resolved = PrintfText.replaced(text, vars, multi, Some(effective), quote, dataVarNames)
     ZIO.fromOption(resolved).orElse(logErrorFail(s"Could not assemble Manchester template text for parsing"))
@@ -467,7 +467,7 @@ private[dosdp] object PatternCompiler {
     parser: ManchesterOWLSyntaxInlineAxiomParser,
     quote: Boolean,
     placeholderBindings: Map[String, Binding]
-  ): ZIO[Any, DOSDPError, ParsedPiece[OWLAxiom]] = {
+  ): IO[DOSDPError, ParsedPiece[OWLAxiom]] = {
     val effective = withFallbackPlaceholders(vars.getOrElse(Nil), placeholderBindings)
     val resolved = PrintfText.replaced(text, vars, multi_clause = None, Some(effective), quote, dataVarNames)
     ZIO.fromOption(resolved).orElse(logErrorFail("Could not assemble Manchester axiom text for parsing"))
@@ -604,7 +604,7 @@ private[dosdp] object PatternCompiler {
     case _                           => ()
   }
 
-  private def compileOBOAnnotations(dosdp: DOSDP, checker: SafeOWLEntityChecker): ZIO[Any, DOSDPError, Set[NormalizedAnnotation]] = {
+  private def compileOBOAnnotations(dosdp: DOSDP, checker: SafeOWLEntityChecker): IO[DOSDPError, Set[NormalizedAnnotation]] = {
     val fields: List[(Iterable[OBOAnnotations], OWLAnnotationProperty, Option[String])] = List(
       (dosdp.name,                                       Name,           Some(overrides(Name))),
       (dosdp.comment,                                    Comment,        Some(overrides(Comment))),
@@ -624,7 +624,7 @@ private[dosdp] object PatternCompiler {
     }.map(_.flatten.toSet)
   }
 
-  private def compileReadableIdentifierProperties(dosdp: DOSDP, checker: SafeOWLEntityChecker): ZIO[Any, DOSDPError, List[OWLAnnotationProperty]] =
+  private def compileReadableIdentifierProperties(dosdp: DOSDP, checker: SafeOWLEntityChecker): IO[DOSDPError, List[OWLAnnotationProperty]] =
     ZIO.foreach(dosdp.readable_identifiers) { identifiers =>
       ZIO.foreach(identifiers)(name =>
         checker.getOWLAnnotationProperty(name)

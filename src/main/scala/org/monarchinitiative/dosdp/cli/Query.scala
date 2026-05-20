@@ -27,7 +27,7 @@ object Query {
 
   private val ConformsTo = AnnotationProperty(DCTerms.conformsTo.getURI)
 
-  def run(config: QueryConfig): ZIO[Any, DOSDPError, Unit] = {
+  def run(config: QueryConfig): IO[DOSDPError, Unit] = {
     Main.withLogContext(Map("command" -> "query")) {
       val reasonerFactoryOptZ = ZIO.foreach(config.reasoner) { reasonerArg =>
         reasonerArg.toLowerCase match {
@@ -86,14 +86,14 @@ object Query {
         .withFinalizer(o => ZIO.succeed(o.dispose()))
     )(identity)
 
-  private def createQueryWithPatternIRI(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, (String, Option[String])] =
+  private def createQueryWithPatternIRI(target: QueryTarget, config: QueryConfig, reasonerOpt: Option[OWLReasoner]): IO[DOSDPError, (String, Option[String])] =
     for {
       dosdp <- Config.inputDOSDPFrom(target.templateFile)
       prefixes <- config.common.prefixesMap
       query <- makeProcessedQuery(dosdp, prefixes, config.restrictAxiomsTo, reasonerOpt)
     } yield (query, dosdp.pattern_iri)
 
-  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): ZIO[Any, DOSDPError, String] =
+  def makeProcessedQuery(dosdp: DOSDP, prefixes: PartialFunction[String, String], axiomKind: AxiomKind, reasonerOpt: Option[OWLReasoner]): IO[DOSDPError, String] =
     for {
       compiled <- PatternCompiler.compile(dosdp, prefixes)
       sparqlQuery <- SPARQL.queryFor(compiled, axiomKind)
@@ -105,7 +105,7 @@ object Query {
                             config: QueryConfig,
                             processedQuery: String,
                             modelOpt: Option[Model],
-                            patternIRIOpt: Option[String]): ZIO[Any, DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
+                            patternIRIOpt: Option[String]): IO[DOSDPError, Set[OWLAnnotationAssertionAxiom]] = {
     val doPrintQuery = (Console.printLine(s"**** SPARQL query for ${target.templateFile} ****") *> Console.printLine(processedQuery))
       .flatMapError(logError(s"Failure printing SPARQL query for ${target.templateFile}", _))
     val doPerformQuery = for {
@@ -128,12 +128,12 @@ object Query {
       doPerformQuery.flatMapError(e => logError("Failure performing query command", e))
   }
 
-  private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]): IO[Throwable, List[Unit]] =
+  private def writeQueryResults(writer: CSVWriter, columns: List[String], results: List[QuerySolution]): Task[List[Unit]] =
     ZIO.attempt(writer.writeRow(columns)) *> ZIO.foreach(results) { qs =>
       ZIO.attempt(writer.writeRow(columns.map(variable => Option(qs.get(variable)).map(_.toString).getOrElse(""))))
     }
 
-  private def determineTargets(config: QueryConfig): ZIO[Any, DOSDPError, List[QueryTarget]] = {
+  private def determineTargets(config: QueryConfig): IO[DOSDPError, List[QueryTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.logInfo("Running in batch mode")
@@ -162,7 +162,7 @@ object Query {
       }
     } yield results
 
-  def writeConformanceFile(path: String, annotations: Set[OWLAnnotationAssertionAxiom]): ZIO[Any, DOSDPError, Unit] =
+  def writeConformanceFile(path: String, annotations: Set[OWLAnnotationAssertionAxiom]): IO[DOSDPError, Unit] =
     (for {
       manager <- ZIO.attempt(OWLManager.createOWLOntologyManager())
       ont <- ZIO.attempt(manager.createOntology(annotations.toSet[OWLAxiom].asJava))

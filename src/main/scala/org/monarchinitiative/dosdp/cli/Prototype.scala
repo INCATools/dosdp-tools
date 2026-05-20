@@ -13,7 +13,7 @@ object Prototype {
   private val DCTTitle: OWLAnnotationProperty = AnnotationProperty(DCTERMS.TITLE.stringValue)
   val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
 
-  def run(config: PrototypeConfig): ZIO[Any, DOSDPError, Unit] = {
+  def run(config: PrototypeConfig): IO[DOSDPError, Unit] = {
     Main.withLogContext(Map("command" -> "prototype")) {
       val possibleFile = File(config.common.template)
       for {
@@ -32,7 +32,7 @@ object Prototype {
     }
   }
 
-  private def axiomsFor(dosdp: DOSDP, config: PrototypeConfig): ZIO[Any, DOSDPError, Set[OWLAxiom]] =
+  private def axiomsFor(dosdp: DOSDP, config: PrototypeConfig): IO[DOSDPError, Set[OWLAxiom]] =
     Main.withLogContext(dosdp.pattern_name.map(n => Map("pattern" -> n)).getOrElse(Map.empty)) {
       for {
         prefixes <- config.common.prefixesMap

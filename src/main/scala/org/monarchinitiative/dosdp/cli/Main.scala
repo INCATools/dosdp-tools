@@ -23,8 +23,8 @@ object Main extends ZCommandApp[Config] {
     Runtime.removeDefaultLoggers >>> (consoleLogger(config) ++ Slf4jBridge.initialize)
   }
 
-  override def run(config: Config, args: RemainingArgs): ZIO[Any, Nothing, ExitCode] = {
-    val program: ZIO[Any, DOSDPError, Unit] = ZIO.succeed(JenaSystem.init()) *> config.run
+  override def run(config: Config, args: RemainingArgs): UIO[ExitCode] = {
+    val program: IO[DOSDPError, Unit] = ZIO.succeed(JenaSystem.init()) *> config.run
     program
       .tapError { e =>
         if (config.common.verbose) ZIO.succeed(e.printStackTrace())

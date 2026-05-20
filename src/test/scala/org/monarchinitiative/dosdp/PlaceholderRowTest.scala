@@ -3,7 +3,7 @@ package org.monarchinitiative.dosdp
 import org.monarchinitiative.dosdp.cli.Config.AllAxioms
 import org.monarchinitiative.dosdp.cli.{Config, DOSDPError}
 import org.semanticweb.owlapi.model.OWLAxiom
-import zio.ZIO
+import zio.IO
 import zio.test._
 
 /**
@@ -20,7 +20,7 @@ object PlaceholderRowTest extends ZIOSpecDefault {
 
   private val resourceDir = "src/test/resources/org/monarchinitiative/dosdp"
 
-  private def loadAndCompile(name: String): ZIO[Any, DOSDPError, CompiledPattern] =
+  private def loadAndCompile(name: String): IO[DOSDPError, CompiledPattern] =
     for {
       dosdp    <- Config.inputDOSDPFrom(s"$resourceDir/$name.yaml")
       compiled <- PatternCompiler.compile(dosdp, OBOPrefixes)

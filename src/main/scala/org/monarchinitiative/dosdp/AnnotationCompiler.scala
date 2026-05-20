@@ -17,7 +17,7 @@ import zio.{Config => _, _}
  */
 private[dosdp] object AnnotationCompiler {
 
-  def normalizeAnnotation(annotation: Annotations, checker: SafeOWLEntityChecker): ZIO[Any, DOSDPError, NormalizedAnnotation] = annotation match {
+  def normalizeAnnotation(annotation: Annotations, checker: SafeOWLEntityChecker): IO[DOSDPError, NormalizedAnnotation] = annotation match {
     case PrintfAnnotation(anns, ap, text, vars, overrideColumn, multiClause, perms) =>
       for {
         prop <- checker.getOWLAnnotationProperty(ap).orElse(logErrorFail(s"No annotation property binding: $ap"))
@@ -37,7 +37,7 @@ private[dosdp] object AnnotationCompiler {
       } yield NormalizedIRIValueAnnotation(prop, varr, annotations.to(Set))
   }
 
-  def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty, overrideColumn: Option[String], checker: SafeOWLEntityChecker): ZIO[Any, DOSDPError, NormalizedAnnotation] =
+  def normalizeOBOAnnotation(annotation: OBOAnnotations, property: OWLAnnotationProperty, overrideColumn: Option[String], checker: SafeOWLEntityChecker): IO[DOSDPError, NormalizedAnnotation] =
     annotation match {
       case PrintfAnnotationOBO(anns, xrefs, text, vars, multiClause, perms) =>
         for {
@@ -52,14 +52,14 @@ private[dosdp] object AnnotationCompiler {
           xrefs.map(NormalizedListAnnotation(PrintfAnnotationOBO.Xref, _, Set.empty)).to(Set)))
     }
 
-  def normalizePermutation(permutation: Permutation, checker: SafeOWLEntityChecker): ZIO[Any, DOSDPError, NormalizedPermutation] =
+  def normalizePermutation(permutation: Permutation, checker: SafeOWLEntityChecker): IO[DOSDPError, NormalizedPermutation] =
     for {
       props <- ZIO.foreach(permutation.annotationProperties)(apName =>
         checker.getOWLAnnotationProperty(apName).orElse(logErrorFail(s"No annotation property binding for permutation: $apName")))
     } yield NormalizedPermutation(permutation.`var`, props)
 
   /** Every variable named in a permutation spec must appear in the enclosing annotation's `vars` list. */
-  def validatePermutationVars(permutations: List[Permutation], vars: List[String]): ZIO[Any, DOSDPError, Unit] = {
+  def validatePermutationVars(permutations: List[Permutation], vars: List[String]): IO[DOSDPError, Unit] = {
     val varSet = vars.toSet
     val invalidVars = permutations.map(_.`var`).filterNot(varSet.contains)
     if (invalidVars.isEmpty) ZIO.unit
@@ -71,7 +71,7 @@ private[dosdp] object AnnotationCompiler {
    * Names that fail to resolve are silently dropped here; `normalizePermutation` is the canonical
    * place where an unresolved reference becomes a validation error.
    */
-  def permutationAnnotationProperties(dosdp: DOSDP, checker: SafeOWLEntityChecker): URIO[Any, Set[OWLAnnotationProperty]] = {
+  def permutationAnnotationProperties(dosdp: DOSDP, checker: SafeOWLEntityChecker): UIO[Set[OWLAnnotationProperty]] = {
     val names = collectPermutationPropertyNames(dosdp)
     ZIO.foreach(names.toList)(name => checker.getOWLAnnotationProperty(name).option)
       .map(_.flatten.toSet)

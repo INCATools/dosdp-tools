@@ -11,7 +11,7 @@ import scala.jdk.CollectionConverters._
 
 object Terms {
 
-  def run(config: TermsConfig): ZIO[Any, DOSDPError, Unit] =
+  def run(config: TermsConfig): IO[DOSDPError, Unit] =
     Main.withLogContext(Map("command" -> "terms", "pattern" -> config.common.template, "input" -> config.infile, "output" -> config.common.outfile)) {
       for {
         dosdp <- config.common.inputDOSDP

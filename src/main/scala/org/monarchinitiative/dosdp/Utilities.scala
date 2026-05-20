@@ -13,7 +13,7 @@ import scala.jdk.CollectionConverters._
 
 object Utilities {
 
-  def saveAxiomsToOntology(axioms: Set[OWLAxiom], filepath: String): ZIO[Any, DOSDPError, Unit] =
+  def saveAxiomsToOntology(axioms: Set[OWLAxiom], filepath: String): IO[DOSDPError, Unit] =
     for {
       manager <- ZIO.succeed(OWLManager.createOWLOntologyManager())
       ont <- ZIO.attempt(manager.createOntology(axioms.asJava)).orDie
@@ -21,7 +21,7 @@ object Utilities {
         logError(s"Unable to write ontology to file $filepath", e))
     } yield ()
 
-  def loadOntology(location: String, catalogPathOpt: Option[String]): ZIO[Any, DOSDPError, OWLOntology] = {
+  def loadOntology(location: String, catalogPathOpt: Option[String]): IO[DOSDPError, OWLOntology] = {
     val ontIRI = if (location.startsWith("http")) IRI.create(location) else IRI.create(new File(location))
     for {
       manager <- ZIO.succeed(OWLManager.createOWLOntologyManager())

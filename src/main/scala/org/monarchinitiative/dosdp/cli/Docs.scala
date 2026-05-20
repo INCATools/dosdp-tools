@@ -23,7 +23,7 @@ object Docs {
   private val Definition = AnnotationProperty("http://purl.obolibrary.org/obo/IAO_0000115")
   private val Special = Set(RDFSLabel, Definition)
 
-  def run(config: DocsConfig): ZIO[Any, DOSDPError, Unit] = {
+  def run(config: DocsConfig): IO[DOSDPError, Unit] = {
     Main.withLogContext(Map("command" -> "docs")) {
       for {
         sepFormat <- Config.tabularFormat(config.common.tableFormat)
@@ -36,7 +36,7 @@ object Docs {
     }
   }
 
-  private def processTarget(target: DocsTarget, sepFormat: CSVFormat, config: DocsConfig, ontology: OWLOntology): ZIO[Any, DOSDPError, Unit] =
+  private def processTarget(target: DocsTarget, sepFormat: CSVFormat, config: DocsConfig, ontology: OWLOntology): IO[DOSDPError, Unit] =
     Main.withLogContext(target.toLogContext) {
       for {
         _ <- ZIO.logInfo(s"Processing pattern ${target.templateFile}")
@@ -78,7 +78,7 @@ object Docs {
     } yield DocsMarkdown.indexMarkdown(dosdpsAndOutfiles)
   }
 
-  private def determineTargets(config: DocsConfig): ZIO[Any, DOSDPError, List[DocsTarget]] = {
+  private def determineTargets(config: DocsConfig): IO[DOSDPError, List[DocsTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
       _ <- ZIO.logInfo("Running in batch mode")
