@@ -10,6 +10,18 @@ import zio.{Config => _, _}
 
 import java.io.IOException
 
+private object ZIOAppExitCodeHandling {
+
+  def exitOnFailure(exitWith: ExitCode => UIO[Unit], exitCode: ExitCode): ZIO[Any, Nothing, ExitCode] =
+    if (exitCode == ExitCode.success) ZIO.succeed(exitCode)
+    else {
+      // ZIOAppDefault derives the JVM status from effect success/failure, not a
+      // returned ExitCode value. Keep command implementations free to return
+      // ExitCode.failure, and translate that into a real process exit here.
+      exitWith(exitCode).as(exitCode)
+    }
+}
+
 /**
  * ZIO-flavored replacements for case-app's [[caseapp.CaseApp]] and
  * [[caseapp.CommandApp]] base classes.
@@ -90,7 +102,7 @@ abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T
     }
 
   override def run: ZIO[ZIOAppArgs, Nothing, ExitCode] =
-    getArgs.flatMap(args => runArgs(args.toList))
+    getArgs.flatMap(args => runArgs(args.toList).flatMap(ZIOAppExitCodeHandling.exitOnFailure(exit, _)))
 
 }
 
@@ -193,7 +205,7 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
   }
 
   override def run: ZIO[ZIOAppArgs, Nothing, ExitCode] =
-    getArgs.flatMap(args => runArgs(args.toList))
+    getArgs.flatMap(args => runArgs(args.toList).flatMap(ZIOAppExitCodeHandling.exitOnFailure(exit, _)))
 
 }
 

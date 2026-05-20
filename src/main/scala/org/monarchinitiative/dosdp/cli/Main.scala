@@ -24,18 +24,14 @@ object Main extends ZCommandApp[Config] {
   }
 
   override def run(config: Config, args: RemainingArgs): ZIO[Any, Nothing, ExitCode] = {
-    val program = ZIO.succeed(JenaSystem.init()) *> config.run
+    val program: ZIO[Any, DOSDPError, Unit] = ZIO.succeed(JenaSystem.init()) *> config.run
     program
       .tapError { e =>
         if (config.common.verbose) ZIO.succeed(e.printStackTrace())
         else ZIO.logError(e.getMessage)
       }
       .as(ExitCode.success)
-      // ZIOAppDefault derives the process exit code from success/failure of the
-      // effect, not from a returned ExitCode value, so a non-zero exit must be
-      // requested explicitly. exit avoids the framework's default cause dump,
-      // leaving error reporting to the tapError above.
-      .catchAll(_ => exit(ExitCode.failure).as(ExitCode.failure))
+      .catchAll { (_: DOSDPError) => ZIO.succeed(ExitCode.failure) }
       .provideLayer(loggingLayer(config.common.verbose))
   }
 
