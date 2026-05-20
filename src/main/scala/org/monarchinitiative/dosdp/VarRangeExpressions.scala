@@ -5,8 +5,7 @@ import org.monarchinitiative.dosdp.cli.DOSDPError.logError
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.manchestersyntax.parser.ManchesterOWLSyntaxClassExpressionParser
 import org.semanticweb.owlapi.model.OWLClassExpression
-import zio._
-import zio.logging.Logging
+import zio.{Config => _, _}
 
 /**
  * Parses the Manchester range expressions declared on `dosdp.vars` and
@@ -16,17 +15,17 @@ import zio.logging.Logging
  */
 object VarRangeExpressions {
 
-  def varExpressions(compiled: CompiledPattern): ZIO[Logging, DOSDPError, Map[String, OWLClassExpression]] =
+  def varExpressions(compiled: CompiledPattern): IO[DOSDPError, Map[String, OWLClassExpression]] =
     parse(compiled, compiled.source.vars.getOrElse(Map.empty))
 
-  def listVarExpressions(compiled: CompiledPattern): ZIO[Logging, DOSDPError, Map[String, OWLClassExpression]] =
+  def listVarExpressions(compiled: CompiledPattern): IO[DOSDPError, Map[String, OWLClassExpression]] =
     parse(compiled, compiled.source.list_vars.getOrElse(Map.empty))
 
-  private def parse(compiled: CompiledPattern, ranges: Map[String, String]): ZIO[Logging, DOSDPError, Map[String, OWLClassExpression]] = {
+  private def parse(compiled: CompiledPattern, ranges: Map[String, String]): IO[DOSDPError, Map[String, OWLClassExpression]] = {
     val checker = new DOSDPEntityChecker(compiled.source, compiled.prefixes)
     val parser = new ManchesterOWLSyntaxClassExpressionParser(OWLManager.getOWLDataFactory, checker)
     ZIO.foreach(ranges) { case (name, expr) =>
-      ZIO.effect(parser.parse(expr))
+      ZIO.attempt(parser.parse(expr))
         .flatMapError(e => logError(s"Failed to parse class expression: $expr", e))
         .map(name -> _)
     }

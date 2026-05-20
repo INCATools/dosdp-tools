@@ -4,14 +4,11 @@ import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
 import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
-import org.monarchinitiative.dosdp.cli.Main.loggingContext
 import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
 import org.semanticweb.owlapi.model.parameters.Imports
-import zio._
-import zio.blocking._
-import zio.logging._
+import zio.{Config => _, _}
 
 import java.io.{File, StringReader}
 import java.nio.charset.StandardCharsets
@@ -23,8 +20,8 @@ object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(config: GenerateConfig): ZIO[ZEnv with Logging, DOSDPError, Unit] =
-    log.locally(_.annotate(loggingContext, Map("command" -> "generate"))) {
+  def run(config: GenerateConfig): IO[DOSDPError, Unit] =
+    Main.withLogContext(Map("command" -> "generate")) {
       for {
         ontologyOpt <- config.common.ontologyOpt
         prefixes <- config.common.prefixesMap
@@ -33,15 +30,15 @@ object Generate {
         axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
           .orElse(logErrorFail("Couldn't create IRI for axiom source annotation property."))
         targets <- determineTargets(config)
-        _ <- ZIO.foreach_(targets) { target =>
-          log.locally(_.annotate(loggingContext, target.toLogContext)) {
+        _ <- ZIO.foreachDiscard(targets) { target =>
+          Main.withLogContext(target.toLogContext) {
             for {
-              _ <- log.info(s"Processing pattern ${target.templateFile}")
+              _ <- ZIO.logInfo(s"Processing pattern ${target.templateFile}")
               dosdp <- Config.inputDOSDPFrom(target.templateFile)
               columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
               (columns, fillers) = columnsAndFillers
               missingColumns = dosdp.allVars.diff(columns.to(Set))
-              _ <- ZIO.foreach_(missingColumns)(c => log.warn(s"Input ${target.inputFile} for pattern ${target.templateFile} is missing column for pattern variable <$c>"))
+              _ <- ZIO.foreachDiscard(missingColumns)(c => ZIO.logWarning(s"Input ${target.inputFile} for pattern ${target.templateFile} is missing column for pattern variable <$c>"))
               axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool, Map.empty)
               _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
             } yield ()
@@ -50,10 +47,10 @@ object Generate {
       } yield ()
     }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] =
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] =
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, extraReadableIdentifiers)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] = {
     val knownColumns = dosdp.allVars
     for {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
@@ -93,11 +90,11 @@ object Generate {
     } yield res
   }
 
-  private def determineTargets(config: GenerateConfig): ZIO[Blocking with Logging, DOSDPError, List[GenerateTarget]] = {
+  private def determineTargets(config: GenerateConfig): IO[DOSDPError, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
-      _ <- log.info("Running in batch mode")
-      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(logErrorFail(s"Pattern doesn't exist: $pattern")))
+      _ <- ZIO.logInfo("Running in batch mode")
+      _ <- ZIO.foreachDiscard(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(logErrorFail(s"Pattern doesn't exist: $pattern")))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(logErrorFail("\"--template must be a directory in batch mode\""))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(logErrorFail("\"--infile must be a directory in batch mode\""))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(logErrorFail("\"--outfile must be a directory in batch mode\""))
@@ -111,19 +108,19 @@ object Generate {
     else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
   }
 
-  def readFillers(file: File, sepFormat: CSVFormat): ZIO[Blocking with Logging, DOSDPError, (Seq[String], List[Map[String, String]])] =
+  def readFillers(file: File, sepFormat: CSVFormat): IO[DOSDPError, (Seq[String], List[Map[String, String]])] =
     for {
-      cleaned <- effectBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).bracketAuto { source =>
-        effectBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
+      cleaned <- ZIO.attemptBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).acquireReleaseWithAuto { source =>
+        ZIO.attemptBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
       }.flatMapError(e => logError("Unable to read input table", e))
-      columns <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
-        ZIO.effectTotal {
+      columns <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
+        ZIO.succeed {
           val iteratorToCheckColumns = reader.iteratorWithHeaders
           if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keys.to(Seq) else Seq.empty[String]
         }
       }
-      data <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
-        ZIO.effectTotal(reader.iteratorWithHeaders.toList)
+      data <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
+        ZIO.succeed(reader.iteratorWithHeaders.toList)
       }
     } yield columns -> data
 

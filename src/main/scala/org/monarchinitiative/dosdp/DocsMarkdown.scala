@@ -5,8 +5,7 @@ import org.monarchinitiative.dosdp.cli.Docs.DocData
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.io.OWLObjectRenderer
 import org.semanticweb.owlapi.model.{IRI, OWLObject}
-import zio.ZIO
-import zio.logging.Logging
+import zio.{IO, ZIO}
 
 import scala.jdk.CollectionConverters._
 
@@ -20,7 +19,7 @@ import scala.jdk.CollectionConverters._
  */
 object DocsMarkdown {
 
-  def markdown(compiled: CompiledPattern, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): ZIO[Logging, DOSDPError, String] = {
+  def markdown(compiled: CompiledPattern, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): IO[DOSDPError, String] = {
     def r(obj: OWLObject): String = renderer.render(obj).replace("\n", " ")
 
     val dosdp = compiled.source

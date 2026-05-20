@@ -3,12 +3,11 @@ package org.monarchinitiative.dosdp
 import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model._
-import zio._
+import zio.{Config => _, _}
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object MultiClausePrintfTest extends DefaultRunnableSpec {
+object MultiClausePrintfTest extends ZIOSpecDefault {
 
   def spec = suite("Print simple text")(
     test("Text should be replaced correctly") {
@@ -181,7 +180,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         "Sub text1 sub_value1 end. Sub text2 sub_value2_1 end. Sub text2 sub_value2_2 end. Sub text2 sub_value2_3 end. Sub text3 sub_value3 end. " +
         "Sub sub text1 sub_sub_value1 end. Sub sub text2 end._Third me sibling_value3."))
     },
-    testM("SubClassOf should be replaced correctly with list values (single value in it).") {
+    test("SubClassOf should be replaced correctly with list values (single value in it).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
       val partOf: OWLObjectProperty = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
@@ -203,7 +202,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(logicalAxiom1))
     },
-    testM("SubClassOf should be replaced correctly with list values (two values in it).") {
+    test("SubClassOf should be replaced correctly with list values (two values in it).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
       val item2: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000003")
@@ -226,7 +225,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002|ONT:0000003", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(logicalAxiom1))
     },
-    testM("Single-clause multi_clause with sep ' or ' joins list_var expansions as a union.") {
+    test("Single-clause multi_clause with sep ' or ' joins list_var expansions as a union.") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
       val item2: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000003")
@@ -249,7 +248,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002|ONT:0000003", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(logicalAxiom1))
     },
-    testM("SubClassOf with annotation should be replaced correctly.") {
+    test("SubClassOf with annotation should be replaced correctly.") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
@@ -274,7 +273,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all", "comment_var" -> "My comment1.")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(annotationAxiom1))
     },
-    testM("Annotation should be replaced correctly. Tests the default behaviour (without multiClauses and multiValues).") {
+    test("Annotation should be replaced correctly. Tests the default behaviour (without multiClauses and multiValues).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val exacySynonym: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/hasExactSynonym")
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
@@ -293,7 +292,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "disease" -> "ONT:0000002")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(annotationAxiom))
     },
-    testM("Annotations should be replaced correctly with list values (two values in it).") {
+    test("Annotations should be replaced correctly with list values (two values in it).") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val exacySynonym: OWLAnnotationProperty = AnnotationProperty("http://purl.obolibrary.org/obo/hasExactSynonym")
       val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
@@ -317,7 +316,7 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       } yield assert(axioms)(contains(annotationAxiom1)) &&
         assert(axioms)(contains(annotationAxiom2))
     },
-    testM("Logical axiom separators should be validated. Only and, or allowed for logical expressions.") {
+    test("Logical axiom separators should be validated. Only and, or allowed for logical expressions.") {
       var exceptionOccurred = false
 
       try {
@@ -333,8 +332,8 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
       } catch {
         case e: IllegalArgumentException => exceptionOccurred = true
       }
-      assertM(ZIO.effect(exceptionOccurred))(isTrue)
+      assertZIO(ZIO.attempt(exceptionOccurred))(isTrue)
     },
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

@@ -3,7 +3,6 @@ package org.monarchinitiative.dosdp
 import org.monarchinitiative.dosdp.cli.{Config, Generate}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
@@ -16,7 +15,7 @@ import scala.jdk.CollectionConverters._
  * Manchester parser saw one assembled expression. Patterns relying on this
  * structure must still compile.
  */
-object MultiClauseSubClausesTest extends DefaultRunnableSpec {
+object MultiClauseSubClausesTest extends ZIOSpecDefault {
 
   private val term: OWLClass = Class("http://purl.obolibrary.org/obo/EX_0001")
   private val anatomy: OWLClass = Class("http://purl.obolibrary.org/obo/UBERON_0000001")
@@ -28,7 +27,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
     axiom.getSuperClass.getClassesInSignature.asScala.contains(cls)
 
   def spec = suite("multi_clause with sub_clauses on logical templates") (
-    testM("subClassOf multi_clause with one clause carrying a sub_clause compiles and renders") {
+    test("subClassOf multi_clause with one clause carrying a sub_clause compiles and renders") {
       val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
       val topClause = PrintfClause(
         "'part_of' some %s",
@@ -56,7 +55,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(partOf)) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(develops))
     },
-    testM("missing nested sub_clause binding keeps the parent clause (drop only the sub-clause)") {
+    test("missing nested sub_clause binding keeps the parent clause (drop only the sub-clause)") {
       // Parent clause `'part_of' some %s` is bound; nested sub_clause `'develops_from' some %s`
       // is unbound. Legacy `PrintfText.replaceMultiClause` kept the parent and dropped only the
       // sub-clause.
@@ -87,7 +86,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala))(contains(partOf)) &&
         assert(axioms.flatMap(_.getObjectPropertiesInSignature.asScala).contains(develops))(isFalse)
     },
-    testM("missing parent clause binding drops the entire clause-group even if sub_clauses are bound") {
+    test("missing parent clause binding drops the entire clause-group even if sub_clauses are bound") {
       val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
       val topClause = PrintfClause(
         "'part_of' some %s",
@@ -111,7 +110,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
         Harness.assertNoPlaceholderIRIs(axioms)
     },
-    testM("a single-clause nested sub_clause may omit its separator") {
+    test("a single-clause nested sub_clause may omit its separator") {
       // The nested sub_clause has exactly one clause and no `sep`; the operator
       // is never used to join anything, so compilation must not demand a separator.
       val sub = PrintfClause("'develops_from' some %s", Some(List("origin")), None)
@@ -138,7 +137,7 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
         subAxioms = axioms.collect { case sc: OWLSubClassOfAxiom => sc }
       } yield assert(subAxioms.exists(ax => hasNamedClass(ax, anatomy) && hasNamedClass(ax, region)))(isTrue)
     },
-    testM("nested operator differs from parent: row-time and placeholder forms agree") {
+    test("nested operator differs from parent: row-time and placeholder forms agree") {
       // Parent `and`, nested sub_clause `or`. The output must nest a union inside
       // the intersection — not flatten — for both the row-time axioms and the
       // placeholder-form axioms that Query/Terms consume.
@@ -181,6 +180,6 @@ object MultiClauseSubClausesTest extends DefaultRunnableSpec {
       } yield assert(rowSub.exists(superHasNestedUnion))(isTrue) &&
         assert(placeholderSub.exists(superHasNestedUnion))(isTrue)
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

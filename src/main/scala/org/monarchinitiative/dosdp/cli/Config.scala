@@ -10,9 +10,7 @@ import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AxiomKind, BoolValue, 
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.{DOSDP, OBOPrefixes, Utilities}
 import org.semanticweb.owlapi.model.OWLOntology
-import zio._
-import zio.blocking.Blocking
-import zio.logging._
+import zio.{Config => _, _}
 
 import java.io.File
 import scala.io.Source
@@ -23,7 +21,7 @@ sealed trait Config {
 
   def common: CommonOptions
 
-  def run: ZIO[ZEnv with Logging, DOSDPError, Unit]
+  def run: IO[DOSDPError, Unit]
 
 }
 
@@ -56,13 +54,13 @@ final case class CommonOptions(
                                 verbose: Boolean = false
                               ) {
 
-  def inputDOSDP: ZIO[Logging, DOSDPError, DOSDP] = inputDOSDPFrom(template)
+  def inputDOSDP: IO[DOSDPError, DOSDP] = inputDOSDPFrom(template)
 
-  def prefixesMap: ZIO[Logging, DOSDPError, PartialFunction[String, String]] = {
+  def prefixesMap: IO[DOSDPError, PartialFunction[String, String]] = {
     val possiblePrefixMap = prefixes.map { prefixesPath =>
       val prefixesFile = new File(prefixesPath)
       for {
-        prefixesText <- ZIO.effect(Source.fromFile(prefixesFile, "UTF-8")).bracketAuto(s => ZIO.effect(s.mkString))
+        prefixesText <- ZIO.attempt(Source.fromFile(prefixesFile, "UTF-8")).acquireReleaseWithAuto(s => ZIO.attempt(s.mkString))
           .flatMapError(e => logError(s"Could not read prefixes file at $prefixesPath", e))
         prefixesJson <- ZIO.fromEither(parser.parse(prefixesText))
           .flatMapError(e => logError(s"Invalid JSON format for prefixes file at $prefixesPath", e))
@@ -76,7 +74,7 @@ final case class CommonOptions(
     } yield if (oboPrefixes.bool) specifiedPrefixes.orElse(OBOPrefixes) else specifiedPrefixes
   }
 
-  def ontologyOpt: ZIO[Blocking with Logging, DOSDPError, Option[OWLOntology]] =
+  def ontologyOpt: IO[DOSDPError, Option[OWLOntology]] =
     ZIO.foreach(ontology)(ontPath => Utilities.loadOntology(ontPath, catalog))
 
 }
@@ -89,7 +87,7 @@ final case class TermsConfig(@Recurse
                              @ValueDescription("file")
                              infile: String = "fillers.tsv") extends Config {
 
-  override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Terms.run(this)
+  override def run: IO[DOSDPError, Unit] = Terms.run(this)
 
 }
 
@@ -117,7 +115,7 @@ final case class GenerateConfig(@Recurse
                                 axiomSourceAnnotationProperty: String = "http://www.geneontology.org/formats/oboInOwl#source"
                                ) extends Config {
 
-  override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Generate.run(this)
+  override def run: IO[DOSDPError, Unit] = Generate.run(this)
 
 }
 
@@ -126,7 +124,7 @@ final case class GenerateConfig(@Recurse
 final case class PrototypeConfig(@Recurse
                                  common: CommonOptions) extends Config {
 
-  override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Prototype.run(this)
+  override def run: IO[DOSDPError, Unit] = Prototype.run(this)
 
 }
 
@@ -141,7 +139,7 @@ final case class DocsConfig(@Recurse
                             @ValueDescription("URL")
                             dataLocationPrefix: String = "http://example.org/") extends Config {
 
-  override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Docs.run(this)
+  override def run: IO[DOSDPError, Unit] = Docs.run(this)
 
 }
 
@@ -166,26 +164,26 @@ final case class QueryConfig(@Recurse
                              parallelism: Int = 1
                             ) extends Config {
 
-  override def run: ZIO[ZEnv with Logging, DOSDPError, Unit] = Query.run(this)
+  override def run: IO[DOSDPError, Unit] = Query.run(this)
 
 }
 
 object Config {
 
-  def tabularFormat(arg: String): ZIO[Logging, DOSDPError, CSVFormat] = arg.toLowerCase match {
+  def tabularFormat(arg: String): IO[DOSDPError, CSVFormat] = arg.toLowerCase match {
     case "csv" => ZIO.succeed(new DefaultCSVFormat {})
     case "tsv" => ZIO.succeed(new TSVFormat {})
     case other => logErrorFail(s"Invalid tabular format requested: $other")
   }
 
-  def inputDOSDPFrom(location: String): ZIO[Logging, DOSDPError, DOSDP] = {
-    def wrap[A](what: String)(z: ZIO[Logging, Throwable, A]): ZIO[Logging, DOSDPError, A] =
+  def inputDOSDPFrom(location: String): IO[DOSDPError, DOSDP] = {
+    def wrap[A](what: String)(z: Task[A]): IO[DOSDPError, A] =
       z.flatMapError(e => logError(s"$what at $location", e))
     for {
-      file <- ZIO.effectTotal(new File(location))
-      fileExists <- wrap("Could not read pattern file")(ZIO.effect(file.exists))
-      sourceZ = if (fileExists) ZIO.effect(Source.fromFile(file, "UTF-8")) else ZIO.effect(Source.fromURL(location, "UTF-8"))
-      dosdpText <- wrap("Could not read pattern file")(sourceZ.bracketAuto(s => ZIO.effect(s.mkString)))
+      file <- ZIO.succeed(new File(location))
+      fileExists <- wrap("Could not read pattern file")(ZIO.attempt(file.exists))
+      sourceZ = if (fileExists) ZIO.attempt(Source.fromFile(file, "UTF-8")) else ZIO.attempt(Source.fromURL(location, "UTF-8"))
+      dosdpText <- wrap("Could not read pattern file")(sourceZ.acquireReleaseWithAuto(s => ZIO.attempt(s.mkString)))
       json <- wrap("Invalid JSON format for pattern file")(ZIO.fromEither(parser.parse(dosdpText)))
       dosdp <- wrap("JSON does not conform to DOS-DP schema for pattern file")(ZIO.fromEither(json.as[DOSDP]))
     } yield dosdp
@@ -269,15 +267,15 @@ object DOSDPError {
 
   private def apply(msg: String): DOSDPError = new DOSDPError(msg, new Exception(msg))
 
-  def logError(msg: String, cause: Throwable): URIO[Logging, DOSDPError] =
-    log.error(s"$msg:\n${cause.getMessage}").as(new DOSDPError(msg, cause))
+  def logError(msg: String, cause: Throwable): UIO[DOSDPError] =
+    ZIO.logError(s"$msg:\n${cause.getMessage}").as(new DOSDPError(msg, cause))
 
-  def logError(msg: String): URIO[Logging, DOSDPError] = log.info(msg).as(DOSDPError(msg))
+  def logError(msg: String): UIO[DOSDPError] = ZIO.logError(msg).as(DOSDPError(msg))
 
-  def logErrorFail(msg: String, cause: Throwable): ZIO[Logging, DOSDPError, Nothing] =
+  def logErrorFail(msg: String, cause: Throwable): IO[DOSDPError, Nothing] =
     logError(msg, cause).flip
 
-  def logErrorFail(msg: String): ZIO[Logging, DOSDPError, Nothing] =
+  def logErrorFail(msg: String): IO[DOSDPError, Nothing] =
     logError(msg).flip
 
 }

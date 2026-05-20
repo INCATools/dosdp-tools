@@ -2,8 +2,7 @@ package org.monarchinitiative.dosdp
 
 import org.apache.jena.sys.JenaSystem
 import org.monarchinitiative.dosdp.cli._
-import zio._
-import zio.logging._
+import zio.{Config => _, _}
 import zio.test._
 
 import java.nio.charset.StandardCharsets
@@ -19,7 +18,7 @@ import scala.jdk.CollectionConverters._
  * set of lines (the underlying collection is unordered); prototype and docs
  * are compared exactly (OFN via axiom-set equality, Markdown byte-for-byte).
  */
-object SubcommandGoldenTest extends DefaultRunnableSpec {
+object SubcommandGoldenTest extends ZIOSpecDefault {
 
   JenaSystem.init()
 
@@ -44,40 +43,40 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     p.toString
   }
 
-  private def queryTest(name: String, axioms: Config.AxiomKind = Config.LogicalAxioms, goldenSuffix: String = "query") = testM(s"$goldenSuffix: $name") {
+  private def queryTest(name: String, axioms: Config.AxiomKind = Config.LogicalAxioms, goldenSuffix: String = "query") = test(s"$goldenSuffix: $name") {
     for {
       dosdp <- Config.inputDOSDPFrom(s"$R/$name.yaml")
       sparql <- Query.makeProcessedQuery(dosdp, OBOPrefixes, axioms, None)
     } yield Harness.assertSPARQLMatchesGolden(sparql, s"$R/$name.$goldenSuffix.golden.rq")
   }
 
-  private def termsTest(name: String) = testM(s"terms: $name") {
+  private def termsTest(name: String) = test(s"terms: $name") {
     val out = tempFile("terms-", ".txt")
     val cfg = TermsConfig(commonFor(s"$R/$name.yaml", out), infile = s"$R/$name.tsv")
     for {
       _ <- Terms.run(cfg)
-      lines <- ZIO.effect(Files.readAllLines(Paths.get(out)).asScala.toList)
+      lines <- ZIO.attempt(Files.readAllLines(Paths.get(out)).asScala.toList)
     } yield Harness.assertLineSetMatchesGolden(lines, s"$R/$name.terms.golden.txt")
   }
 
-  private def prototypeTest(name: String) = testM(s"prototype: $name") {
+  private def prototypeTest(name: String) = test(s"prototype: $name") {
     val out = tempFile("proto-", ".ofn")
     val cfg = PrototypeConfig(commonFor(s"$R/$name.yaml", out))
     for {
       _ <- Prototype.run(cfg)
-      ofn <- ZIO.effect(new String(Files.readAllBytes(Paths.get(out)), StandardCharsets.UTF_8))
+      ofn <- ZIO.attempt(new String(Files.readAllBytes(Paths.get(out)), StandardCharsets.UTF_8))
       axioms = Harness.parse(ofn)
     } yield Harness.assertMatchesGolden(axioms, s"$R/$name.prototype.golden.ofn") &&
       Harness.assertNoPlaceholderIRIs(axioms) &&
       Harness.assertNoPlaceholderLiterals(axioms)
   }
 
-  private def docsTest(name: String) = testM(s"docs: $name") {
+  private def docsTest(name: String) = test(s"docs: $name") {
     val out = tempFile("docs-", ".md")
     val cfg = DocsConfig(commonFor(s"$R/$name.yaml", out), infile = s"$R/$name.tsv")
     for {
       _ <- Docs.run(cfg)
-      md <- ZIO.effect(new String(Files.readAllBytes(Paths.get(out)), StandardCharsets.UTF_8))
+      md <- ZIO.attempt(new String(Files.readAllBytes(Paths.get(out)), StandardCharsets.UTF_8))
     } yield Harness.assertTextMatchesGolden(md, s"$R/$name.docs.golden.md")
   }
 
@@ -114,6 +113,6 @@ object SubcommandGoldenTest extends DefaultRunnableSpec {
     prototypeTest("annotated_axioms"),
     prototypeTest("axiom_kinds"),
     docsTest("annotated_axioms")
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

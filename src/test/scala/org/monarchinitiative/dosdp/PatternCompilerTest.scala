@@ -2,11 +2,10 @@ package org.monarchinitiative.dosdp
 
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.phenoscape.scowl._
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
-object PatternCompilerTest extends DefaultRunnableSpec {
+object PatternCompilerTest extends ZIOSpecDefault {
 
   private val labelAnnotated: DOSDP = DOSDP.empty.copy(
     pattern_name = Some("trivial"),
@@ -20,7 +19,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
       vars = Some(List("x")))))
 
   def spec = suite("PatternCompiler")(
-    testM("compiles a minimal pattern with an OBO name annotation") {
+    test("compiles a minimal pattern with an OBO name annotation") {
       for {
         compiled <- PatternCompiler.compile(labelAnnotated, OBOPrefixes)
       } yield {
@@ -34,7 +33,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           assert(compiled.dataVarNames)(isEmpty)
       }
     },
-    testM("rejects a custom annotation that names an undeclared property") {
+    test("rejects a custom annotation that names an undeclared property") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-custom-ann"),
         annotations = Some(List(PrintfAnnotation(
@@ -45,7 +44,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           `override` = None))))
       compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
     },
-    testM("rejects a permutation that names an undeclared property") {
+    test("rejects a permutation that names an undeclared property") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-permutation-prop"),
         vars = Some(Map("x" -> "owl:Thing")),
@@ -57,7 +56,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           permutations = Some(List(Permutation("x", List("made_up_property")))))))
       compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
     },
-    testM("rejects a permutation whose var is not in the annotation's vars list") {
+    test("rejects a permutation whose var is not in the annotation's vars list") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-permutation-var"),
         annotationProperties = Some(Map("exact_synonym" -> "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")),
@@ -70,13 +69,13 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           permutations = Some(List(Permutation("y", List("exact_synonym")))))))
       compileError(pattern).map(msg => assert(msg)(containsString("Permutation vars not found")))
     },
-    testM("rejects a readable_identifiers entry that names an undeclared property") {
+    test("rejects a readable_identifiers entry that names an undeclared property") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-readable-id"),
         readable_identifiers = Some(List("made_up_property")))
       compileError(pattern).map(msg => assert(msg)(containsString("made_up_property")))
     },
-    testM("populates dataVarNames from data_vars and data_list_vars") {
+    test("populates dataVarNames from data_vars and data_list_vars") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("data-vars"),
         data_vars = Some(Map("rate_min" -> "xsd:short")),
@@ -85,7 +84,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
         compiled <- PatternCompiler.compile(pattern, OBOPrefixes)
       } yield assert(compiled.dataVarNames)(equalTo(Set("rate_min", "rates")))
     },
-    testM("rejects declared variable names outside letters, numbers, and underscores") {
+    test("rejects declared variable names outside letters, numbers, and underscores") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-var-name"),
         vars = Some(Map("cell-type" -> "owl:Thing")),
@@ -95,7 +94,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           assert(msg)(containsString("xref.value")) &&
           assert(msg)(containsString("letters, numbers, and underscores")))
     },
-    testM("rejects undeclared template variable names outside letters, numbers, and underscores") {
+    test("rejects undeclared template variable names outside letters, numbers, and underscores") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-template-var-name"),
         classes = Some(Map("thing" -> "owl:Thing")),
@@ -106,7 +105,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           vars = Some(List("cell type")))))
       compileError(pattern).map(msg => assert(msg)(containsString("cell type")))
     },
-    testM("rejects bad name in a permutation var") {
+    test("rejects bad name in a permutation var") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-permutation-var-name"),
         annotationProperties = Some(Map("exact_synonym" -> "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")),
@@ -119,7 +118,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           permutations = Some(List(Permutation("bad-var", List("exact_synonym")))))))
       compileError(pattern).map(msg => assert(msg)(containsString("bad-var")))
     },
-    testM("rejects bad name in an internal_vars input reference") {
+    test("rejects bad name in an internal_vars input reference") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-internal-input"),
         data_list_vars = Some(Map("items" -> "xsd:string")),
@@ -129,7 +128,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           input = "bad input"))))
       compileError(pattern).map(msg => assert(msg)(containsString("bad input")))
     },
-    testM("rejects bad name nested inside a multi_clause sub_clause") {
+    test("rejects bad name nested inside a multi_clause sub_clause") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-sub-clause-var"),
         classes = Some(Map("thing" -> "owl:Thing")),
@@ -151,7 +150,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
                   sub_clauses = None))))))))))))))
       compileError(pattern).map(msg => assert(msg)(containsString("nested.bad")))
     },
-    testM("rejects bad name in an IRIValueAnnotation var") {
+    test("rejects bad name in an IRIValueAnnotation var") {
       val pattern = DOSDP.empty.copy(
         pattern_name = Some("bad-iri-annotation-var"),
         annotationProperties = Some(Map("seeAlso" -> "rdfs:seeAlso")),
@@ -162,7 +161,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
           `var` = "bad-iri-var"))))
       compileError(pattern).map(msg => assert(msg)(containsString("bad-iri-var")))
     },
-    testM("rejects a data_var in a cardinality slot (`min %s`) — known capability regression") {
+    test("rejects a data_var in a cardinality slot (`min %s`) — known capability regression") {
       // Manchester requires a bare integer at the cardinality, but the compile-time
       // placeholder for a data_var is a typed-literal token `"$name"^^xsd:integer`,
       // which the parser does not accept in that position. Pinning this as an
@@ -176,7 +175,7 @@ object PatternCompilerTest extends DefaultRunnableSpec {
         subClassOf = Some(PrintfOWLConvenience(None, Some("'has_age' min %s xsd:integer"), Some(List("count")))))
       compileError(pattern).map(msg => assert(msg)(containsString("Failed to parse class expression")))
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
   private def compileError(pattern: DOSDP) =
     PatternCompiler.compile(pattern, OBOPrefixes).either.map {

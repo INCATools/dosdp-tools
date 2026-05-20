@@ -12,7 +12,7 @@ import zio.test._
  * does not include such subjects (they're not OWLEntities), so a
  * signature-only walk would miss a leaked placeholder there.
  */
-object HarnessTest extends DefaultRunnableSpec {
+object HarnessTest extends ZIOSpecDefault {
 
   private val factory = OWLManager.getOWLDataFactory
   private val placeholder: IRI = DOSDP.variableToIRI("defined_class")

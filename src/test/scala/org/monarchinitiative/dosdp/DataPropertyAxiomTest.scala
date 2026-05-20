@@ -5,13 +5,12 @@ import org.monarchinitiative.dosdp.{AxiomType => DOSDPAxiomType}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
 import scala.jdk.CollectionConverters._
 
-object DataPropertyAxiomTest extends DefaultRunnableSpec {
+object DataPropertyAxiomTest extends ZIOSpecDefault {
 
   private val factory = OWLManager.getOWLDataFactory
 
@@ -51,7 +50,7 @@ object DataPropertyAxiomTest extends DefaultRunnableSpec {
   }
 
   def spec = suite("Data property restrictions in logical_axioms (issue #504)") {
-    testM("data_var fillers should be substituted and produce a well-typed data restriction") {
+    test("data_var fillers should be substituted and produce a well-typed data restriction") {
       val row = Map("defined_class" -> "ONT:0000001", "rate_min" -> "5")
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None, outputLogicalAxioms = true, outputAnnotationAxioms = false, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
@@ -65,6 +64,6 @@ object DataPropertyAxiomTest extends DefaultRunnableSpec {
         assert(facetValues.map(_.getLiteral))(equalTo(List("5"))) &&
         assert(facetValues.map(_.getDatatype))(equalTo(List(xsdShort)))
     }
-  }.provideCustomLayer(Logging.consoleErr())
+  }
 
 }

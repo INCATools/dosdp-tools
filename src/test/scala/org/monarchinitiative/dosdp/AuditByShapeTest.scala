@@ -4,7 +4,6 @@ import org.monarchinitiative.dosdp.cli.Generate
 import org.monarchinitiative.dosdp.{AxiomType => DOSDPAxiomType}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
@@ -27,7 +26,7 @@ import scala.jdk.CollectionConverters._
  *     slots not covered in `MissingBindingsTest` (value, DataOneOf,
  *     inside a cardinality filler).
  */
-object AuditByShapeTest extends DefaultRunnableSpec {
+object AuditByShapeTest extends ZIOSpecDefault {
 
   private val term: OWLClass = Class("http://purl.obolibrary.org/obo/EX_0001")
   private val anatomy: OWLClass = Class("http://purl.obolibrary.org/obo/UBERON_0000001")
@@ -140,7 +139,7 @@ object AuditByShapeTest extends DefaultRunnableSpec {
 
     // ----- Logical templates carrying axiom annotations (positive) -----
 
-    testM("equivalentTo with an axiom annotation renders both the axiom and the annotation") {
+    test("equivalentTo with an axiom annotation renders both the axiom and the annotation") {
       for {
         axioms <- render(equivWithAnn, boundRow)
         eqAxioms = axioms.collect { case e: OWLEquivalentClassesAxiom => e }
@@ -149,14 +148,14 @@ object AuditByShapeTest extends DefaultRunnableSpec {
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("disjointWith with an axiom annotation renders both the axiom and the annotation") {
+    test("disjointWith with an axiom annotation renders both the axiom and the annotation") {
       for {
         axioms <- render(disjointWithAnn, boundRow)
       } yield assert(logicalAxiomAnnotationProps(axioms))(contains(DCSource)) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("GCI with an axiom annotation renders both the axiom and the annotation") {
+    test("GCI with an axiom annotation renders both the axiom and the annotation") {
       for {
         axioms <- render(gciWithAnn, boundRow)
       } yield assert(logicalAxiomAnnotationProps(axioms))(contains(DCSource)) &&
@@ -166,28 +165,28 @@ object AuditByShapeTest extends DefaultRunnableSpec {
 
     // ----- Missing-binding negatives on annotation paths -----
 
-    testM("OBO name annotation with missing class var emits no rdfs:label") {
+    test("OBO name annotation with missing class var emits no rdfs:label") {
       for {
         axioms <- render(oboNamePattern, unboundRow)
       } yield assert(annotationOn(axioms, OBORdfsLabel))(isEmpty) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("Custom annotation with missing class var emits no annotation assertion") {
+    test("Custom annotation with missing class var emits no annotation assertion") {
       for {
         axioms <- render(customAnnPattern, unboundRow)
       } yield assert(annotationOn(axioms, DCSource))(isEmpty) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("Annotation with `permutations` and missing class var emits no permuted synonyms") {
+    test("Annotation with `permutations` and missing class var emits no permuted synonyms") {
       for {
         axioms <- render(permutationAnnPattern, unboundRow)
       } yield assert(annotationOn(axioms, OBOExactSynonym))(isEmpty) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("Annotation with `override`: missing both the override column and the template var drops the annotation") {
+    test("Annotation with `override`: missing both the override column and the template var drops the annotation") {
       // unboundRow has neither `source_override` nor `structure`; neither branch can produce a value.
       for {
         axioms <- render(overrideAnnPattern, unboundRow)
@@ -198,21 +197,21 @@ object AuditByShapeTest extends DefaultRunnableSpec {
 
     // ----- Missing-binding negatives on the three non-facet data_var slots -----
 
-    testM("data_var missing in `value %s` slot drops the subClassOf axiom") {
+    test("data_var missing in `value %s` slot drops the subClassOf axiom") {
       for {
         axioms <- render(dataValuePattern, Map("defined_class" -> "EX:0001"))
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("data_var missing in `{%s}` DataOneOf slot drops the subClassOf axiom") {
+    test("data_var missing in `{%s}` DataOneOf slot drops the subClassOf axiom") {
       for {
         axioms <- render(dataOneOfPattern, Map("defined_class" -> "EX:0001"))
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
         Harness.assertNoPlaceholderIRIs(axioms) &&
         Harness.assertNoPlaceholderLiterals(axioms)
     },
-    testM("data_var missing inside a cardinality facet filler drops the subClassOf axiom") {
+    test("data_var missing inside a cardinality facet filler drops the subClassOf axiom") {
       for {
         axioms <- render(dataCardinalityPattern, Map("defined_class" -> "EX:0001"))
       } yield assert(axioms.exists(_.isInstanceOf[OWLSubClassOfAxiom]))(isFalse) &&
@@ -220,6 +219,6 @@ object AuditByShapeTest extends DefaultRunnableSpec {
         Harness.assertNoPlaceholderLiterals(axioms)
     }
 
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

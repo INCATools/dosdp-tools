@@ -5,18 +5,17 @@ import org.monarchinitiative.dosdp.cli.{Config, Generate}
 import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import org.semanticweb.owlapi.vocab.DublinCoreVocabulary
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
 import java.io.File
 
-object OverrideTest extends DefaultRunnableSpec {
+object OverrideTest extends ZIOSpecDefault {
 
   val DCSource: OWLAnnotationProperty = AnnotationProperty(DublinCoreVocabulary.SOURCE.getIRI)
 
   def spec = suite("Overrides") {
-    testM("Overrides should be checked") {
+    test("Overrides should be checked") {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/OverrideTest.ofn", None)
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/OverrideTest.yaml")
@@ -38,6 +37,6 @@ object OverrideTest extends DefaultRunnableSpec {
         assert(axioms)(not(contains(Class("http://ex.org/1") Annotation(DCSource, "The source is source1")))) &&
         assert(axioms)(not(contains(Class("http://ex.org/5") Annotation(RDFSLabel, "Entity5LabelInTSV thing"))))
     }
-  }.provideCustomLayer(Logging.consoleErr())
+  }
 
 }
