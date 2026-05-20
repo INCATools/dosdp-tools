@@ -9,8 +9,7 @@ import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpre
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
 import org.phenoscape.scowl._
-import zio._
-import zio.logging._
+import zio.{Config => _, _}
 
 import scala.jdk.CollectionConverters._
 
@@ -18,7 +17,7 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] = {
+  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Any, DOSDPError, String] = {
     // Logical axioms always materialize even on an annotation-only query: the
     // `OPTIONAL { ?var rdfs:label ... }` clauses are derived from their
     // variable set. Compute once and share with `selectFor` / `triplesFor` so
@@ -63,10 +62,10 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] =
+  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): ZIO[Any, DOSDPError, Seq[String]] =
     triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms))
 
-  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): ZIO[Logging, DOSDPError, Seq[String]] = {
+  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): ZIO[Any, DOSDPError, Seq[String]] = {
     val props = compiled.readableIdentifierProperties.to(Set)
     val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
     val annotationAxioms = if (queryAnnotations) Expansion.placeholderAxioms(compiled, AnnotationAxioms) else Set.empty[OWLAxiom]
@@ -94,13 +93,13 @@ ORDER BY ?defined_class_label
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
-  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Logging, Seq[String]] = axiom match {
+  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Any, Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
       val (subClass, subClassTriples) = triplesForClassExpression(subClassOf.getSubClass)
       val (superClass, superClassTriples) = triplesForClassExpression(subClassOf.getSuperClass)
       ZIO.succeed(Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples)
     case equivalentTo: OWLEquivalentClassesAxiom          =>
-      log.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      ZIO.logWarning("More than two operands or missing named class in equivalent class axiom unexpected")
         .when(!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) *>
         ZIO.succeed {
           (for {
@@ -113,7 +112,7 @@ ORDER BY ?defined_class_label
           }).toSeq.flatten
         }
     case disjointWith: OWLDisjointClassesAxiom            =>
-      log.warn("More than two operands or missing named class in disjointness axiom unexpected")
+      ZIO.logWarning("More than two operands or missing named class in disjointness axiom unexpected")
         .when(!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) *>
         ZIO.succeed {
           (for {

@@ -2,17 +2,16 @@ package org.monarchinitiative.dosdp
 
 import org.apache.jena.sys.JenaSystem
 import org.monarchinitiative.dosdp.cli.Config
-import zio._
+import zio.{Config => _, _}
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object QueryGeneratorRegexTest extends DefaultRunnableSpec {
+object QueryGeneratorRegexTest extends ZIOSpecDefault {
 
   JenaSystem.init()
 
   def spec = suite("Test query label token regex")(
-    testM("Query label token regex") {
+    test("Query label token regex") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorRegexTest.yaml")
         compiled <- PatternCompiler.compile(dosdp, OBOPrefixes)
@@ -25,6 +24,6 @@ object QueryGeneratorRegexTest extends DefaultRunnableSpec {
         assert(joined)(not(containsString("vector_borne"))) &&
         assert(joined)(not(containsString("vector_x002d_borne")))
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

@@ -3,7 +3,7 @@ package org.monarchinitiative.dosdp
 import zio.test.Assertion._
 import zio.test._
 
-object PrefixesTest extends DefaultRunnableSpec {
+object PrefixesTest extends ZIOSpecDefault {
 
   def spec = suite("Test prefixes") {
     test("OBO prefixes should be fallback") {

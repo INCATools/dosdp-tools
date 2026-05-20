@@ -7,15 +7,14 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object PermutationTest extends DefaultRunnableSpec {
+object PermutationTest extends ZIOSpecDefault {
 
   val oioExactSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")
   val oioRelatedSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
 
   def spec = suite("Permutation feature test")(
-    testM("Generate synonyms from filler term synonyms using permutations") {
+    test("Generate synonyms from filler term synonyms using permutations") {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/permutation_test.ofn", None)
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_test.yaml")
@@ -44,7 +43,7 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001002") Annotation(oioRelatedSynonym, "acute form of pulmonary disease")))
       }
     },
-    testM("Generate annotations without ontology (no permutation values available)") {
+    test("Generate annotations without ontology (no permutation values available)") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_test.yaml")
         columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/permutation_test.tsv"), new TSVFormat {})
@@ -59,7 +58,7 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001001") Annotation(oioExactSynonym, "http://purl.obolibrary.org/obo/MONDO_0005267, acute")))
       }
     },
-    testM("Cartesian product of permutations across multiple vars") {
+    test("Cartesian product of permutations across multiple vars") {
       val defined = Class("http://purl.obolibrary.org/obo/TEST_9999999")
       val fillers = List(Map(
         "defined_class" -> "TEST:9999999",
@@ -89,25 +88,25 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(contains(defined Annotation(oioExactSynonym, "hypertrophic pump")))
       }
     },
-    testM("Permutation var not in annotation vars list fails validation") {
+    test("Permutation var not in annotation vars list fails validation") {
       val fillers = List(Map("defined_class" -> "TEST:9999999", "disease" -> "TEST:0000001"))
       val program = for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_invalid_var.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, None, outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield axioms
-      assertM(program.flip.map(_.msg))(containsString("not_a_real_var"))
+      assertZIO(program.flip.map(_.msg))(containsString("not_a_real_var"))
     },
-    testM("Permutation referencing an undeclared annotation property fails validation") {
+    test("Permutation referencing an undeclared annotation property fails validation") {
       val fillers = List(Map("defined_class" -> "TEST:9999999", "disease" -> "TEST:0000001"))
       val program = for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_invalid_property.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, None, outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield axioms
-      assertM(program.flip.map(_.msg))(containsString("undeclared_property"))
+      assertZIO(program.flip.map(_.msg))(containsString("undeclared_property"))
     },
     // A non-empty `override:` value short-circuits `permutations:` on the same annotation:
     // the row emits exactly the override string, and permutation expansion is skipped.
-    testM("Override value short-circuits permutations for that row") {
+    test("Override value short-circuits permutations for that row") {
       val overridden  = Class("http://purl.obolibrary.org/obo/TEST_9999992")
       val notOverridden = Class("http://purl.obolibrary.org/obo/TEST_9999991")
       val fillers = List(
@@ -130,6 +129,6 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(not(contains(overridden Annotation(oioExactSynonym, "cardiac disease, acute"))))
       }
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

@@ -21,7 +21,7 @@ import scala.jdk.CollectionConverters._
  * the first assertion fires ("test missing entry for X") — forcing a deliberate
  * decision about whether the new type carries literals and needs walker support.
  */
-object LiteralWalkerAuditTest extends DefaultRunnableSpec {
+object LiteralWalkerAuditTest extends ZIOSpecDefault {
 
   private val factory     = OWLManager.getOWLDataFactory
   private val placeholder = factory.getOWLLiteral("$placeholder")

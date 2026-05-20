@@ -4,8 +4,6 @@ import org.monarchinitiative.dosdp.cli.Config.AllAxioms
 import org.monarchinitiative.dosdp.cli.{Config, DOSDPError}
 import org.semanticweb.owlapi.model.OWLAxiom
 import zio.ZIO
-import zio.blocking.Blocking
-import zio.logging._
 import zio.test._
 
 /**
@@ -18,18 +16,18 @@ import zio.test._
  * end-to-end byte-equivalence proof; this suite localizes regressions to a
  * fixture and a structural shape.
  */
-object PlaceholderRowTest extends DefaultRunnableSpec {
+object PlaceholderRowTest extends ZIOSpecDefault {
 
   private val resourceDir = "src/test/resources/org/monarchinitiative/dosdp"
 
-  private def loadAndCompile(name: String): ZIO[Blocking with Logging, DOSDPError, CompiledPattern] =
+  private def loadAndCompile(name: String): ZIO[Any, DOSDPError, CompiledPattern] =
     for {
       dosdp    <- Config.inputDOSDPFrom(s"$resourceDir/$name.yaml")
       compiled <- PatternCompiler.compile(dosdp, OBOPrefixes)
     } yield compiled
 
   private def placeholderTest(name: String) =
-    testM(name) {
+    test(name) {
       for {
         compiled <- loadAndCompile(name)
       } yield {
@@ -46,6 +44,6 @@ object PlaceholderRowTest extends DefaultRunnableSpec {
     placeholderTest("annotated_axioms"),
     placeholderTest("permutation_test"),
     placeholderTest("list_annotations")
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

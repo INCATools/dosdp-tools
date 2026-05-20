@@ -1,10 +1,9 @@
 package org.monarchinitiative.dosdp
 
-import zio.logging._
 import zio.test.Assertion._
 import zio.test._
 
-object RegexTest extends DefaultRunnableSpec {
+object RegexTest extends ZIOSpecDefault {
 
   def spec = suite("Missing columns and cell values")(
     test("RegexSub should replace values correctly") {

@@ -27,12 +27,12 @@ buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, gitC
 
 buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
-val zioVersion = "1.0.18"
+val zioVersion = "2.1.26"
+val zioLoggingVersion = "2.5.3"
 
 libraryDependencies ++= {
     Seq(
       "dev.zio"                    %% "zio"                    % zioVersion,
-      "dev.zio"                    %% "zio-streams"            % zioVersion,
       "com.github.alexarchambault" %% "case-app"               % "2.0.6",
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.29",
       "org.phenoscape"             %% "scowl"                  % "1.4.1",
@@ -55,8 +55,8 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "apache-jena-libs"       % "4.10.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",
       "commons-codec"              %  "commons-codec"          % "1.17.2",
-      "dev.zio"                    %% "zio-logging"            % "0.5.16",
-      "dev.zio"                    %% "zio-logging-slf4j-bridge" % "0.5.16",
+      "dev.zio"                    %% "zio-logging"            % zioLoggingVersion,
+      "dev.zio"                    %% "zio-logging-slf4j2-bridge" % zioLoggingVersion,
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
       "dev.zio"                    %% "zio-test-sbt"           % zioVersion % Test
     )

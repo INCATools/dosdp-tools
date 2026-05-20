@@ -2,7 +2,7 @@ package org.monarchinitiative.dosdp
 
 import org.semanticweb.owlapi.expression.OWLEntityChecker
 import org.semanticweb.owlapi.model._
-import zio._
+import zio.{Config => _, _}
 
 class SafeOWLEntityChecker(checker: OWLEntityChecker) {
 

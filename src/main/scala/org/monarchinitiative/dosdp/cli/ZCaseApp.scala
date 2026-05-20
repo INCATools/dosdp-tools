@@ -6,8 +6,7 @@ import caseapp.core.commandparser.CommandParser
 import caseapp.core.help.{CommandsHelp, Help, WithHelp}
 import caseapp.core.parser.Parser
 import caseapp.core.util.Formatter
-import zio._
-import zio.console.{Console, putStrLn}
+import zio.{Config => _, _}
 
 import java.io.IOException
 
@@ -17,11 +16,11 @@ import java.io.IOException
  *
  * Why this exists: case-app's stock base classes assume a synchronous `def run`
  * returning `Unit`. They are not parameterized over an effect type, so any
- * subcommand that needs to thread `ZIO[ZEnv, …, ExitCode]` through the entry
- * point would have to call `Runtime#unsafeRun` from inside a stock `run`. These
+ * subcommand that needs to thread `ZIO[Any, …, ExitCode]` through the entry
+ * point would have to call `Runtime#unsafe.run` from inside a stock `run`. These
  * classes invert that: the abstract `run` returns ZIO, and the trampoline from
  * `args: List[String]` into `run` itself runs as a single ZIO program suitable
- * for a `zio.App` entry point.
+ * for a `zio.ZIOAppDefault` entry point.
  *
  * The structure mirrors `caseapp.cats.IOCaseApp` and
  * `caseapp.cats.CommandIOApp` from case-app-cats, but for `zio.ZIO`.
@@ -30,7 +29,7 @@ import java.io.IOException
  * outcomes case-app produces: `--usage` requested, `--help` requested, a parse
  * error, or a successfully-parsed options value.
  */
-abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T]) extends App {
+abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T]) extends ZIOAppDefault {
 
   private[this] def parser: Parser[T] = {
     val p = parser0.nameFormatter(nameFormatter)
@@ -40,16 +39,16 @@ abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T
       p
   }
 
-  def run(options: T, remainingArgs: RemainingArgs): ZIO[ZEnv, Nothing, ExitCode]
+  def run(options: T, remainingArgs: RemainingArgs): ZIO[Any, Nothing, ExitCode]
 
-  private[this] def error(message: Error): ZIO[Console, IOException, ExitCode] =
-    putStrLn(message.message).as(ExitCode.failure)
+  private[this] def error(message: Error): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(message.message).as(ExitCode.failure)
 
-  private[this] def helpAsked: ZIO[Console, IOException, ExitCode] =
-    putStrLn(messages.withHelp.help).as(ExitCode.success)
+  private[this] def helpAsked: ZIO[Any, IOException, ExitCode] =
+    Console.printLine(messages.withHelp.help).as(ExitCode.success)
 
-  private[this] def usageAsked: ZIO[Console, IOException, ExitCode] =
-    putStrLn(messages.withHelp.usage).as(ExitCode.success)
+  private[this] def usageAsked: ZIO[Any, IOException, ExitCode] =
+    Console.printLine(messages.withHelp.usage).as(ExitCode.success)
 
   /**
    * Arguments are expanded then parsed. By default, argument expansion is the identity function.
@@ -81,7 +80,7 @@ abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T
 
   private[this] def nameFormatter: Formatter[Name] = Formatter.DefaultNameFormatter
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] =
+  private[this] def runArgs(args: List[String]): ZIO[Any, Nothing, ExitCode] =
     parser.withHelp.detailedParse(expandArgs(args), stopAtFirstUnrecognized) match {
       case Left(err)                                        => error(err).orDie
       case Right((WithHelp(_, true, _), _))                 => helpAsked.orDie
@@ -90,6 +89,9 @@ abstract class ZCaseApp[T](implicit val parser0: Parser[T], val messages: Help[T
       case Right((WithHelp(_, _, Right(t)), remainingArgs)) => run(t, remainingArgs)
     }
 
+  override def run: ZIO[ZIOAppArgs, Nothing, ExitCode] =
+    getArgs.flatMap(args => runArgs(args.toList))
+
 }
 
 abstract class ZCommandAppWithPreCommand[D, T](implicit
@@ -97,7 +99,7 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
                                                baseBeforeCommandMessages: Help[D],
                                                val commandParser: CommandParser[T],
                                                val commandsMessages: CommandsHelp[T]
-                                              ) extends App {
+                                              ) extends ZIOAppDefault {
 
   /**
    * Override to support conditional early exit, suppressing a run.
@@ -106,12 +108,12 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
    * @param remainingArgs extra arguments
    * @return exit code for early exit, none to call run
    */
-  def beforeCommand(options: D, remainingArgs: Seq[String]): ZIO[Console, IOException, Option[ExitCode]]
+  def beforeCommand(options: D, remainingArgs: Seq[String]): ZIO[Any, IOException, Option[ExitCode]]
 
-  def run(options: T, remainingArgs: RemainingArgs): ZIO[ZEnv, Nothing, ExitCode]
+  def run(options: T, remainingArgs: RemainingArgs): ZIO[Any, Nothing, ExitCode]
 
-  def error(message: Error): ZIO[Console, IOException, ExitCode] =
-    putStrLn(message.message).as(ExitCode.failure)
+  def error(message: Error): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(message.message).as(ExitCode.failure)
 
   lazy val beforeCommandMessages: Help[D] =
     baseBeforeCommandMessages
@@ -123,8 +125,8 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
 
   lazy val commands: Seq[Seq[String]] = CommandsHelp[T].messages.map(_._1)
 
-  def helpAsked(): ZIO[Console, IOException, ExitCode] =
-    putStrLn(
+  def helpAsked(): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(
       s"""${beforeCommandMessages.help}
          |Available commands: ${commands.map(_.mkString(" ")).mkString(", ")}
          |
@@ -132,12 +134,12 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
         .stripMargin)
       .as(ExitCode.success)
 
-  def commandHelpAsked(command: Seq[String]): ZIO[Console, IOException, ExitCode] =
-    putStrLn(commandsMessages.messagesMap(command).helpMessage(beforeCommandMessages.progName, command))
+  def commandHelpAsked(command: Seq[String]): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(commandsMessages.messagesMap(command).helpMessage(beforeCommandMessages.progName, command))
       .as(ExitCode.success)
 
-  def usageAsked(): ZIO[Console, IOException, ExitCode] =
-    putStrLn(
+  def usageAsked(): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(
       s"""${beforeCommandMessages.usage}
          |Available commands: ${commands.map(_.mkString(" ")).mkString(", ")}
          |
@@ -145,8 +147,8 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
         .stripMargin)
       .as(ExitCode.success)
 
-  def commandUsageAsked(command: Seq[String]): ZIO[Console, IOException, ExitCode] =
-    putStrLn(commandsMessages.messagesMap(command).usageMessage(beforeCommandMessages.progName, command))
+  def commandUsageAsked(command: Seq[String]): ZIO[Any, IOException, ExitCode] =
+    Console.printLine(commandsMessages.messagesMap(command).usageMessage(beforeCommandMessages.progName, command))
       .as(ExitCode.success)
 
   def appName: String = Help[D].appName
@@ -155,8 +157,8 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
 
   def progName: String = Help[D].progName
 
-  override def run(args: List[String]): ZIO[ZEnv, Nothing, ExitCode] = {
-    if (args == List("--version")) ZIO.succeed(println(org.monarchinitiative.dosdp.cli.BuildInfo.toString)).exitCode
+  private[this] def runArgs(args: List[String]): ZIO[Any, Nothing, ExitCode] = {
+    if (args == List("--version")) ZIO.succeed(println(org.monarchinitiative.dosdp.cli.BuildInfo.toString)).as(ExitCode.success)
     else
       commandParser.withHelp.detailedParse(args.toVector)(beforeCommandParser.withHelp) match {
         case Left(err)                                                =>
@@ -169,7 +171,7 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
           error(err).orDie
         case Right((WithHelp(false, false, Right(d)), dArgs, optCmd)) =>
           beforeCommand(d, dArgs).flatMap {
-            case Some(exitCode) => IO.succeed(exitCode)
+            case Some(exitCode) => ZIO.succeed(exitCode)
             case None           =>
               optCmd
                 .map {
@@ -190,6 +192,9 @@ abstract class ZCommandAppWithPreCommand[D, T](implicit
       }
   }
 
+  override def run: ZIO[ZIOAppArgs, Nothing, ExitCode] =
+    getArgs.flatMap(args => runArgs(args.toList))
+
 }
 
 abstract class ZCommandApp[T](implicit
@@ -197,10 +202,10 @@ abstract class ZCommandApp[T](implicit
                               commandsMessages: CommandsHelp[T]
                              ) extends ZCommandAppWithPreCommand[None.type, T] {
 
-  override def beforeCommand(options: None.type, remainingArgs: Seq[String]): ZIO[Console, IOException, Option[ExitCode]] = {
+  override def beforeCommand(options: None.type, remainingArgs: Seq[String]): ZIO[Any, IOException, Option[ExitCode]] = {
     if (remainingArgs.nonEmpty) {
       error(Error.Other(s"Found extra arguments: ${remainingArgs.mkString(" ")}"))
         .map(Some(_))
-    } else IO.none
+    } else ZIO.none
   }
 }

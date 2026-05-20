@@ -3,8 +3,6 @@ package org.monarchinitiative.dosdp
 import com.github.tototoshi.csv.TSVFormat
 import org.monarchinitiative.dosdp.cli.{Config, DOSDPError, Generate}
 import org.semanticweb.owlapi.model.OWLAxiom
-import zio.blocking.Blocking
-import zio.logging._
 import zio.test._
 
 import java.io.File
@@ -19,11 +17,11 @@ import java.io.File
  * `generate` CLI, so a passing test means the refactor preserved behavior for
  * that structure. See `Harness` for the set-equality comparison.
  */
-object ComplexStructureGoldenTest extends DefaultRunnableSpec {
+object ComplexStructureGoldenTest extends ZIOSpecDefault {
 
   private val resourceDir = "src/test/resources/org/monarchinitiative/dosdp"
 
-  private def renderFixture(name: String): zio.ZIO[Blocking with Logging, DOSDPError, Set[OWLAxiom]] =
+  private def renderFixture(name: String): zio.ZIO[Any, DOSDPError, Set[OWLAxiom]] =
     for {
       dosdp <- Config.inputDOSDPFrom(s"$resourceDir/$name.yaml")
       columnsAndFillers <- Generate.readFillers(new File(s"$resourceDir/$name.tsv"), new TSVFormat {})
@@ -32,7 +30,7 @@ object ComplexStructureGoldenTest extends DefaultRunnableSpec {
     } yield axioms
 
   private def goldenTest(name: String) =
-    testM(name) {
+    test(name) {
       renderFixture(name).map { axioms =>
         Harness.assertMatchesGolden(axioms, s"$resourceDir/$name.golden.ofn") &&
           Harness.assertNoPlaceholderIRIs(axioms) &&
@@ -55,6 +53,6 @@ object ComplexStructureGoldenTest extends DefaultRunnableSpec {
     goldenTest("axiom_kinds"),
     goldenTest("list_var_logical"),
     goldenTest("annotated_axioms")
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }
