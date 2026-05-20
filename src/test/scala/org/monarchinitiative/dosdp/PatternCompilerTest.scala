@@ -84,6 +84,97 @@ object PatternCompilerTest extends DefaultRunnableSpec {
       for {
         compiled <- PatternCompiler.compile(pattern, OBOPrefixes)
       } yield assert(compiled.dataVarNames)(equalTo(Set("rate_min", "rates")))
+    },
+    testM("rejects declared variable names outside letters, numbers, and underscores") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-var-name"),
+        vars = Some(Map("cell-type" -> "owl:Thing")),
+        data_list_vars = Some(Map("xref.value" -> "xsd:string")))
+      compileError(pattern).map(msg =>
+        assert(msg)(containsString("cell-type")) &&
+          assert(msg)(containsString("xref.value")) &&
+          assert(msg)(containsString("letters, numbers, and underscores")))
+    },
+    testM("rejects undeclared template variable names outside letters, numbers, and underscores") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-template-var-name"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        name = Some(PrintfAnnotationOBO(
+          annotations = None,
+          xrefs = None,
+          text = Some("name of %s"),
+          vars = Some(List("cell type")))))
+      compileError(pattern).map(msg => assert(msg)(containsString("cell type")))
+    },
+    testM("rejects bad name in a permutation var") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-permutation-var-name"),
+        annotationProperties = Some(Map("exact_synonym" -> "http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")),
+        vars = Some(Map("x" -> "owl:Thing")),
+        name = Some(PrintfAnnotationOBO(
+          annotations = None,
+          xrefs = None,
+          text = Some("%s"),
+          vars = Some(List("x")),
+          permutations = Some(List(Permutation("bad-var", List("exact_synonym")))))))
+      compileError(pattern).map(msg => assert(msg)(containsString("bad-var")))
+    },
+    testM("rejects bad name in an internal_vars input reference") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-internal-input"),
+        data_list_vars = Some(Map("items" -> "xsd:string")),
+        internal_vars = Some(List(InternalVariable(
+          var_name = "joined",
+          apply = Some(JoinFunction(Join(","))),
+          input = "bad input"))))
+      compileError(pattern).map(msg => assert(msg)(containsString("bad input")))
+    },
+    testM("rejects bad name nested inside a multi_clause sub_clause") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-sub-clause-var"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        vars = Some(Map("x" -> "'thing'")),
+        equivalentTo = Some(PrintfOWLConvenience(
+          annotations = None,
+          text = None,
+          vars = None,
+          multi_clause = Some(MultiClausePrintf(
+            sep = Some(" and "),
+            clauses = Some(List(PrintfClause(
+              text = "%s",
+              vars = Some(List("x")),
+              sub_clauses = Some(List(MultiClausePrintf(
+                sep = Some(" or "),
+                clauses = Some(List(PrintfClause(
+                  text = "%s",
+                  vars = Some(List("nested.bad")),
+                  sub_clauses = None))))))))))))))
+      compileError(pattern).map(msg => assert(msg)(containsString("nested.bad")))
+    },
+    testM("rejects bad name in an IRIValueAnnotation var") {
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("bad-iri-annotation-var"),
+        annotationProperties = Some(Map("seeAlso" -> "rdfs:seeAlso")),
+        vars = Some(Map("x" -> "owl:Thing")),
+        annotations = Some(List(IRIValueAnnotation(
+          annotations = None,
+          annotationProperty = "seeAlso",
+          `var` = "bad-iri-var"))))
+      compileError(pattern).map(msg => assert(msg)(containsString("bad-iri-var")))
+    },
+    testM("rejects a data_var in a cardinality slot (`min %s`) — known capability regression") {
+      // Manchester requires a bare integer at the cardinality, but the compile-time
+      // placeholder for a data_var is a typed-literal token `"$name"^^xsd:integer`,
+      // which the parser does not accept in that position. Pinning this as an
+      // explicit non-support: if a real pattern needs cardinality data_vars, the
+      // fix is a row-time-parse fallback rather than relaxing this check.
+      val pattern = DOSDP.empty.copy(
+        pattern_name = Some("data-var-cardinality"),
+        classes = Some(Map("thing" -> "owl:Thing")),
+        dataProperties = Some(Map("has_age" -> "RO:0002000")),
+        data_vars = Some(Map("count" -> "xsd:integer")),
+        subClassOf = Some(PrintfOWLConvenience(None, Some("'has_age' min %s xsd:integer"), Some(List("count")))))
+      compileError(pattern).map(msg => assert(msg)(containsString("Failed to parse class expression")))
     }
   ).provideCustomLayer(Logging.consoleErr())
 

@@ -1,0 +1,51 @@
+pattern_name: annotated_axioms
+pattern_iri: http://purl.obolibrary.org/obo/test/annotated_axioms.yaml
+
+description: 'OBO annotations, a logical axiom carrying an axiom annotation, and a custom annotation with sub-annotations.'
+
+classes:
+  thing: "owl:Thing"
+
+relations:
+  part_of: "BFO:0000050"
+
+annotationProperties:
+  source: "http://www.geneontology.org/formats/oboInOwl#source"
+  contributor: "http://purl.org/dc/terms/contributor"
+
+vars:
+  structure: "'thing'"
+
+data_vars:
+  note: "xsd:string"
+
+name:
+  text: "part of %s"
+  vars:
+    - structure
+
+def:
+  text: "Anything part of %s."
+  vars:
+    - structure
+
+subClassOf:
+  text: "'part_of' some %s"
+  vars:
+    - structure
+  annotations:
+    - annotationProperty: source
+      text: "%s"
+      vars:
+        - note
+
+annotations:
+  - annotationProperty: contributor
+    text: "%s"
+    vars:
+      - note
+    annotations:
+      - annotationProperty: source
+        text: "sub-annotation %s"
+        vars:
+          - note

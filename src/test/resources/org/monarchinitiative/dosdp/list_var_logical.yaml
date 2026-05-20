@@ -1,0 +1,31 @@
+pattern_name: list_var_logical
+pattern_iri: http://purl.obolibrary.org/obo/test/list_var_logical.yaml
+
+description: 'list_var fillers folded into an intersection (and) and a union (or) via multi_clause.'
+
+classes:
+  thing: "owl:Thing"
+
+relations:
+  part_of: "BFO:0000050"
+
+list_vars:
+  parts: "'thing'"
+  origins: "'thing'"
+
+subClassOf:
+  multi_clause:
+    sep: " and "
+    clauses:
+      - text: "'part_of' some %s"
+        vars:
+          - parts
+
+logical_axioms:
+  - axiom_type: equivalentTo
+    multi_clause:
+      sep: " or "
+      clauses:
+        - text: "'part_of' some %s"
+          vars:
+            - origins

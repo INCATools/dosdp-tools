@@ -1,0 +1,32 @@
+Prefix(:=<urn:unnamed:ontology#ont1>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont1>
+
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0001>))
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0002>))
+Declaration(Class(<http://purl.obolibrary.org/obo/UBERON_0000001>))
+Declaration(Class(<http://purl.obolibrary.org/obo/UBERON_0000002>))
+Declaration(Class(<http://purl.obolibrary.org/obo/UBERON_0000003>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/BFO_0000050>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_0002202>))
+
+############################
+#   Classes
+############################
+
+# Class: <http://purl.obolibrary.org/obo/EX_0001> (<http://purl.obolibrary.org/obo/EX_0001>)
+
+SubClassOf(<http://purl.obolibrary.org/obo/EX_0001> ObjectIntersectionOf(ObjectUnionOf(ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002202> <http://purl.obolibrary.org/obo/UBERON_0000002>) ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002202> <http://purl.obolibrary.org/obo/UBERON_0000003>)) ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/BFO_0000050> <http://purl.obolibrary.org/obo/UBERON_0000001>)))
+
+# Class: <http://purl.obolibrary.org/obo/EX_0002> (<http://purl.obolibrary.org/obo/EX_0002>)
+
+SubClassOf(<http://purl.obolibrary.org/obo/EX_0002> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/BFO_0000050> <http://purl.obolibrary.org/obo/UBERON_0000001>))
+
+
+)

@@ -67,6 +67,9 @@ object DOSDP {
 
   def variableToIRI(name: String): IRI = IRI.create(variablePrefix + processedVariable(name))
 
+  /** Lexical form used to render an unsubstituted data-var slot at parse time: `$<name>`. */
+  def literalPlaceholder(name: String): String = "$" + name
+
   def computeDefinedIRI(pattern: IRI, bindings: Map[String, Binding]): IRI = {
     val text: String = bindings.toSeq.sortBy(_._1).map { case (_, binding) =>
       binding match {

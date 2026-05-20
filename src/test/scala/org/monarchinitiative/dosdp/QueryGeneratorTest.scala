@@ -24,7 +24,7 @@ object QueryGeneratorTest extends DefaultRunnableSpec {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/QueryGeneratorTest.yaml")
         compiled <- PatternCompiler.compile(dosdp, prefixes)
-        query <- SPARQL.queryFor(ExpandedDOSDP(dosdp, prefixes, compiled), Config.LogicalAxioms)
+        query <- SPARQL.queryFor(compiled, Config.LogicalAxioms)
         variables <- ZIO.effect(QueryFactory.create(query).getProjectVars.asScala)
       } yield assert(variables(0).getVarName)(equalTo("defined_class")) &&
         assert(variables(1).getVarName)(equalTo("defined_class_label"))

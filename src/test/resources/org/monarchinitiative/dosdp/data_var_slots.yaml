@@ -1,0 +1,31 @@
+pattern_name: data_var_slots
+pattern_iri: http://purl.obolibrary.org/obo/test/data_var_slots.yaml
+
+description: 'data_var fillers in value, facet, DataOneOf, and facet-inside-cardinality Manchester slots.'
+
+classes:
+  thing: "owl:Thing"
+
+dataProperties:
+  has_age: "RO:0002000"
+
+data_vars:
+  age: "xsd:integer"
+
+logical_axioms:
+  - axiom_type: subClassOf
+    text: "'has_age' value %s"
+    vars:
+      - age
+  - axiom_type: subClassOf
+    text: "'has_age' some xsd:integer[>= %s]"
+    vars:
+      - age
+  - axiom_type: subClassOf
+    text: "'has_age' some {%s}"
+    vars:
+      - age
+  - axiom_type: subClassOf
+    text: "'has_age' min 1 xsd:integer[>= %s]"
+    vars:
+      - age

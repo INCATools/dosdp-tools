@@ -1,0 +1,27 @@
+Prefix(:=<urn:unnamed:ontology#ont4>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont4>
+
+Declaration(Class(<urn:dosdp:defined_class>))
+Declaration(Class(<urn:dosdp:origin_a>))
+Declaration(Class(<urn:dosdp:origin_b>))
+Declaration(Class(<urn:dosdp:structure>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/BFO_0000050>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_0002202>))
+
+############################
+#   Classes
+############################
+
+# Class: <urn:dosdp:defined_class> (<urn:dosdp:defined_class>)
+
+SubClassOf(<urn:dosdp:defined_class> ObjectIntersectionOf(ObjectUnionOf(ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002202> <urn:dosdp:origin_a>) ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_0002202> <urn:dosdp:origin_b>)) ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/BFO_0000050> <urn:dosdp:structure>)))
+
+
+)

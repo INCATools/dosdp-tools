@@ -1,0 +1,44 @@
+pattern_name: axiom_kinds
+pattern_iri: http://purl.obolibrary.org/obo/test/axiom_kinds.yaml
+
+description: 'equivalentTo, subClassOf, disjointWith, GCI, and a logical_axioms entry in a single pattern.'
+
+classes:
+  thing: "owl:Thing"
+
+relations:
+  part_of: "BFO:0000050"
+  has_part: "BFO:0000051"
+
+vars:
+  equiv_target: "'thing'"
+  sub_target: "'thing'"
+  disjoint_target: "'thing'"
+  gci_source: "'thing'"
+  extra_target: "'thing'"
+
+equivalentTo:
+  text: "'part_of' some %s"
+  vars:
+    - equiv_target
+
+subClassOf:
+  text: "'part_of' some %s"
+  vars:
+    - sub_target
+
+disjointWith:
+  text: "'part_of' some %s"
+  vars:
+    - disjoint_target
+
+GCI:
+  text: "'part_of' some %s SubClassOf: 'thing'"
+  vars:
+    - gci_source
+
+logical_axioms:
+  - axiom_type: subClassOf
+    text: "'has_part' some %s"
+    vars:
+      - extra_target

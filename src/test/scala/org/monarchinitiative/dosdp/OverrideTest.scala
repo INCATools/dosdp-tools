@@ -23,7 +23,10 @@ object OverrideTest extends DefaultRunnableSpec {
         columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/OverrideTest.tsv"), new TSVFormat {})
         (_, fillers) = columnsAndFillers
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, Some(ontology), true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      } yield assert(axioms)(contains(Class("http://ex.org/1") Annotation(RDFSLabel, "Entity 1 thing"))) &&
+      } yield Harness.assertMatchesGolden(axioms, "src/test/resources/org/monarchinitiative/dosdp/OverrideTest.golden.ofn") &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
+        assert(axioms)(contains(Class("http://ex.org/1") Annotation(RDFSLabel, "Entity 1 thing"))) &&
         assert(axioms)(contains(Class("http://ex.org/2") Annotation(RDFSLabel, "Entity 2 TSV"))) &&
         assert(axioms)(contains(Class("http://ex.org/3") Annotation(RDFSLabel, "http://example.org/Entity3 thing"))) &&
         assert(axioms)(contains(Class("http://ex.org/4") Annotation(RDFSLabel, "Entity4LabelInTSV thing"))) &&
