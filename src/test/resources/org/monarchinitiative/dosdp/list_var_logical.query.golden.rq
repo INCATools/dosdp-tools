@@ -1,0 +1,23 @@
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?defined_class (STR(?defined_class__label) AS ?defined_class_label) ?origins (STR(?origins__label) AS ?origins_label) ?parts (STR(?parts__label) AS ?parts_label)
+WHERE {
+?defined_class rdfs:subClassOf ?_v0 .
+FILTER(isIRI(?defined_class))
+?_v0 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v0 owl:someValuesFrom ?parts .
+FILTER(isIRI(?parts))
+?defined_class owl:equivalentClass ?_v1 .
+FILTER(isIRI(?defined_class))
+?_v1 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v1 owl:someValuesFrom ?origins .
+FILTER(isIRI(?origins))
+OPTIONAL { ?defined_class rdfs:label ?defined_class__label . }
+OPTIONAL { ?parts rdfs:label ?parts__label . }
+OPTIONAL { ?origins rdfs:label ?origins__label . }
+}
+ORDER BY ?defined_class_label

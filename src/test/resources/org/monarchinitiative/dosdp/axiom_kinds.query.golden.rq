@@ -1,0 +1,40 @@
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT DISTINCT ?defined_class (STR(?defined_class__label) AS ?defined_class_label) ?disjoint_target (STR(?disjoint_target__label) AS ?disjoint_target_label) ?equiv_target (STR(?equiv_target__label) AS ?equiv_target_label) ?extra_target (STR(?extra_target__label) AS ?extra_target_label) ?gci_source (STR(?gci_source__label) AS ?gci_source_label) ?sub_target (STR(?sub_target__label) AS ?sub_target_label)
+WHERE {
+?defined_class rdfs:subClassOf ?_v0 .
+FILTER(isIRI(?defined_class))
+?_v0 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v0 owl:someValuesFrom ?sub_target .
+FILTER(isIRI(?sub_target))
+?_v1 rdfs:subClassOf <http://www.w3.org/2002/07/owl#Thing> .
+?_v1 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v1 owl:someValuesFrom ?gci_source .
+FILTER(isIRI(?gci_source))
+?defined_class owl:disjointWith ?_v2 .
+FILTER(isIRI(?defined_class))
+?_v2 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v2 owl:someValuesFrom ?disjoint_target .
+FILTER(isIRI(?disjoint_target))
+?defined_class rdfs:subClassOf ?_v3 .
+FILTER(isIRI(?defined_class))
+?_v3 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000051> .
+?_v3 owl:someValuesFrom ?extra_target .
+FILTER(isIRI(?extra_target))
+?defined_class owl:equivalentClass ?_v4 .
+FILTER(isIRI(?defined_class))
+?_v4 owl:onProperty <http://purl.obolibrary.org/obo/BFO_0000050> .
+?_v4 owl:someValuesFrom ?equiv_target .
+FILTER(isIRI(?equiv_target))
+OPTIONAL { ?disjoint_target rdfs:label ?disjoint_target__label . }
+OPTIONAL { ?defined_class rdfs:label ?defined_class__label . }
+OPTIONAL { ?extra_target rdfs:label ?extra_target__label . }
+OPTIONAL { ?equiv_target rdfs:label ?equiv_target__label . }
+OPTIONAL { ?sub_target rdfs:label ?sub_target__label . }
+OPTIONAL { ?gci_source rdfs:label ?gci_source__label . }
+}
+ORDER BY ?defined_class_label

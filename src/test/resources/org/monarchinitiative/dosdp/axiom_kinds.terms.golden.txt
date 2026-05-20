@@ -1,0 +1,9 @@
+http://purl.obolibrary.org/obo/UBERON_0000004
+http://purl.obolibrary.org/obo/UBERON_0000002
+http://purl.obolibrary.org/obo/UBERON_0000005
+http://purl.obolibrary.org/obo/BFO_0000050
+http://purl.obolibrary.org/obo/EX_0001
+http://purl.obolibrary.org/obo/UBERON_0000003
+http://purl.obolibrary.org/obo/BFO_0000051
+http://purl.obolibrary.org/obo/UBERON_0000001
+http://www.w3.org/2002/07/owl#Thing

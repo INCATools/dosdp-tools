@@ -34,7 +34,7 @@ object UnionQueryTest extends DefaultRunnableSpec {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/test_union.ofn", None)
         model <- Query.makeModel(ontology)
         compiled <- PatternCompiler.compile(dosdp, OBOPrefixes).provideCustomLayer(Logging.consoleErr())
-        sparqlQuery <- SPARQL.queryFor(ExpandedDOSDP(dosdp, OBOPrefixes, compiled), Config.LogicalAxioms).provideCustomLayer(Logging.consoleErr())
+        sparqlQuery <- SPARQL.queryFor(compiled, Config.LogicalAxioms).provideCustomLayer(Logging.consoleErr())
         columnsAndResults <- Query.performQuery(sparqlQuery, model)
         (_, results) = columnsAndResults
         tests <- ZIO.foreach(results) { qs =>

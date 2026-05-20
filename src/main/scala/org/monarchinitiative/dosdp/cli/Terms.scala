@@ -4,7 +4,7 @@ import better.files._
 import com.github.tototoshi.csv.CSVReader
 import org.monarchinitiative.dosdp.cli.DOSDPError.logError
 import org.monarchinitiative.dosdp.cli.Main.loggingContext
-import org.monarchinitiative.dosdp.{DOSDP, ExpandedDOSDP, PatternCompiler, Prefixes}
+import org.monarchinitiative.dosdp.{DOSDP, Expansion, PatternCompiler, Prefixes}
 import zio._
 import zio.logging._
 
@@ -19,10 +19,8 @@ object Terms {
         dosdp <- config.common.inputDOSDP
         prefixes <- config.common.prefixesMap
         compiled <- PatternCompiler.compile(dosdp, prefixes)
-        eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
         sepFormat <- Config.tabularFormat(config.common.tableFormat)
-        patternAxioms <- eDOSDP.filledLogicalAxioms(None, None)
-        patternTerms = patternAxioms.flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith("urn:dosdp:")))
+        patternTerms = Expansion.placeholderAxioms(compiled, Config.LogicalAxioms).flatMap(_.getSignature.asScala.map(_.getIRI).filterNot(_.toString.startsWith(DOSDP.variablePrefix)))
         rows <- ZIO.effect(CSVReader.open(config.infile, StandardCharsets.UTF_8.name())(sepFormat)).bracketAuto(csvReader => ZIO.effect(csvReader.iteratorWithHeaders.toList))
           .flatMapError(e => logError(s"Could not read fillers file at ${config.infile}", e))
         identifiers = rows.flatMap(identifiersForRow(_, dosdp)).to(Set)

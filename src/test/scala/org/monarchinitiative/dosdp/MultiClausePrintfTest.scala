@@ -226,6 +226,29 @@ object MultiClausePrintfTest extends DefaultRunnableSpec {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002|ONT:0000003", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield assert(axioms)(contains(logicalAxiom1))
     },
+    testM("Single-clause multi_clause with sep ' or ' joins list_var expansions as a union.") {
+      val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
+      val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
+      val item2: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000003")
+      val partOf: OWLObjectProperty = ObjectProperty("http://purl.obolibrary.org/obo/BFO_0000050")
+      val OboInOwlSource: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#source")
+
+      val exp_clause = PrintfClause("'part_of' some %s", Some(List("item")), None)
+      val exp_printf = MultiClausePrintf(Some(" or "), Some(List(exp_clause)))
+      val dosdp: DOSDP = DOSDP.empty.copy(
+        pattern_name = Some("test_restrictions_pattern"),
+        classes = Some(Map("thing" -> "owl:Thing", "cell" -> "CL:0000000")),
+        relations = Some(Map("part_of" -> "BFO:0000050")),
+        list_vars = Some(Map("item" -> "'thing'")),
+        subClassOf = Some(PrintfOWLConvenience(None, None, None, Some(exp_printf)))
+      )
+
+      val logicalAxiom1: OWLSubClassOfAxiom = term SubClassOf ((partOf some item) or (partOf some item2))
+
+      for {
+        axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002|ONT:0000003", "axiom_filter" -> "all")), None, outputLogicalAxioms = true, outputAnnotationAxioms = true, None, annotateAxiomSource = false, OboInOwlSource, generateDefinedClass = false, Map.empty)
+      } yield assert(axioms)(contains(logicalAxiom1))
+    },
     testM("SubClassOf with annotation should be replaced correctly.") {
       val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
       val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")

@@ -1,0 +1,58 @@
+Prefix(:=<urn:unnamed:ontology#ont1>)
+Prefix(owl:=<http://www.w3.org/2002/07/owl#>)
+Prefix(rdf:=<http://www.w3.org/1999/02/22-rdf-syntax-ns#>)
+Prefix(xml:=<http://www.w3.org/XML/1998/namespace>)
+Prefix(xsd:=<http://www.w3.org/2001/XMLSchema#>)
+Prefix(rdfs:=<http://www.w3.org/2000/01/rdf-schema#>)
+
+
+Ontology(<urn:unnamed:ontology#ont1>
+
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0001>))
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0002>))
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0003>))
+Declaration(Class(<http://purl.obolibrary.org/obo/EX_0005>))
+Declaration(Class(<http://purl.obolibrary.org/obo/UBERON_arm>))
+Declaration(Class(<http://purl.obolibrary.org/obo/VTO_Holothuroidea>))
+Declaration(ObjectProperty(<http://purl.obolibrary.org/obo/RO_part_of>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/IAO_0000115>))
+Declaration(AnnotationProperty(<http://purl.obolibrary.org/obo/RO_never_in_taxon>))
+Declaration(AnnotationProperty(<http://www.geneontology.org/formats/oboInOwl#hasExactSynonym>))
+
+
+
+############################
+#   Classes
+############################
+
+# Class: <http://purl.obolibrary.org/obo/EX_0001> (Term 0001)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/EX_0001> "Term 0001 Arm two and then one")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/RO_never_in_taxon> <http://purl.obolibrary.org/obo/EX_0001> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)
+AnnotationAssertion(<http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> <http://purl.obolibrary.org/obo/EX_0001> "a synonym for this term")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/EX_0001> "Term 0001")
+EquivalentClasses(<http://purl.obolibrary.org/obo/EX_0001> ObjectIntersectionOf(<http://purl.obolibrary.org/obo/UBERON_arm> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_part_of> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)))
+
+# Class: <http://purl.obolibrary.org/obo/EX_0002> (Term 0002)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/IAO_0000115> <http://purl.obolibrary.org/obo/EX_0002> "Term 0002 Arm two and then one")
+AnnotationAssertion(<http://purl.obolibrary.org/obo/RO_never_in_taxon> <http://purl.obolibrary.org/obo/EX_0002> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/EX_0002> "Term 0002")
+EquivalentClasses(<http://purl.obolibrary.org/obo/EX_0002> ObjectIntersectionOf(<http://purl.obolibrary.org/obo/UBERON_arm> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_part_of> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)))
+
+# Class: <http://purl.obolibrary.org/obo/EX_0003> (<http://purl.obolibrary.org/obo/EX_0003>)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/RO_never_in_taxon> <http://purl.obolibrary.org/obo/EX_0003> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)
+EquivalentClasses(<http://purl.obolibrary.org/obo/EX_0003> ObjectIntersectionOf(<http://purl.obolibrary.org/obo/UBERON_arm> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_part_of> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)))
+
+# Class: <http://purl.obolibrary.org/obo/EX_0005> (Term 0005)
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/RO_never_in_taxon> <http://purl.obolibrary.org/obo/EX_0005> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)
+AnnotationAssertion(<http://www.geneontology.org/formats/oboInOwl#hasExactSynonym> <http://purl.obolibrary.org/obo/EX_0005> "a synonym for this term")
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/EX_0005> "Term 0005")
+EquivalentClasses(<http://purl.obolibrary.org/obo/EX_0005> ObjectIntersectionOf(<http://purl.obolibrary.org/obo/UBERON_arm> ObjectSomeValuesFrom(<http://purl.obolibrary.org/obo/RO_part_of> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)))
+
+
+AnnotationAssertion(<http://purl.obolibrary.org/obo/RO_never_in_taxon> <http://purl.obolibrary.org/obo/EX_0004> <http://purl.obolibrary.org/obo/VTO_Holothuroidea>)
+AnnotationAssertion(rdfs:label <http://purl.obolibrary.org/obo/EX_0004> "Term 0004")
+)
