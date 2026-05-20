@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.org/INCATools/dosdp-tools.svg?branch=master)](https://travis-ci.org/INCATools/dosdp-tools)
-
 # dosdp-tools
 
 `dosdp-tools` is a command-line utility for working with DOSDP design patterns and OWL ontologies. Given a YAML design pattern following the [DOSDP spec](https://github.com/dosumis/dead_simple_owl_design_patterns), it can either generate ontology axioms from an input table of terms, or instead generate a SPARQL query that can be used to query an ontology for terms matching the pattern.
