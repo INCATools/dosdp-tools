@@ -45,15 +45,18 @@ object QueryReasonerTest extends ZIOSpecDefault {
             val target = factory.getOWLClass(IRI.create("http://example.org/Target"))
             val partOfTarget = factory.getOWLClass(IRI.create("http://example.org/PartOfTarget"))
             val candidate = factory.getOWLClass(IRI.create("http://example.org/Candidate"))
+            val directCandidate = factory.getOWLClass(IRI.create("http://example.org/DirectCandidate"))
             val nonMatching = factory.getOWLClass(IRI.create("http://example.org/NonMatching"))
             val partOf = factory.getOWLObjectProperty(IRI.create("http://purl.obolibrary.org/obo/BFO_0000050"))
             val ontology = manager.createOntology()
             manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(target))
             manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(partOfTarget))
             manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(candidate))
+            manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(directCandidate))
             manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(partOf))
             manager.addAxiom(ontology, factory.getOWLEquivalentClassesAxiom(partOfTarget, factory.getOWLObjectSomeValuesFrom(partOf, target)))
             manager.addAxiom(ontology, factory.getOWLSubClassOfAxiom(candidate, partOfTarget))
+            manager.addAxiom(ontology, factory.getOWLSubClassOfAxiom(directCandidate, factory.getOWLObjectSomeValuesFrom(partOf, target)))
             manager.addAxiom(ontology, factory.getOWLDeclarationAxiom(nonMatching))
             ontology
           }
@@ -65,8 +68,10 @@ object QueryReasonerTest extends ZIOSpecDefault {
           queryClasses = ontology.getClassesInSignature().asScala.exists(_.getIRI.toString.startsWith("urn:dosdp:query:"))
         } yield assert(query)(containsString("VALUES")) &&
           assert(query)(containsString("?entity")) &&
-          assert(query)(containsString("http://example.org/Candidate")) &&
+          assert(query)(containsString("http://example.org/PartOfTarget")) &&
+          assert(query)(containsString("http://example.org/DirectCandidate")) &&
           assert(query)(not(containsString("http://example.org/NonMatching"))) &&
+          assert(query)(not(containsString("urn:dosdp:query:"))) &&
           assert(queryClasses)(isFalse)
       }
     }
