@@ -29,6 +29,9 @@ buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
 val zioVersion = "2.1.26"
 val zioLoggingVersion = "2.5.3"
+val catsVersion = "2.13.0"
+val circeVersion = "0.14.15"
+val circeYamlVersion = "0.16.1"
 
 libraryDependencies ++= {
     Seq(
@@ -42,10 +45,10 @@ libraryDependencies ++= {
         exclude("net.sourceforge.owlapi", "owlapi-impl"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
-      "io.circe"                   %% "circe-yaml"             % "0.14.2",
-      "io.circe"                   %% "circe-core"             % "0.14.15",
-      "io.circe"                   %% "circe-generic"          % "0.14.15",
-      "io.circe"                   %% "circe-parser"           % "0.14.15",
+      "org.typelevel"              %% "cats-core"              % catsVersion,
+      "io.circe"                   %% "circe-yaml"             % circeYamlVersion,
+      "io.circe"                   %% "circe-core"             % circeVersion,
+      "io.circe"                   %% "circe-generic"          % circeVersion,
       "com.github.pathikrit"       %% "better-files"           % "3.9.2",
       "org.apache.jena"            %  "jena-arq"               % "4.10.0",
       "org.apache.jena"            %  "jena-core"              % "4.10.0",
