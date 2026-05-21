@@ -52,7 +52,7 @@ libraryDependencies ++= {
         exclude("org.geneontology", "whelk-owlapi_2.12")
         exclude("org.geneontology", "owl-diff_2.12"),
       "com.github.pathikrit"       %% "better-files"           % "3.9.2",
-      "org.apache.jena"            %  "apache-jena-libs"       % "4.10.0" exclude("org.slf4j", "slf4j-log4j12"),
+      "org.apache.jena"            %  "apache-jena-libs"       % "6.1.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",
       "commons-codec"              %  "commons-codec"          % "1.17.2",
       "dev.zio"                    %% "zio-logging"            % zioLoggingVersion,
