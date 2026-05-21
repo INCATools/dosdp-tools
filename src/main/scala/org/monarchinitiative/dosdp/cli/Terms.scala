@@ -1,12 +1,12 @@
 package org.monarchinitiative.dosdp.cli
 
-import better.files._
 import com.github.tototoshi.csv.CSVReader
 import org.monarchinitiative.dosdp.cli.DOSDPError.logError
 import org.monarchinitiative.dosdp.{DOSDP, Expansion, PatternCompiler, Prefixes}
 import zio.{Config => _, _}
 
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths, StandardOpenOption}
 import scala.jdk.CollectionConverters._
 
 object Terms {
@@ -23,7 +23,16 @@ object Terms {
           .flatMapError(e => logError(s"Could not read fillers file at ${config.infile}", e))
         identifiers = rows.flatMap(identifiersForRow(_, dosdp)).to(Set)
         iris = patternTerms ++ identifiers.flatMap(Prefixes.idToIRI(_, prefixes)) //FIXME should we report failure to expand to IRI?
-        _ <- ZIO.attempt(config.common.outfile.toFile.overwrite("").appendLines(iris.map(_.toString).toSeq: _*)(StandardCharsets.UTF_8))
+        _ <- ZIO.attempt {
+          Files.write(
+            Paths.get(config.common.outfile),
+            iris.map(_.toString).toSeq.asJava,
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.TRUNCATE_EXISTING,
+            StandardOpenOption.WRITE
+          )
+        }.unit
           .flatMapError(e => logError(s"Failed writing output file at ${config.common.outfile}", e))
       } yield ()
     }
@@ -45,4 +54,3 @@ object Terms {
   }
 
 }
-
