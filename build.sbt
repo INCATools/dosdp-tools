@@ -36,8 +36,10 @@ libraryDependencies ++= {
       "com.github.alexarchambault" %% "case-app"               % "2.0.6",
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.29",
       "org.phenoscape"             %% "scowl"                  % "1.4.1",
-      "org.phenoscape"             %% "owlet"                  % "1.9" exclude("org.slf4j", "slf4j-log4j12"),
-      "org.semanticweb.elk"        %  "elk-owlapi"             % "0.4.3" exclude("org.slf4j", "slf4j-log4j12"),
+      "io.github.liveontologies"   %  "elk-owlapi"             % "0.6.0"
+        exclude("net.sourceforge.owlapi", "owlapi-apibinding")
+        exclude("net.sourceforge.owlapi", "owlapi-api")
+        exclude("net.sourceforge.owlapi", "owlapi-impl"),
       "net.sourceforge.owlapi"     %  "org.semanticweb.hermit" % "1.4.3.456",
       "net.sourceforge.owlapi"     %  "jfact"                  % "4.0.4",
       "io.circe"                   %% "circe-yaml"             % "0.14.2",

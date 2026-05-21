@@ -5,9 +5,10 @@ import java.util.regex.Pattern
 import org.apache.jena.query.ParameterizedSparqlString
 import org.monarchinitiative.dosdp.cli.Config.{AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.{DOSDPError, Generate}
-import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
+import org.monarchinitiative.dosdp.cli.DOSDPError.logError
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
+import org.semanticweb.owlapi.reasoner.OWLReasoner
 import org.phenoscape.scowl._
 import zio.{Config => _, _}
 
@@ -17,13 +18,13 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, String] = {
+  def queryFor(compiled: CompiledPattern, axioms: AxiomKind, reasonerOpt: Option[OWLReasoner] = None): IO[DOSDPError, String] = {
     // Logical axioms always materialize even on an annotation-only query: the
     // `OPTIONAL { ?var rdfs:label ... }` clauses are derived from their
     // variable set. Compute once and share with `selectFor` / `triplesFor` so
     // the placeholder expansion runs only once per query.
     val logicalAxioms = Expansion.placeholderAxioms(compiled, LogicalAxioms)
-    triplesFor(compiled, axioms, logicalAxioms).map { triples =>
+    triplesFor(compiled, axioms, logicalAxioms, reasonerOpt).map { triples =>
       val select = selectFor(axioms, logicalAxioms)
       s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
@@ -63,9 +64,9 @@ ORDER BY ?defined_class_label
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
   def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, Seq[String]] =
-    triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms))
+    triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms), None)
 
-  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): IO[DOSDPError, Seq[String]] = {
+  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom], reasonerOpt: Option[OWLReasoner]): IO[DOSDPError, Seq[String]] = {
     val props = compiled.readableIdentifierProperties.to(Set)
     val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
     val annotationAxioms = if (queryAnnotations) Expansion.placeholderAxioms(compiled, AnnotationAxioms) else Set.empty[OWLAxiom]
@@ -73,25 +74,59 @@ ORDER BY ?defined_class_label
       annotationTriples <- ZIO.foreach(annotationAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten)
       axiomTriples <- if (queryLogical) ZIO.foreach(logicalAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten) else ZIO.succeed(Nil)
       varExpressions <- VarRangeExpressions.varExpressions(compiled)
-      variableTriples = varExpressions.toSeq.flatMap {
+      variableTriples <- ZIO.foreach(varExpressions.toSeq) {
         case (_, Thing)                                                               =>
-          Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
+          ZIO.succeed(Seq.empty[String]) // relationships to owl:Thing are not typically explicit in the ontology
         case (variable, named: OWLClass)                                              =>
-          Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> .")
+          ZIO.succeed(Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.getIRI}> ."))
         case (variable, ObjectUnionOf(operands)) if operands.forall(_.isNamed)        =>
-          Seq(operands.map(named => s"{ ?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . }")
-            .mkString(" UNION "))
+          ZIO.succeed(Seq(operands.map(named => s"{ ?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . }")
+            .mkString(" UNION ")))
         case (variable, ObjectIntersectionOf(operands)) if operands.forall(_.isNamed) =>
-          operands.map(named => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . ")
+          ZIO.succeed(operands.map(named => s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf* <${named.asOWLClass().getIRI}> . ").toSeq)
         case (variable, expression)                                                   =>
-          val pss = new ParameterizedSparqlString()
-          pss.appendNode(expression.asOMN)
-          val sanitizedExpression = pss.toString
-          Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
-      }
+          reasonerOpt match {
+            case Some(reasoner) => reasonerValues(variable, expression, reasoner)
+            case None           => missingReasonerValues(variable, expression)
+          }
+      }.map(_.flatten)
       labelTriples = axiomVariables(logicalAxioms).map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
+
+  private def missingReasonerValues(variable: String, expression: OWLClassExpression): UIO[Seq[String]] =
+    ZIO.logWarning(
+      s"Variable range '$variable' uses anonymous class expression '${expression.toString}'. " +
+        "Query results for anonymous class expressions require requesting a reasoner."
+    ).as(Seq(s"VALUES ?${DOSDP.processedVariable(variable)} { }"))
+
+  private def reasonerValues(variable: String, expression: OWLClassExpression, reasoner: OWLReasoner): IO[DOSDPError, Seq[String]] =
+    ZIO.attempt {
+      val classes = subclassesFor(reasoner, expression)
+        .toSeq
+        .sortBy(_.getIRI.toString)
+        .map(cls => s"<${cls.getIRI}>")
+        .mkString(" ")
+      Seq(s"VALUES ?${DOSDP.processedVariable(variable)} { $classes }")
+    }.flatMapError(e => logError(s"Failed to expand variable range '$variable' with reasoner", e))
+
+  private def subclassesFor(reasoner: OWLReasoner, expression: OWLClassExpression): Set[OWLClass] =
+    expression match {
+      case named: OWLClass =>
+        reasoner.getSubClasses(named, false).getFlattened.asScala.toSet.filterNot(_.isOWLNothing) + named
+      case anonymous       =>
+        val ontology = reasoner.getRootOntology
+        val manager = ontology.getOWLOntologyManager
+        val queryClass = factory.getOWLClass(IRI.create(s"urn:dosdp:query:${UUID.randomUUID()}"))
+        val queryAxiom = factory.getOWLEquivalentClassesAxiom(queryClass, anonymous)
+        manager.addAxiom(ontology, queryAxiom)
+        reasoner.flush()
+        try reasoner.getSubClasses(queryClass, false).getFlattened.asScala.toSet.filterNot(_.isOWLNothing)
+        finally {
+          manager.removeAxiom(ontology, queryAxiom)
+          reasoner.flush()
+        }
+    }
 
   def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): UIO[Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
