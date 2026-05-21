@@ -49,7 +49,6 @@ libraryDependencies ++= {
       "io.circe"                   %% "circe-yaml"             % circeYamlVersion,
       "io.circe"                   %% "circe-core"             % circeVersion,
       "io.circe"                   %% "circe-generic"          % circeVersion,
-      "com.github.pathikrit"       %% "better-files"           % "3.9.2",
       "org.apache.jena"            %  "jena-arq"               % "4.10.0",
       "org.apache.jena"            %  "jena-core"              % "4.10.0",
       "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",

@@ -1,12 +1,15 @@
 package org.monarchinitiative.dosdp.cli
 
-import better.files._
 import org.eclipse.rdf4j.model.vocabulary.DCTERMS
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.{DOSDP, Utilities}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.{OWLAnnotationProperty, OWLAxiom}
 import zio.{Config => _, _}
+
+import java.nio.file.{Files, Path, Paths}
+import java.util.Locale
+import scala.jdk.CollectionConverters._
 
 object Prototype {
 
@@ -15,14 +18,12 @@ object Prototype {
 
   def run(config: PrototypeConfig): IO[DOSDPError, Unit] = {
     Main.withLogContext(Map("command" -> "prototype")) {
-      val possibleFile = File(config.common.template)
+      val possibleFile = Paths.get(config.common.template)
       for {
-        isDir <- ZIO.attempt(possibleFile.isDirectory).flatMapError(e => logError(s"Unable to read input at $possibleFile", e))
+        isDir <- ZIO.attempt(Files.isDirectory(possibleFile)).flatMapError(e => logError(s"Unable to read input at $possibleFile", e))
         filenames <- if (isDir) {
-          ZIO.attempt {
-            possibleFile.list.filter { f =>
-              f.extension(false, false, true).exists(e => (e == "yaml") || (e == "yml"))
-            }.map(_.toString).toSet
+          ZIO.attempt(Files.list(possibleFile)).acquireReleaseWithAuto { paths =>
+            ZIO.attempt(paths.iterator.asScala.filter(isYamlFile).map(_.toString).toSet)
           }.flatMapError(e => logError(s"Couldn't list files in $possibleFile", e))
         } else ZIO.succeed(Set(config.common.template))
         dosdps <- ZIO.foreach(filenames)(f => Config.inputDOSDPFrom(f))
@@ -47,5 +48,10 @@ object Prototype {
         maybeTitleAxiom = dosdp.pattern_name.map(name => Class(iri) Annotation(DCTTitle, name))
       } yield axioms ++ maybeTitleAxiom
     }
+
+  private def isYamlFile(path: Path): Boolean = {
+    val name = path.getFileName.toString.toLowerCase(Locale.ROOT)
+    name.endsWith(".yaml") || name.endsWith(".yml")
+  }
 
 }
