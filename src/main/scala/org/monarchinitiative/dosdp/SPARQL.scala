@@ -102,7 +102,7 @@ ORDER BY ?defined_class_label
 
   private def reasonerValues(variable: String, expression: OWLClassExpression, reasoner: OWLReasoner): IO[DOSDPError, Seq[String]] =
     ZIO.attempt {
-      val classes = subclassesFor(reasoner, expression)
+      val classes = reasoner.synchronized(classesFor(reasoner, expression))
         .toSeq
         .sortBy(_.getIRI.toString)
         .map(cls => s"<${cls.getIRI}>")
@@ -110,23 +110,18 @@ ORDER BY ?defined_class_label
       Seq(s"VALUES ?${DOSDP.processedVariable(variable)} { $classes }")
     }.flatMapError(e => logError(s"Failed to expand variable range '$variable' with reasoner", e))
 
-  private def subclassesFor(reasoner: OWLReasoner, expression: OWLClassExpression): Set[OWLClass] =
-    expression match {
-      case named: OWLClass =>
-        reasoner.getSubClasses(named, false).getFlattened.asScala.toSet.filterNot(_.isOWLNothing) + named
-      case anonymous       =>
-        val ontology = reasoner.getRootOntology
-        val manager = ontology.getOWLOntologyManager
-        val queryClass = factory.getOWLClass(IRI.create(s"urn:dosdp:query:${UUID.randomUUID()}"))
-        val queryAxiom = factory.getOWLEquivalentClassesAxiom(queryClass, anonymous)
-        manager.addAxiom(ontology, queryAxiom)
-        reasoner.flush()
-        try reasoner.getSubClasses(queryClass, false).getFlattened.asScala.toSet.filterNot(_.isOWLNothing)
-        finally {
-          manager.removeAxiom(ontology, queryAxiom)
-          reasoner.flush()
-        }
+  private def classesFor(reasoner: OWLReasoner, expression: OWLClassExpression): Set[OWLClass] = {
+    val subclasses = reasoner.getSubClasses(expression, false).getFlattened.asScala.toSet
+    // ELK 0.6.0 can omit direct subclasses from anonymous-expression queries when direct=false:
+    // https://github.com/liveontologies/elk-reasoner/issues/70
+    val directSubclasses = reasoner.getSubClasses(expression, true).getFlattened.asScala.toSet
+    val equivalents = reasoner.getEquivalentClasses(expression).getEntities.asScala.toSet
+    val expressionIfNamed = expression match {
+      case named: OWLClass => Set(named)
+      case _               => Set.empty[OWLClass]
     }
+    (subclasses ++ directSubclasses ++ equivalents ++ expressionIfNamed).filterNot(_.isOWLNothing)
+  }
 
   def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): UIO[Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
