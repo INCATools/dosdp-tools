@@ -58,7 +58,8 @@ object Docs {
         axioms <- Generate.renderPattern(dosdp, prefixes, fillers, Some(ontology), true, true, None, false, OboInOwlSource, false, Map(RDFSLabel.getIRI -> variableReadableIdentifiers))
         patternIRI = IRI.create(iri)
         docAxioms = findDocAxioms(patternIRI, axioms, target, config.dataLocationPrefix)
-        data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), prefixes)) ::: Nil
+        entityColumns = dosdp.vars.getOrElse(Map.empty).keySet ++ dosdp.list_vars.getOrElse(Map.empty).keySet + DOSDP.DefinedClassVariable
+        data = columns.to(List) :: rows.take(5).map(formatDataRow(_, columns.to(List), entityColumns, prefixes)) ::: Nil
         markdown <- DocsMarkdown.markdown(compiled, docAxioms, renderer, data)
         _ <- ZIO.attemptBlockingIO(new PrintWriter(target.outputFile, "utf-8")).acquireReleaseWithAuto { writer =>
           ZIO.attemptBlockingIO(writer.print(markdown))
@@ -97,8 +98,16 @@ object Docs {
   }
 
   //TODO better handling for list values?
-  private def formatDataRow(row: Map[String, String], columns: List[String], prefixes: PartialFunction[String, String]): List[String] =
-    columns.map(c => row.getOrElse(c, "")).map(v => Prefixes.idToIRI(v, prefixes).map(iri => s"[$v]($iri)").getOrElse(v))
+  // Only entity-valued columns (pattern vars/list_vars and defined_class) are
+  // linkified. Free-text columns (labels, data_vars) can legitimately contain a
+  // colon, which would otherwise be misparsed as a CURIE and turned into a bogus
+  // OBO link.
+  private[cli] def formatDataRow(row: Map[String, String], columns: List[String], entityColumns: Set[String], prefixes: PartialFunction[String, String]): List[String] =
+    columns.map { c =>
+      val v = row.getOrElse(c, "")
+      if (entityColumns(c)) Prefixes.idToIRI(v, prefixes).map(iri => s"[$v]($iri)").getOrElse(v)
+      else v
+    }
 
   private final case class DocsTarget(templateFile: String, inputFile: String, outputFile: String) {
 

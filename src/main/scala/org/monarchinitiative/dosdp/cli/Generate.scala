@@ -113,16 +113,11 @@ object Generate {
       cleaned <- ZIO.attemptBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).acquireReleaseWithAuto { source =>
         ZIO.attemptBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
       }.flatMapError(e => logError("Unable to read input table", e))
-      columns <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
-        ZIO.succeed {
-          val iteratorToCheckColumns = reader.iteratorWithHeaders
-          if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keys.to(Seq) else Seq.empty[String]
-        }
+      columnsAndData <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
+        ZIO.succeed(reader.allWithOrderedHeaders())
       }
-      data <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
-        ZIO.succeed(reader.iteratorWithHeaders.toList)
-      }
-    } yield columns -> data
+      (columns, data) = columnsAndData
+    } yield columns.to(Seq) -> data
 
   def axiomsOutputChoice(kind: AxiomKind): (Boolean, Boolean) = kind match {
     case AllAxioms        => (true, true)
