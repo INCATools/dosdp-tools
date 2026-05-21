@@ -4,14 +4,11 @@ import cats.implicits._
 import com.github.tototoshi.csv.{CSVFormat, CSVReader}
 import org.monarchinitiative.dosdp.cli.Config.{AllAxioms, AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
-import org.monarchinitiative.dosdp.cli.Main.loggingContext
 import org.monarchinitiative.dosdp.{AxiomType => _, _}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model._
 import org.semanticweb.owlapi.model.parameters.Imports
-import zio._
-import zio.blocking._
-import zio.logging._
+import zio.{Config => _, _}
 
 import java.io.{File, StringReader}
 import java.nio.charset.StandardCharsets
@@ -23,8 +20,8 @@ object Generate {
 
   val LocalLabelProperty: IRI = IRI.create("http://example.org/TSVProvidedLabel")
 
-  def run(config: GenerateConfig): ZIO[ZEnv with Logging, DOSDPError, Unit] =
-    log.locally(_.annotate(loggingContext, Map("command" -> "generate"))) {
+  def run(config: GenerateConfig): IO[DOSDPError, Unit] =
+    Main.withLogContext(Map("command" -> "generate")) {
       for {
         ontologyOpt <- config.common.ontologyOpt
         prefixes <- config.common.prefixesMap
@@ -33,15 +30,15 @@ object Generate {
         axiomSourceProperty <- ZIO.fromOption(Prefixes.idToIRI(config.axiomSourceAnnotationProperty, prefixes).map(AnnotationProperty(_)))
           .orElse(logErrorFail("Couldn't create IRI for axiom source annotation property."))
         targets <- determineTargets(config)
-        _ <- ZIO.foreach_(targets) { target =>
-          log.locally(_.annotate(loggingContext, target.toLogContext)) {
+        _ <- ZIO.foreachDiscard(targets) { target =>
+          Main.withLogContext(target.toLogContext) {
             for {
-              _ <- log.info(s"Processing pattern ${target.templateFile}")
+              _ <- ZIO.logInfo(s"Processing pattern ${target.templateFile}")
               dosdp <- Config.inputDOSDPFrom(target.templateFile)
               columnsAndFillers <- readFillers(new File(target.inputFile), sepFormat)
               (columns, fillers) = columnsAndFillers
               missingColumns = dosdp.allVars.diff(columns.to(Set))
-              _ <- ZIO.foreach_(missingColumns)(c => log.warn(s"Input ${target.inputFile} for pattern ${target.templateFile} is missing column for pattern variable <$c>"))
+              _ <- ZIO.foreachDiscard(missingColumns)(c => ZIO.logWarning(s"Input ${target.inputFile} for pattern ${target.templateFile} is missing column for pattern variable <$c>"))
               axioms <- renderPattern(dosdp, prefixes, fillers, ontologyOpt, outputLogicalAxioms, outputAnnotationAxioms, config.restrictAxiomsColumn, config.addAxiomSourceAnnotation.bool, axiomSourceProperty, config.generateDefinedClass.bool, Map.empty)
               _ <- Utilities.saveAxiomsToOntology(axioms, target.outputFile)
             } yield ()
@@ -50,27 +47,36 @@ object Generate {
       } yield ()
     }
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] =
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: Map[String, String], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] =
     renderPattern(dosdp, prefixes, List(fillers), ontOpt, outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, annotateAxiomSource, axiomSourceProperty, generateDefinedClass, extraReadableIdentifiers)
 
-  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
+  def renderPattern(dosdp: DOSDP, prefixes: PartialFunction[String, String], fillers: List[Map[String, String]], ontOpt: Option[OWLOntology], outputLogicalAxioms: Boolean, outputAnnotationAxioms: Boolean, restrictAxiomsColumnName: Option[String], annotateAxiomSource: Boolean, axiomSourceProperty: OWLAnnotationProperty, generateDefinedClass: Boolean, extraReadableIdentifiers: Map[IRI, Map[IRI, String]]): IO[DOSDPError, Set[OWLAxiom]] = {
     val knownColumns = dosdp.allVars
     for {
       _ <- ZIO.when(generateDefinedClass && fillers.exists(_.contains(DOSDP.DefinedClassVariable)))(
         logErrorFail(s"Input table must not have a '${DOSDP.DefinedClassVariable}' column when --generate-defined-class is requested."))
       compiled <- PatternCompiler.compile(dosdp, prefixes)
-      eDOSDP = ExpandedDOSDP(dosdp, prefixes, compiled)
       permutationProperties = compiled.permutationProperties
       permutationIndex =
         if (permutationProperties.isEmpty) Map.empty[IRI, Map[IRI, Set[String]]]
         else ontOpt.map(createPermutationIndex(_, permutationProperties)).getOrElse(Map.empty)
       readableIdentifiers = compiled.readableIdentifierProperties
-      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, eDOSDP, ont)).getOrElse(Map.empty)
+      initialReadableIDIndex = ontOpt.map(ont => createReadableIdentifierIndex(readableIdentifiers, ont)).getOrElse(Map.empty)
       extraReadableIdentifiersInSets = extraReadableIdentifiers.map { case (p, termsToLabel) => p -> termsToLabel.map { case (t, label) => t -> Set(label) } }
       readableIDIndex = (initialReadableIDIndex |+| extraReadableIdentifiersInSets).map { case (p, termsToLabels) => p -> termsToLabels.map { case (t, labels) => t -> labels.toSeq.min } }
+      expansionContext = Expansion.ExpansionContext(
+        readableIDIndex = readableIDIndex,
+        permutationIndex = permutationIndex,
+        outputLogicalAxioms = outputLogicalAxioms,
+        outputAnnotationAxioms = outputAnnotationAxioms,
+        restrictAxiomsColumn = restrictAxiomsColumnName,
+        generateDefinedClass = generateDefinedClass,
+        readableIdentifiers = readableIdentifiers,
+        localLabelProperty = LocalLabelProperty)
       generatedAxioms <- ZIO.foreach(fillers) { row =>
-        renderRow(eDOSDP, dosdp, prefixes, knownColumns, row, readableIdentifiers, readableIDIndex, permutationIndex,
-          outputLogicalAxioms, outputAnnotationAxioms, restrictAxiomsColumnName, generateDefinedClass)
+        val bindings = RowBindings.fromRow(dosdp, prefixes, knownColumns, row)
+        ZIO.fromEither(Expansion.expandRow(compiled, bindings, row, expansionContext))
+          .flatMapError(e => logError(e.message))
       }
       allAxioms = generatedAxioms.to(Set).flatten
       res <- if (annotateAxiomSource) {
@@ -84,71 +90,11 @@ object Generate {
     } yield res
   }
 
-  private def renderRow(eDOSDP: ExpandedDOSDP,
-                        dosdp: DOSDP,
-                        prefixes: PartialFunction[String, String],
-                        knownColumns: Set[String],
-                        row: Map[String, String],
-                        readableIdentifiers: List[OWLAnnotationProperty],
-                        readableIDIndex: Map[IRI, Map[IRI, String]],
-                        permutationIndex: Map[IRI, Map[IRI, Set[String]]],
-                        outputLogicalAxioms: Boolean,
-                        outputAnnotationAxioms: Boolean,
-                        restrictAxiomsColumnName: Option[String],
-                        generateDefinedClass: Boolean): ZIO[Logging, DOSDPError, Set[OWLAxiom]] = {
-    val bindings = RowBindings.fromRow(dosdp, prefixes, knownColumns, row)
-    for {
-      definedClass <- resolveDefinedClass(dosdp, prefixes, row, bindings, generateDefinedClass)
-      iriBinding = DOSDP.DefinedClassVariable -> SingleValue(definedClass)
-      logicalBindings = bindings.varBindings ++ bindings.listVarBindings ++ bindings.dataVarBindings ++ bindings.dataListBindings + iriBinding
-      readableIDIndexPlusLocalLabels = readableIDIndex + (LocalLabelProperty -> bindings.localLabels)
-      initialAnnotationBindings = bindings.varBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.listVarBindings.view.mapValues(v => irisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.internalVarBindings.view.mapValues(v => resolveIrisToLabels(readableIdentifiers, v, eDOSDP, readableIDIndexPlusLocalLabels)).toMap ++
-        bindings.dataVarBindings ++
-        bindings.dataListBindings +
-        iriBinding
-      expandedBindings <- ZIO.foldLeft(eDOSDP.substitutions)(initialAnnotationBindings)((bs, sub) => sub.expandBindings(bs))
-      annotationBindings = expandedBindings ++ bindings.additionalBindings
-      axiomKinds <- resolveAxiomKinds(restrictAxiomsColumnName, row, outputLogicalAxioms, outputAnnotationAxioms)
-      (localOutputLogicalAxioms, localOutputAnnotationAxioms) = axiomKinds
-      logicalAxioms <- if (localOutputLogicalAxioms)
-        eDOSDP.filledLogicalAxioms(Some(logicalBindings), Some(annotationBindings))
-      else ZIO.succeed(Set.empty)
-      annotationAxioms <- if (localOutputAnnotationAxioms)
-        eDOSDP.filledAnnotationAxioms(Some(annotationBindings), Some(logicalBindings), permutationIndex)
-      else ZIO.succeed(Set.empty)
-    } yield logicalAxioms ++ annotationAxioms
-  }
-
-  private def resolveDefinedClass(dosdp: DOSDP,
-                                  prefixes: PartialFunction[String, String],
-                                  row: Map[String, String],
-                                  bindings: RowBindings,
-                                  generateDefinedClass: Boolean): ZIO[Logging, DOSDPError, String] =
-    if (generateDefinedClass)
-      ZIO.fromOption(dosdp.pattern_iri.flatMap(id => Prefixes.idToIRI(id, prefixes)).map { patternIRI =>
-        DOSDP.computeDefinedIRI(patternIRI, bindings.bindingsForDefinedClassIRI).toString
-      }).orElse(logErrorFail("Pattern must have an IRI if generate-defined-class is requested."))
-    else
-      ZIO.fromOption(row.get(DOSDP.DefinedClassVariable).map(_.trim))
-        .orElse(logErrorFail(s"No input column provided for ${DOSDP.DefinedClassVariable}"))
-
-  private def resolveAxiomKinds(restrictAxiomsColumnName: Option[String],
-                                row: Map[String, String],
-                                outputLogicalAxioms: Boolean,
-                                outputAnnotationAxioms: Boolean): ZIO[Logging, DOSDPError, (Boolean, Boolean)] =
-    ZIO.fromEither(restrictAxiomsColumnName.flatMap(column => row.get(column).flatMap(value => stripToOption(value)))
-      .map(Config.parseAxiomKind)
-      .map(maybeAxiomKind => maybeAxiomKind.map(axiomsOutputChoice))
-      .getOrElse(Right((outputLogicalAxioms, outputAnnotationAxioms))))
-      .flatMapError(e => logError(s"Malformed value in table restrict-axioms-column: ${e.error}"))
-
-  private def determineTargets(config: GenerateConfig): ZIO[Blocking with Logging, DOSDPError, List[GenerateTarget]] = {
+  private def determineTargets(config: GenerateConfig): IO[DOSDPError, List[GenerateTarget]] = {
     val patternNames = config.common.batchPatterns.items
     if (patternNames.nonEmpty) for {
-      _ <- log.info("Running in batch mode")
-      _ <- ZIO.foreach_(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(logErrorFail(s"Pattern doesn't exist: $pattern")))
+      _ <- ZIO.logInfo("Running in batch mode")
+      _ <- ZIO.foreachDiscard(patternNames)(pattern => ZIO.when(!Files.exists(Paths.get(config.common.template, s"$pattern.yaml")))(logErrorFail(s"Pattern doesn't exist: $pattern")))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.template)))(logErrorFail("\"--template must be a directory in batch mode\""))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.infile)))(logErrorFail("\"--infile must be a directory in batch mode\""))
       _ <- ZIO.when(!Files.isDirectory(Paths.get(config.common.outfile)))(logErrorFail("\"--outfile must be a directory in batch mode\""))
@@ -162,19 +108,19 @@ object Generate {
     else ZIO.succeed(List(GenerateTarget(config.common.template, config.infile, config.common.outfile)))
   }
 
-  def readFillers(file: File, sepFormat: CSVFormat): ZIO[Blocking with Logging, DOSDPError, (Seq[String], List[Map[String, String]])] =
+  def readFillers(file: File, sepFormat: CSVFormat): IO[DOSDPError, (Seq[String], List[Map[String, String]])] =
     for {
-      cleaned <- effectBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).bracketAuto { source =>
-        effectBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
+      cleaned <- ZIO.attemptBlockingIO(Source.fromFile(file, StandardCharsets.UTF_8.name())).acquireReleaseWithAuto { source =>
+        ZIO.attemptBlockingIO(source.getLines().filterNot(_.trim.isEmpty).mkString("\n"))
       }.flatMapError(e => logError("Unable to read input table", e))
-      columns <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
-        ZIO.effectTotal {
+      columns <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
+        ZIO.succeed {
           val iteratorToCheckColumns = reader.iteratorWithHeaders
           if (iteratorToCheckColumns.hasNext) iteratorToCheckColumns.next().keys.to(Seq) else Seq.empty[String]
         }
       }
-      data <- ZIO.effectTotal(CSVReader.open(new StringReader(cleaned))(sepFormat)).bracketAuto { reader =>
-        ZIO.effectTotal(reader.iteratorWithHeaders.toList)
+      data <- ZIO.succeed(CSVReader.open(new StringReader(cleaned))(sepFormat)).acquireReleaseWithAuto { reader =>
+        ZIO.succeed(reader.iteratorWithHeaders.toList)
       }
     } yield columns -> data
 
@@ -184,7 +130,7 @@ object Generate {
     case AnnotationAxioms => (false, true)
   }
 
-  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], dosdp: ExpandedDOSDP, ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
+  private def createReadableIdentifierIndex(readableIdentifiers: List[OWLAnnotationProperty], ont: OWLOntology): Map[IRI, Map[IRI, Set[String]]] = {
     val properties = readableIdentifiers.to(Set)
     val mappings = for {
       AnnotationAssertion(_, prop, subj: IRI, value ^^ _) <- ont.getAxioms(AxiomType.ANNOTATION_ASSERTION, Imports.INCLUDED).asScala
@@ -205,32 +151,6 @@ object Generate {
       if properties(prop)
     } yield Map(subj -> Map(prop.getIRI -> Set(value)))
     mappings.fold(Map.empty)(_ combine _)
-  }
-
-  private def irisToLabels(readableIdentifiers: List[OWLAnnotationProperty], binding: Binding, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = binding match {
-    case SingleValue(value) => SingleValue(Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(readableIdentifiers, iri, dosdp, index)).getOrElse(value))
-    case MultiValue(values) => MultiValue(values.map(value => Prefixes.idToIRI(value, dosdp.prefixes).map(iri => readableIdentifierForIRI(readableIdentifiers, iri, dosdp, index)).getOrElse(value)))
-  }
-
-  private def resolveIrisToLabels(readableIdentifiers: List[OWLAnnotationProperty], binding: SingleValue, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): Binding = {
-    val CURIEList = "([^ ,:]*):([^ ,]*)".r
-    val CURIEListEmbed = CURIEList.unanchored
-    val value = binding.value
-    var resolvedValue = value
-    if (CURIEListEmbed.matches(value)) {
-      CURIEList.findAllMatchIn(value).foreach(matching => dosdp.prefixes.lift(matching.group(1)).map(uri =>
-        resolvedValue = resolvedValue.replaceFirst(matching.group(1) + ":" + matching.group(2),
-          readableIdentifierForIRI(readableIdentifiers, IRI.create(uri + matching.group(2)), dosdp, index))))
-    }
-    SingleValue(resolvedValue)
-  }
-
-  private def readableIdentifierForIRI(readableIdentifiers: List[OWLAnnotationProperty], iri: IRI, dosdp: ExpandedDOSDP, index: Map[IRI, Map[IRI, String]]): String = {
-    val properties = readableIdentifiers.map(_.getIRI) ::: LocalLabelProperty :: Nil
-    val labelOpt = properties.collectFirst {
-      case prop if index.get(prop).exists(_.isDefinedAt(iri)) => index(prop)(iri)
-    }
-    labelOpt.getOrElse(iri.toString)
   }
 
   private def stripToOption(text: String): Option[String] = {
@@ -261,7 +181,7 @@ object Generate {
    * `localLabels` captures `<var>_label` columns — user-supplied display labels
    * that are applied during annotation rendering ahead of any ontology lookup.
    */
-  private[cli] final case class RowBindings(
+  private[dosdp] final case class RowBindings(
     varBindings: Map[String, SingleValue],
     listVarBindings: Map[String, MultiValue],
     dataVarBindings: Map[String, SingleValue],
@@ -277,13 +197,98 @@ object Generate {
 
   }
 
-  private[cli] object RowBindings {
+  private[dosdp] object RowBindings {
 
     private def collect[V <: Binding](dict: Option[Map[String, String]], row: Map[String, String])(mkBinding: String => V): Map[String, V] =
       dict.toSeq.flatMap(_.keys).flatMap(name => row.get(name).flatMap(stripToOption).map(name -> mkBinding(_))).toMap
 
     private def parseMultiValue(filler: String): MultiValue =
       MultiValue(filler.split(DOSDP.MultiValueDelimiter).map(_.trim).to(Set))
+
+    /**
+     * Synthetic placeholder bindings used by `query` and `terms` to render
+     * the pattern as placeholder-form OWL. Every class slot maps to its
+     * `urn:dosdp:` IRI, every data slot to its `$<name>` lexical placeholder;
+     * `Expansion.expandRow` then substitutes each slot for itself (a no-op),
+     * leaving the parsed templates intact.
+     *
+     * Declared `list_vars` / `data_list_vars` are emitted as `MultiValue`
+     * placeholders (a one-element set wrapping the same placeholder token).
+     * `NormalizedListAnnotation` only consults the multi-value maps, so a
+     * single-value placeholder for a list-style annotation column would emit
+     * no annotation triples; the multi-value form ensures `exact_synonym` /
+     * `xref` / etc. survive into SPARQL annotation queries. Logical-axiom
+     * substitution remains correct because multi-value list bindings are
+     * consumed by `Expansion.expandClauseWithMultiValue`, which iterates
+     * each value into a single-value substitution (one value → one
+     * expression, matching the prior placeholder shape).
+     *
+     * Two sources feed the class-slot set, both required:
+     *   - Slot names found in compiled logical pieces — covers fallback
+     *     placeholders the compiler inserted for template vars not declared
+     *     on the DOSDP (`__attribute` and friends); otherwise `allSlotsBound`
+     *     would drop the axiom.
+     *   - `vars` declared on the DOSDP — covers vars referenced only in
+     *     annotation templates (no logical pieces to walk), without which
+     *     their annotations would lose their bindings and drop.
+     *
+     * The companion `defined_class` placeholder lives in the row map
+     * (see `placeholderRow`) so the existing `resolveDefinedClass` path
+     * resolves it like any other row.
+     */
+    def placeholder(compiled: CompiledPattern): RowBindings = {
+      def placeholderIRI(name: String): String = DOSDP.variableToIRI(name).toString
+      val logicalClassSlots = collectClassSlots(compiled)
+      val dosdp = compiled.source
+      val declaredVarNames = dosdp.vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredListVarNames = dosdp.list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredDataVarNames = dosdp.data_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val declaredDataListVarNames = dosdp.data_list_vars.toSet.flatMap((m: Map[String, String]) => m.keySet)
+      val literalNames = declaredDataVarNames ++ declaredDataListVarNames
+      val singleValueClassNames =
+        (logicalClassSlots ++ declaredVarNames) -- declaredListVarNames -- literalNames
+      val varBindings = singleValueClassNames.iterator
+        .map(name => name -> SingleValue(placeholderIRI(name))).toMap
+      val listVarBindings = declaredListVarNames.iterator
+        .map(name => name -> MultiValue(Set(placeholderIRI(name)))).toMap
+      val dataVarBindings = declaredDataVarNames.iterator
+        .map(name => name -> SingleValue(DOSDP.literalPlaceholder(name))).toMap
+      val dataListBindings = declaredDataListVarNames.iterator
+        .map(name => name -> MultiValue(Set(DOSDP.literalPlaceholder(name)))).toMap
+      RowBindings(varBindings, listVarBindings, dataVarBindings, dataListBindings,
+        Map.empty, Map.empty, Map.empty)
+    }
+
+    private def collectClassSlots(compiled: CompiledPattern): Set[String] = {
+      val classes = scala.collection.mutable.Set.empty[String]
+      def absorb(piece: ParsedPiece[_]): Unit = classes ++= piece.classVarSlots.keys
+      def fromClassExpression(ce: CompiledClassExpression): Unit = ce match {
+        case CompiledSimpleClassExpression(_, piece, _)     => absorb(piece)
+        case CompiledMultiClassExpression(_, clauses, _, _) => clauses.foreach(fromPrintfClause)
+      }
+      def fromPrintfClause(c: CompiledPrintfClause): Unit = {
+        absorb(c.main)
+        c.subExpressions.foreach(_.clauses.foreach(fromPrintfClause))
+      }
+      compiled.equivalentTo.foreach(fromClassExpression)
+      compiled.subClassOf.foreach(fromClassExpression)
+      compiled.disjointWith.foreach(fromClassExpression)
+      compiled.gci.foreach(ax => absorb(ax.piece))
+      compiled.logicalAxioms.foreach {
+        case CompiledLogicalClassAxiom(_, expr, _) => fromClassExpression(expr)
+        case CompiledLogicalGCIAxiom(_, ax, _)     => absorb(ax.piece)
+      }
+      classes.toSet
+    }
+
+    /**
+     * Row map paired with `placeholder(compiled)`: supplies the `defined_class`
+     * placeholder so `resolveDefinedClass` returns the pattern's
+     * `urn:dosdp:defined_class` IRI without taking the row-missing-column
+     * path.
+     */
+    def placeholderRow: Map[String, String] =
+      Map(DOSDP.DefinedClassVariable -> DOSDP.variableToIRI(DOSDP.DefinedClassVariable).toString)
 
     def fromRow(dosdp: DOSDP, prefixes: PartialFunction[String, String], knownColumns: Set[String], row: Map[String, String]): RowBindings = {
       val (varBindingsItems, localLabelItems) = (for {

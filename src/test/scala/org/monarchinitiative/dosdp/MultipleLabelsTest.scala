@@ -4,12 +4,11 @@ import org.monarchinitiative.dosdp.cli.Generate
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
-import zio.logging._
 import zio.test._
 
 import scala.jdk.CollectionConverters._
 
-object MultipleLabelsTest extends DefaultRunnableSpec {
+object MultipleLabelsTest extends ZIOSpecDefault {
 
   val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
   val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
@@ -30,11 +29,11 @@ object MultipleLabelsTest extends DefaultRunnableSpec {
   val logicalAxiom: OWLSubClassOfAxiom = term SubClassOf (partOf some item)
 
   def spec = suite("Multiple labels") {
-    testM("Only one term label should be used for a readable identifier") {
+    test("Only one term label should be used for a readable identifier") {
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), Some(ontology), true, true, None, false, OboInOwlSource, false, Map.empty)
       } yield assertTrue(axioms.size == 1) && assertTrue(axioms.exists { case AnnotationAssertion(_, RDFSLabel, iri: IRI, v ^^ _) => term.getIRI == iri && v == "label1 item" })
     }
-  }.provideCustomLayer(Logging.consoleErr())
+  }
 
 }

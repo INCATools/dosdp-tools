@@ -5,7 +5,6 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAxiom, OWLClass}
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
 // Pins the substitutions (regex sub) pipeline applied to annotation bindings.
 // RegexTest already covers ExpandedRegexSub.substitute as a unit; this fills the
@@ -13,7 +12,7 @@ import zio.logging._
 // binding from `in:`, runs the regex/sub, and exposes the result under `out:` so
 // that downstream annotation templates can reference it. A non-matching value
 // must pass through unchanged.
-object SubstitutionsTest extends DefaultRunnableSpec {
+object SubstitutionsTest extends ZIOSpecDefault {
 
   private val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
 
@@ -33,7 +32,7 @@ object SubstitutionsTest extends DefaultRunnableSpec {
   )
 
   def spec = suite("substitutions (regex sub) integration")(
-    testM("regex sub on a var binding feeds a downstream annotation template") {
+    test("regex sub on a var binding feeds a downstream annotation template") {
       // The ontology supplies a label for the filler so that the regex runs on the
       // label "kinase activity" rather than on the raw IRI.
       for {
@@ -48,7 +47,7 @@ object SubstitutionsTest extends DefaultRunnableSpec {
         expected: OWLAnnotationAssertionAxiom = term Annotation(RDFSLabel, "regulation of kinase")
       } yield assert(axioms)(contains[OWLAxiom](expected))
     },
-    testM("non-matching value passes through unchanged into the downstream template") {
+    test("non-matching value passes through unchanged into the downstream template") {
       // The label "binding" does not match "(.+) activity"; substitute returns the input,
       // so the annotation renders with the original label.
       for {
@@ -63,6 +62,6 @@ object SubstitutionsTest extends DefaultRunnableSpec {
         expected: OWLAnnotationAssertionAxiom = term Annotation(RDFSLabel, "regulation of binding")
       } yield assert(axioms)(contains[OWLAxiom](expected))
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

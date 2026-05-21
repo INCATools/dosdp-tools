@@ -5,7 +5,6 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{IRI, OWLAnnotationAssertionAxiom, OWLAxiom, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom}
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
 // Pins the --generate-defined-class IRI-minting path: when generateDefinedClass = true
 // and the row has no `defined_class` column, the defined-class IRI is computed as
@@ -13,7 +12,7 @@ import zio.logging._
 // DOSDP.computeDefinedIRI or of the binding-collection that feeds it must keep the
 // same IRI shape, or every consumer that relies on these IRIs to dedupe rows breaks
 // silently.
-object GenerateDefinedClassTest extends DefaultRunnableSpec {
+object GenerateDefinedClassTest extends ZIOSpecDefault {
 
   private val patternIRIString = "http://purl.obolibrary.org/obo/test/generate_defined_class_test.yaml"
   private val patternIRI: IRI = IRI.create(patternIRIString)
@@ -40,7 +39,7 @@ object GenerateDefinedClassTest extends DefaultRunnableSpec {
     expectedDefinedClass SubClassOf (partOf some item)
 
   def spec = suite("generate-defined-class")(
-    testM("mints defined-class IRI from sha1 of bindings when generateDefinedClass = true") {
+    test("mints defined-class IRI from sha1 of bindings when generateDefinedClass = true") {
       val row = Map("item" -> "ONT:0000002")
       for {
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, List(row), None,
@@ -50,22 +49,22 @@ object GenerateDefinedClassTest extends DefaultRunnableSpec {
       } yield assert(axioms)(contains[OWLAxiom](expectedLabel)) &&
         assert(axioms)(contains[OWLAxiom](expectedSubClassOf))
     },
-    testM("fails when the input table has a defined_class column alongside generateDefinedClass") {
+    test("fails when the input table has a defined_class column alongside generateDefinedClass") {
       val row = Map("defined_class" -> "ONT:9999999", "item" -> "ONT:0000002")
       val program = Generate.renderPattern(dosdp, OBOPrefixes, List(row), None,
         outputLogicalAxioms = true, outputAnnotationAxioms = true, None,
         annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource,
         generateDefinedClass = true, Map.empty)
-      assertM(program.flip.map(_.msg))(containsString(DOSDP.DefinedClassVariable))
+      assertZIO(program.flip.map(_.msg))(containsString(DOSDP.DefinedClassVariable))
     },
-    testM("fails when pattern_iri is missing") {
+    test("fails when pattern_iri is missing") {
       val noIRI = dosdp.copy(pattern_iri = None)
       val program = Generate.renderPattern(noIRI, OBOPrefixes, List(Map("item" -> "ONT:0000002")), None,
         outputLogicalAxioms = true, outputAnnotationAxioms = true, None,
         annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource,
         generateDefinedClass = true, Map.empty)
-      assertM(program.flip.map(_.msg))(containsString("generate-defined-class"))
+      assertZIO(program.flip.map(_.msg))(containsString("generate-defined-class"))
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

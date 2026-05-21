@@ -33,13 +33,18 @@ object OBOPrefixes extends PartialFunction[String, String] {
 object Prefixes {
 
   private val HTTPURI = "^http.+".r
+  private val URNURI = "^urn:.+".r
   private val DOSDPVariable = "^'\\$(.+)'$".r
   private val Quoted = "^'(.*)'$".r
   private val CURIE = "^([^:]*):(.*)$".r
   private val FullIRI = "^<(.+)>$".r
 
+  // URN-scheme IRIs (`urn:dosdp:...` placeholders are the main use) are
+  // absolute IRIs; without this branch the CURIE regex would try to resolve
+  // them via a `urn` prefix that prefix maps don't carry.
   def idToIRI(id: String, prefixes: PartialFunction[String, String]): Option[IRI] = id match {
     case HTTPURI(_*)          => Option(IRI.create(id))
+    case URNURI(_*)           => Option(IRI.create(id))
     case CURIE(prefix, local) => prefixes.lift(prefix).map(uri => IRI.create(s"$uri$local"))
     case _                    => None
   }
