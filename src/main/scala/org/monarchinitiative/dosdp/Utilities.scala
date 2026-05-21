@@ -2,7 +2,6 @@ package org.monarchinitiative.dosdp
 
 import org.monarchinitiative.dosdp.cli.DOSDPError
 import org.monarchinitiative.dosdp.cli.DOSDPError.logError
-import org.obolibrary.robot.CatalogXmlIRIMapper
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.formats.FunctionalSyntaxDocumentFormat
 import org.semanticweb.owlapi.model.{IRI, OWLAxiom, OWLOntology}
