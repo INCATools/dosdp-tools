@@ -54,7 +54,7 @@ libraryDependencies ++= {
       "com.github.pathikrit"       %% "better-files"           % "3.9.2",
       "org.apache.jena"            %  "apache-jena-libs"       % "4.10.0" exclude("org.slf4j", "slf4j-log4j12"),
       "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",
-      "commons-codec"              %  "commons-codec"          % "1.17.2",
+      "commons-codec"              %  "commons-codec"          % "1.22.0",
       "dev.zio"                    %% "zio-logging"            % zioLoggingVersion,
       "dev.zio"                    %% "zio-logging-slf4j2-bridge" % zioLoggingVersion,
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
