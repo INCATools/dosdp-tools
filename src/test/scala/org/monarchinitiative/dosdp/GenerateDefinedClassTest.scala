@@ -8,10 +8,10 @@ import zio.test._
 
 // Pins the --generate-defined-class IRI-minting path: when generateDefinedClass = true
 // and the row has no `defined_class` column, the defined-class IRI is computed as
-// sha1Hex(sorted-bindings) appended to the pattern IRI as a fragment. A refactor of
-// DOSDP.computeDefinedIRI or of the binding-collection that feeds it must keep the
-// same IRI shape, or every consumer that relies on these IRIs to dedupe rows breaks
-// silently.
+// lowercase SHA-1 hex of the sorted bindings appended to the pattern IRI as a
+// fragment. A refactor of DOSDP.computeDefinedIRI or of the binding-collection
+// that feeds it must keep the same IRI shape, or every consumer that relies on
+// these IRIs to dedupe rows breaks silently.
 object GenerateDefinedClassTest extends ZIOSpecDefault {
 
   private val patternIRIString = "http://purl.obolibrary.org/obo/test/generate_defined_class_test.yaml"
@@ -28,10 +28,12 @@ object GenerateDefinedClassTest extends ZIOSpecDefault {
     name = Some(PrintfAnnotationOBO(None, None, Some("%s item"), Some(List("item")), None)),
     subClassOf = Some(PrintfOWLConvenience(None, Some("'part_of' some %s"), Some(List("item")))))
 
-  // Mirror what Generate.renderPattern computes internally, so that the assertion
-  // would catch a behavior change in DOSDP.computeDefinedIRI itself.
+  // Mirror what Generate.renderPattern computes internally for the rendering assertions,
+  // and pin the literal IRI string below to catch digest-format regressions.
   private val expectedDefinedIRI: IRI =
     DOSDP.computeDefinedIRI(patternIRI, Map("item" -> SingleValue("ONT:0000002")))
+  private val expectedDefinedIRIString: String =
+    s"$patternIRIString#b241301b4391f87c756c868293230e2464e77d44"
   private val expectedDefinedClass: OWLClass = Class(expectedDefinedIRI)
   private val expectedLabel: OWLAnnotationAssertionAxiom =
     expectedDefinedClass Annotation(RDFSLabel, "http://purl.obolibrary.org/obo/ONT_0000002 item")
@@ -39,6 +41,9 @@ object GenerateDefinedClassTest extends ZIOSpecDefault {
     expectedDefinedClass SubClassOf (partOf some item)
 
   def spec = suite("generate-defined-class")(
+    test("computeDefinedIRI uses lowercase SHA-1 hex") {
+      assert(expectedDefinedIRI.toString)(equalTo(expectedDefinedIRIString))
+    },
     test("mints defined-class IRI from sha1 of bindings when generateDefinedClass = true") {
       val row = Map("item" -> "ONT:0000002")
       for {

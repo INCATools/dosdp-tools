@@ -3,9 +3,11 @@ package org.monarchinitiative.dosdp
 import io.circe._
 import io.circe.generic.auto._
 import io.circe.syntax._
-import org.apache.commons.codec.digest.DigestUtils
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.model.{IRI, OWLAnnotationProperty}
+
+import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 
 /**
  * Basic data model for DOSDP schema, for serializing to/from JSON.
@@ -77,9 +79,15 @@ object DOSDP {
         case MultiValue(values) => values.toSeq.sorted.mkString("|")
       }
     }.mkString("&")
-    val hash = DigestUtils.sha1Hex(text)
+    val hash = sha1Hex(text)
     IRI.create(s"$pattern#$hash")
   }
+
+  private def sha1Hex(text: String): String =
+    MessageDigest.getInstance("SHA-1")
+      .digest(text.getBytes(StandardCharsets.UTF_8))
+      .map(byte => f"${byte & 0xff}%02x")
+      .mkString
 
 }
 
@@ -366,4 +374,3 @@ final case class Join(sep: String)
  *                             will be used to generate additional annotations.
  */
 final case class Permutation(`var`: String, annotationProperties: List[String])
-

@@ -52,7 +52,6 @@ libraryDependencies ++= {
       "org.apache.jena"            %  "jena-arq"               % "4.10.0",
       "org.apache.jena"            %  "jena-core"              % "4.10.0",
       "com.github.tototoshi"       %% "scala-csv"              % "2.0.0",
-      "commons-codec"              %  "commons-codec"          % "1.17.2",
       "dev.zio"                    %% "zio-logging"            % zioLoggingVersion,
       "dev.zio"                    %% "zio-logging-slf4j2-bridge" % zioLoggingVersion,
       "dev.zio"                    %% "zio-test"               % zioVersion % Test,
