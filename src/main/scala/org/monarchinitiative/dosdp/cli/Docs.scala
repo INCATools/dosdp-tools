@@ -1,12 +1,10 @@
 package org.monarchinitiative.dosdp.cli
 
 import com.github.tototoshi.csv.CSVFormat
-import org.geneontology.owl.differ.ManchesterSyntaxOWLObjectRenderer
-import org.geneontology.owl.differ.shortform.MarkdownLinkShortFormProvider
 import org.monarchinitiative.dosdp.cli.DOSDPError.{logError, logErrorFail}
 import org.monarchinitiative.dosdp.cli.Generate.readFillers
 import org.monarchinitiative.dosdp.cli.Prototype.OboInOwlSource
-import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, PatternCompiler, Prefixes}
+import org.monarchinitiative.dosdp.{DOSDP, DocsMarkdown, ManchesterSyntaxOWLObjectRenderer, MarkdownLinkShortFormProvider, PatternCompiler, Prefixes}
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.io.OWLObjectRenderer
