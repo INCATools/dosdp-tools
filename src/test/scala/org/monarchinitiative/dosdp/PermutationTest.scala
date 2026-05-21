@@ -7,15 +7,14 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.OWLAnnotationProperty
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object PermutationTest extends DefaultRunnableSpec {
+object PermutationTest extends ZIOSpecDefault {
 
   val oioExactSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasExactSynonym")
   val oioRelatedSynonym: OWLAnnotationProperty = AnnotationProperty("http://www.geneontology.org/formats/oboInOwl#hasRelatedSynonym")
 
   def spec = suite("Permutation feature test")(
-    testM("Generate synonyms from filler term synonyms using permutations") {
+    test("Generate synonyms from filler term synonyms using permutations") {
       for {
         ontology <- Utilities.loadOntology("src/test/resources/org/monarchinitiative/dosdp/permutation_test.ofn", None)
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_test.yaml")
@@ -23,6 +22,9 @@ object PermutationTest extends DefaultRunnableSpec {
         (_, fillers) = columnsAndFillers
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, Some(ontology), outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield {
+        Harness.assertMatchesGolden(axioms, "src/test/resources/org/monarchinitiative/dosdp/permutation_test.golden.ofn") &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
         // Test that the label-based name is generated
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001001") Annotation(RDFSLabel, "acute heart disease"))) &&
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001002") Annotation(RDFSLabel, "acute lung disease"))) &&
@@ -41,7 +43,7 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001002") Annotation(oioRelatedSynonym, "acute form of pulmonary disease")))
       }
     },
-    testM("Generate annotations without ontology (no permutation values available)") {
+    test("Generate annotations without ontology (no permutation values available)") {
       for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_test.yaml")
         columnsAndFillers <- Generate.readFillers(new File("src/test/resources/org/monarchinitiative/dosdp/permutation_test.tsv"), new TSVFormat {})
@@ -49,12 +51,14 @@ object PermutationTest extends DefaultRunnableSpec {
         // Without ontology, permutation values won't be available - only label-based annotation should be generated
         axioms <- Generate.renderPattern(dosdp: DOSDP, OBOPrefixes, fillers, None, outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield {
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
         // Without ontology, the filler IRIs are used directly (no label lookup)
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001001") Annotation(RDFSLabel, "acute http://purl.obolibrary.org/obo/MONDO_0005267"))) &&
         assert(axioms)(contains(Class("http://purl.obolibrary.org/obo/MONDO_0001001") Annotation(oioExactSynonym, "http://purl.obolibrary.org/obo/MONDO_0005267, acute")))
       }
     },
-    testM("Cartesian product of permutations across multiple vars") {
+    test("Cartesian product of permutations across multiple vars") {
       val defined = Class("http://purl.obolibrary.org/obo/TEST_9999999")
       val fillers = List(Map(
         "defined_class" -> "TEST:9999999",
@@ -66,6 +70,9 @@ object PermutationTest extends DefaultRunnableSpec {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_cartesian.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, Some(ontology), outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield {
+        Harness.assertMatchesGolden(axioms, "src/test/resources/org/monarchinitiative/dosdp/permutation_cartesian.golden.ofn") &&
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
         // 1 label-based + 8 permutation-based = 9 expected exact_synonym annotations on the defined class.
         // Quality values: enlarged (label), big, hypertrophic.
         // Entity values:  heart (label), cardiac organ, pump.
@@ -81,28 +88,25 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(contains(defined Annotation(oioExactSynonym, "hypertrophic pump")))
       }
     },
-    testM("Permutation var not in annotation vars list fails validation") {
+    test("Permutation var not in annotation vars list fails validation") {
       val fillers = List(Map("defined_class" -> "TEST:9999999", "disease" -> "TEST:0000001"))
       val program = for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_invalid_var.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, None, outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield axioms
-      assertM(program.flip.map(_.msg))(containsString("not_a_real_var"))
+      assertZIO(program.flip.map(_.msg))(containsString("not_a_real_var"))
     },
-    testM("Permutation referencing an undeclared annotation property fails validation") {
+    test("Permutation referencing an undeclared annotation property fails validation") {
       val fillers = List(Map("defined_class" -> "TEST:9999999", "disease" -> "TEST:0000001"))
       val program = for {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_invalid_property.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, None, outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield axioms
-      assertM(program.flip.map(_.msg))(containsString("undeclared_property"))
+      assertZIO(program.flip.map(_.msg))(containsString("undeclared_property"))
     },
-    // Pins the rule that `override:` short-circuits `permutations:` for the same annotation:
-    // a row with a non-empty override value yields exactly that string, and the permutation
-    // expansion (and template rendering) is skipped for that row. Without this test, a future
-    // refactor of the `.orElse` in ExpandedDOSDP.translateAnnotations could silently change
-    // overridden rows to also emit synonym permutations.
-    testM("Override value short-circuits permutations for that row") {
+    // A non-empty `override:` value short-circuits `permutations:` on the same annotation:
+    // the row emits exactly the override string, and permutation expansion is skipped.
+    test("Override value short-circuits permutations for that row") {
       val overridden  = Class("http://purl.obolibrary.org/obo/TEST_9999992")
       val notOverridden = Class("http://purl.obolibrary.org/obo/TEST_9999991")
       val fillers = List(
@@ -114,6 +118,8 @@ object PermutationTest extends DefaultRunnableSpec {
         dosdp <- Config.inputDOSDPFrom("src/test/resources/org/monarchinitiative/dosdp/permutation_override.yaml")
         axioms <- Generate.renderPattern(dosdp, OBOPrefixes, fillers, Some(ontology), outputLogicalAxioms = false, outputAnnotationAxioms = true, None, annotateAxiomSource = false, AxiomRestrictionsTest.OboInOwlSource, generateDefinedClass = false, Map.empty)
       } yield {
+        Harness.assertNoPlaceholderIRIs(axioms) &&
+        Harness.assertNoPlaceholderLiterals(axioms) &&
         // Non-overridden row: label-based + permutation-based annotations are produced as normal.
         assert(axioms)(contains(notOverridden Annotation(oioExactSynonym, "heart disease, acute"))) &&
         assert(axioms)(contains(notOverridden Annotation(oioExactSynonym, "cardiac disease, acute"))) &&
@@ -123,6 +129,6 @@ object PermutationTest extends DefaultRunnableSpec {
         assert(axioms)(not(contains(overridden Annotation(oioExactSynonym, "cardiac disease, acute"))))
       }
     }
-  ).provideCustomLayer(Logging.consoleErr())
+  )
 
 }

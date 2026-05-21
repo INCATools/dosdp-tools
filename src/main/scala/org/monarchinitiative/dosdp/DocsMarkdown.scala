@@ -5,24 +5,31 @@ import org.monarchinitiative.dosdp.cli.Docs.DocData
 import org.phenoscape.scowl._
 import org.semanticweb.owlapi.io.OWLObjectRenderer
 import org.semanticweb.owlapi.model.{IRI, OWLObject}
-import zio.ZIO
-import zio.logging.Logging
+import zio.{IO, ZIO}
 
 import scala.jdk.CollectionConverters._
 
+/**
+ * Pure Markdown rendering of a compiled pattern plus its example fillers.
+ *
+ * Renders the variable / list-variable range expressions (via
+ * `VarRangeExpressions`) and the example data table for the `docs`
+ * subcommand. Does not load ontologies or write files; the surrounding
+ * `cli.Docs` runner handles I/O.
+ */
 object DocsMarkdown {
 
-  def markdown(edosdp: ExpandedDOSDP, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): ZIO[Logging, DOSDPError, String] = {
+  def markdown(compiled: CompiledPattern, docData: DocData, renderer: OWLObjectRenderer, data: List[List[String]]): IO[DOSDPError, String] = {
     def r(obj: OWLObject): String = renderer.render(obj).replace("\n", " ")
 
-    val dosdp = edosdp.dosdp
+    val dosdp = compiled.source
     val PatternIRI = dosdp.pattern_iri.map(IRI.create).getOrElse(IRI.create("http://example.org/"))
     val PatternCls = Class(PatternIRI)
     val equivPrefix = if (docData.equivalentTo.flatMap(_.getClassExpressionsMinus(PatternCls).asScala).size > 1) "- " else ""
     val subClassOfPrefix = if (docData.subClassOf.size > 1) "- " else ""
     for {
-      varExpressions <- edosdp.varExpressions
-      listVarExpressions <- edosdp.listVarExpressions
+      varExpressions <- VarRangeExpressions.varExpressions(compiled)
+      listVarExpressions <- VarRangeExpressions.listVarExpressions(compiled)
     } yield {
       val variables = ((varExpressions.to(List) ::: listVarExpressions.to(List)).map { case (k, v) => k -> r(v) }) :::
         dosdp.data_vars.getOrElse(Map.empty).to(List) ::: dosdp.data_list_vars.getOrElse(Map.empty).to(List)

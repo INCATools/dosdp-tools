@@ -5,9 +5,8 @@ import org.phenoscape.scowl.{not => _, _}
 import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationProperty, OWLClass, OWLObjectProperty, OWLSubClassOfAxiom}
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object AxiomRestrictionsTest extends DefaultRunnableSpec {
+object AxiomRestrictionsTest extends ZIOSpecDefault {
 
   val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
   val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
@@ -26,7 +25,7 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
   val logicalAxiom: OWLSubClassOfAxiom = term SubClassOf (partOf some item)
 
   def spec = suite("Axiom filters") {
-    testM("Axiom filters should filter correctly") {
+    test("Axiom filters should filter correctly") {
       for {
         axioms1 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, None, false, OboInOwlSource, false, Map.empty)
         axioms2 <- Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002", "axiom_filter" -> "all")), None, true, true, Some("axiom_filter"), false, OboInOwlSource, false, Map.empty)
@@ -49,6 +48,6 @@ object AxiomRestrictionsTest extends DefaultRunnableSpec {
         assert(axioms6)(contains(logicalAxiom)) &&
         assert(axioms7)(isLeft)
     }
-  }.provideCustomLayer(Logging.consoleErr())
+  }
 
 }

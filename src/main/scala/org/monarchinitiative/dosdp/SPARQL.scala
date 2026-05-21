@@ -3,14 +3,13 @@ package org.monarchinitiative.dosdp
 import java.util.UUID
 import java.util.regex.Pattern
 import org.apache.jena.query.ParameterizedSparqlString
-import org.monarchinitiative.dosdp.cli.Config.{AxiomKind, LogicalAxioms}
+import org.monarchinitiative.dosdp.cli.Config.{AnnotationAxioms, AxiomKind, LogicalAxioms}
 import org.monarchinitiative.dosdp.cli.{DOSDPError, Generate}
 import org.phenoscape.owlet.OwletManchesterSyntaxDataType.SerializableClassExpression
 import org.semanticweb.owlapi.apibinding.OWLManager
 import org.semanticweb.owlapi.model._
 import org.phenoscape.scowl._
-import zio._
-import zio.logging._
+import zio.{Config => _, _}
 
 import scala.jdk.CollectionConverters._
 
@@ -18,11 +17,14 @@ object SPARQL {
 
   private val factory = OWLManager.getOWLDataFactory()
 
-  def queryFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] =
-    for {
-      select <- selectFor(dosdp, axioms)
-      triples <- triplesFor(dosdp, axioms)
-    } yield {
+  def queryFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, String] = {
+    // Logical axioms always materialize even on an annotation-only query: the
+    // `OPTIONAL { ?var rdfs:label ... }` clauses are derived from their
+    // variable set. Compute once and share with `selectFor` / `triplesFor` so
+    // the placeholder expansion runs only once per query.
+    val logicalAxioms = Expansion.placeholderAxioms(compiled, LogicalAxioms)
+    triplesFor(compiled, axioms, logicalAxioms).map { triples =>
+      val select = selectFor(axioms, logicalAxioms)
       s"""
 PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
@@ -36,25 +38,22 @@ ${triples.mkString("\n")}
 ORDER BY ?defined_class_label
 """
     }
+  }
 
-  def selectFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, String] =
-    for {
-      axVariables <- axiomVariables(dosdp)
-    } yield {
-      val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)") ++
-        (if (axioms != LogicalAxioms) axVariables.filterNot(_.startsWith(s"?${DOSDP.DefinedClassVariable}"))
-          .map(v => s"(STR(${v}__match_property) AS ${v}_match_property)") else Set.empty[String])
-      if (variables.isEmpty) "*" else variables.toSeq
-        .sortBy(_.replaceFirst("\\(STR\\(", "").replaceFirst(DOSDP.DefinedClassVariable, "0"))
-        .mkString(" ")
-    }
+  private def selectFor(axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): String = {
+    val axVariables = axiomVariables(logicalAxioms)
+    val variables = axVariables ++ axVariables.map(v => s"(STR(${v}__label) AS ${v}_label)") ++
+      (if (axioms != LogicalAxioms) axVariables.filterNot(_.startsWith(s"?${DOSDP.DefinedClassVariable}"))
+        .map(v => s"(STR(${v}__match_property) AS ${v}_match_property)") else Set.empty[String])
+    if (variables.isEmpty) "*" else variables.toSeq
+      .sortBy(_.replaceFirst("\\(STR\\(", "").replaceFirst(DOSDP.DefinedClassVariable, "0"))
+      .mkString(" ")
+  }
 
-  private def axiomVariables(dosdp: ExpandedDOSDP): ZIO[Logging, DOSDPError, Set[String]] =
-    for {
-      filledAxioms <- dosdp.filledLogicalAxioms(None, None)
-    } yield filledAxioms.flatMap(selectVariables)
+  private def axiomVariables(axioms: Set[OWLAxiom]): Set[String] =
+    axioms.flatMap(selectVariables)
 
-  private val DOSDPVariable = s"^${DOSDP.variablePrefix}(.+)".r
+  private val DOSDPVariable = s"^${DOSDP.variablePrefix}([A-Za-z0-9_]+)$$".r
 
   def selectVariables(axiom: OWLAxiom): Set[String] =
     axiom.getSignature.asScala.toSet[OWLEntity].map(_.getIRI.toString).collect {
@@ -63,27 +62,17 @@ ORDER BY ?defined_class_label
 
   private val Thing = OWLManager.getOWLDataFactory.getOWLThing
 
-  def triplesFor(dosdp: ExpandedDOSDP, axioms: AxiomKind): ZIO[Logging, DOSDPError, Seq[String]] = {
+  def triplesFor(compiled: CompiledPattern, axioms: AxiomKind): IO[DOSDPError, Seq[String]] =
+    triplesFor(compiled, axioms, Expansion.placeholderAxioms(compiled, LogicalAxioms))
+
+  private def triplesFor(compiled: CompiledPattern, axioms: AxiomKind, logicalAxioms: Set[OWLAxiom]): IO[DOSDPError, Seq[String]] = {
+    val props = compiled.readableIdentifierProperties.to(Set)
+    val (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
+    val annotationAxioms = if (queryAnnotations) Expansion.placeholderAxioms(compiled, AnnotationAxioms) else Set.empty[OWLAxiom]
     for {
-      propsList <- dosdp.readableIdentifierProperties
-      props = propsList.to(Set)
-      logicalBindings = dosdp.dosdp.vars.map { vars =>
-        vars.keys.map { key =>
-          key -> SingleValue(DOSDP.variableToIRI(key).toString)
-        }.toMap
-      }
-      (queryLogical, queryAnnotations) = Generate.axiomsOutputChoice(axioms)
-      annotationTriples <- if (queryAnnotations) for {
-        annotationAxioms <- dosdp.filledAnnotationAxioms(logicalBindings, None)
-        triples <- ZIO.foreach(annotationAxioms.to(Seq))(triples(_, props))
-      } yield triples.flatten
-      else ZIO.succeed(Nil)
-      axiomTriples <- if (queryLogical) for {
-        filledAxioms <- dosdp.filledLogicalAxioms(None, None)
-        triples <- ZIO.foreach(filledAxioms.to(Seq))(triples(_, props))
-      } yield triples.flatten
-      else ZIO.succeed(Nil)
-      varExpressions <- dosdp.varExpressions
+      annotationTriples <- ZIO.foreach(annotationAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten)
+      axiomTriples <- if (queryLogical) ZIO.foreach(logicalAxioms.to(Seq))(triplesForAxiom(_, props)).map(_.flatten) else ZIO.succeed(Nil)
+      varExpressions <- VarRangeExpressions.varExpressions(compiled)
       variableTriples = varExpressions.toSeq.flatMap {
         case (_, Thing)                                                               =>
           Seq.empty // relationships to owl:Thing are not typically explicit in the ontology
@@ -100,53 +89,61 @@ ORDER BY ?defined_class_label
           val sanitizedExpression = pss.toString
           Seq(s"?${DOSDP.processedVariable(variable)} rdfs:subClassOf $sanitizedExpression .")
       }
-      labelTriples <- for {
-        variables <- axiomVariables(dosdp)
-      } yield variables.map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
-
+      labelTriples = axiomVariables(logicalAxioms).map(v => s"OPTIONAL { $v rdfs:label ${v}__label . }")
     } yield annotationTriples ++ axiomTriples ++ variableTriples ++ labelTriples
   }
 
-  def triples(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): URIO[Logging, Seq[String]] = axiom match {
+  def triplesForAxiom(axiom: OWLAxiom, readableIdentifierProperties: Set[OWLAnnotationProperty]): UIO[Seq[String]] = axiom match {
     case subClassOf: OWLSubClassOfAxiom                   =>
-      val (subClass, subClassTriples) = triples(subClassOf.getSubClass)
-      val (superClass, superClassTriples) = triples(subClassOf.getSuperClass)
+      val (subClass, subClassTriples) = triplesForClassExpression(subClassOf.getSubClass)
+      val (superClass, superClassTriples) = triplesForClassExpression(subClassOf.getSuperClass)
       ZIO.succeed(Seq(s"$subClass rdfs:subClassOf $superClass .") ++ subClassTriples ++ superClassTriples)
     case equivalentTo: OWLEquivalentClassesAxiom          =>
-      log.warn("More than two operands or missing named class in equivalent class axiom unexpected")
+      ZIO.logWarning("More than two operands or missing named class in equivalent class axiom unexpected")
         .when(!equivalentTo.containsNamedEquivalentClass || (equivalentTo.getClassExpressions.size > 2)) *>
         ZIO.succeed {
           (for {
             named <- equivalentTo.getNamedClasses.asScala.headOption
             expression <- equivalentTo.getClassExpressionsMinus(named).asScala.headOption
           } yield {
-            val (namedClass, namedClassTriples) = triples(named)
-            val (equivClass, equivClassTriples) = triples(expression)
+            val (namedClass, namedClassTriples) = triplesForClassExpression(named)
+            val (equivClass, equivClassTriples) = triplesForClassExpression(expression)
             Seq(s"$namedClass owl:equivalentClass $equivClass .") ++ namedClassTriples ++ equivClassTriples
           }).toSeq.flatten
         }
     case disjointWith: OWLDisjointClassesAxiom            =>
-      log.warn("More than two operands or missing named class in disjointness axiom unexpected")
+      ZIO.logWarning("More than two operands or missing named class in disjointness axiom unexpected")
         .when(!disjointWith.getClassExpressions.asScala.forall(_.isAnonymous) || (disjointWith.getClassExpressions.size > 2)) *>
         ZIO.succeed {
           (for {
             named <- disjointWith.getClassExpressions.asScala.find(!_.isAnonymous)
             expression <- disjointWith.getClassExpressionsMinus(named).asScala.headOption
           } yield {
-            val (namedClass, namedClassTriples) = triples(named)
-            val (equivClass, equivClassTriples) = triples(expression)
+            val (namedClass, namedClassTriples) = triplesForClassExpression(named)
+            val (equivClass, equivClassTriples) = triplesForClassExpression(expression)
             Seq(s"$namedClass owl:disjointWith $equivClass .") ++ namedClassTriples ++ equivClassTriples
           }).toSeq.flatten
         }
     case annotationAssertion: OWLAnnotationAssertionAxiom =>
-      val (subject, subjecTriples) = triples(factory.getOWLClass(annotationAssertion.getSubject.asInstanceOf[IRI]))
+      val (subject, subjecTriples) = triplesForClassExpression(factory.getOWLClass(annotationAssertion.getSubject.asInstanceOf[IRI]))
       val property = s"<${annotationAssertion.getProperty.getIRI}>"
-      val (value, valueTriples) = triples(annotationAssertion.getValue, readableIdentifierProperties)
+      val (value, valueTriples) = triplesForAnnotationValue(annotationAssertion.getValue, readableIdentifierProperties)
       ZIO.succeed(Seq(s"$subject $property $value .") ++ subjecTriples ++ valueTriples)
 
   }
 
-  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}(\\w+)\\b".r
+  private val DOSDPVariableIRIMatch = s"\\b${DOSDP.variablePrefix}([A-Za-z0-9_]+)\\b".r
+
+  /**
+   * A literal whose entire lexical form is a `$<name>` data placeholder —
+   * the shape `NormalizedListAnnotation` emits for a `data_list_var` filler,
+   * and that `Expansion.expandRow` substitutes at row time. SPARQL must
+   * treat this as a captured variable, not as a literal text to regex-match,
+   * or queries for list-style annotations (`exact_synonym`, `xref`, custom
+   * value-list annotations) would require the real value to literally equal
+   * `$name` and never bind.
+   */
+  private val DOSDPLiteralPlaceholder = """\A\$([A-Za-z0-9_]+)\z""".r
 
   private def escape(text: String): String = {
     val pss = new ParameterizedSparqlString()
@@ -154,31 +151,35 @@ ORDER BY ?defined_class_label
     pss.toString
   }
 
-  def triples(annotationValue: OWLAnnotationValue, readableIdentifierProperties: Set[OWLAnnotationProperty]): (String, Seq[String]) = annotationValue match {
+  def triplesForAnnotationValue(annotationValue: OWLAnnotationValue, readableIdentifierProperties: Set[OWLAnnotationProperty]): (String, Seq[String]) = annotationValue match {
     case iri: IRI            =>
       iri.toString match {
         case DOSDPVariable(variable) => (s"?$variable", List(s"FILTER(isIRI(?$variable))"))
         case _                       => (s"<$iri>", Nil)
       }
     case literal: OWLLiteral =>
-      val node = genVar
-      val text = literal.getLiteral
-      val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")
-      val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
-      val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
-      val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
-        val predicateVar = s"${variableName}__match_property"
-        val variableMatchLabel = genVar
-        List(
-          s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS $variableMatchLabel)""",
-          s"VALUES ?$predicateVar { $predicates }",
-          s"?$variableName ?$predicateVar $variableMatchLabel ."
-        )
+      literal.getLiteral match {
+        case DOSDPLiteralPlaceholder(variable) =>
+          (s"?$variable", List(s"FILTER(isLiteral(?$variable))"))
+        case text                              =>
+          val node = genVar
+          val valueRegex = DOSDPVariableIRIMatch.pattern.split(text, -1).map(Pattern.quote).mkString("(.+)")
+          val variableNames = DOSDPVariableIRIMatch.findAllMatchIn(text).toList.map(_.group(1))
+          val predicates = readableIdentifierProperties.map(p => s"<${p.getIRI}>").mkString(" ")
+          val varPatterns = variableNames.zipWithIndex.flatMap { case (variableName, index) =>
+            val predicateVar = s"${variableName}__match_property"
+            val variableMatchLabel = genVar
+            List(
+              s"""BIND((REPLACE($node, ${escape(valueRegex)}, "$$${index + 1}")) AS $variableMatchLabel)""",
+              s"VALUES ?$predicateVar { $predicates }",
+              s"?$variableName ?$predicateVar $variableMatchLabel ."
+            )
+          }
+          (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
       }
-      (node, s"FILTER(REGEX($node, ${escape(valueRegex)}))" :: varPatterns)
   }
 
-  def triples(expression: OWLClassExpression): (String, Seq[String]) = expression match {
+  def triplesForClassExpression(expression: OWLClassExpression): (String, Seq[String]) = expression match {
     case named: OWLClass              =>
       named.getIRI.toString match {
         case DOSDPVariable(variable) => (s"?$variable", List(s"FILTER(isIRI(?$variable))"))
@@ -186,14 +187,14 @@ ORDER BY ?defined_class_label
       }
     case svf: OWLObjectSomeValuesFrom =>
       val node = genVar
-      val (filler, fillerTriples) = triples(svf.getFiller)
+      val (filler, fillerTriples) = triplesForClassExpression(svf.getFiller)
       (node, Seq(
         //this assumes named object property
         s"$node owl:onProperty <${svf.getProperty.asOWLObjectProperty.getIRI}> .",
         s"$node owl:someValuesFrom $filler .") ++ fillerTriples)
     case avf: OWLObjectAllValuesFrom  =>
       val node = genVar
-      val (filler, fillerTriples) = triples(avf.getFiller)
+      val (filler, fillerTriples) = triplesForClassExpression(avf.getFiller)
       (node, Seq(
         //this assumes named object property
         s"$node owl:onProperty <${avf.getProperty.asOWLObjectProperty.getIRI}> .",
@@ -201,7 +202,7 @@ ORDER BY ?defined_class_label
     case and: OWLObjectIntersectionOf =>
       val node = genVar
       val (intersectionTriples, operandTriplesList, operands) = and.getOperands.iterator().asScala.toList.map { o =>
-        val (operand, operandTriples) = triples(o)
+        val (operand, operandTriples) = triplesForClassExpression(o)
         (s"$node owl:intersectionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }.unzip3
       val filters = operands.combinations(2).map { pair =>
@@ -212,7 +213,7 @@ ORDER BY ?defined_class_label
     case or: OWLObjectUnionOf         =>
       val node = genVar
       val (unionTriples, operandTriplesList, operands) = or.getOperands.asScala.map { o =>
-        val (operand, operandTriples) = triples(o)
+        val (operand, operandTriples) = triplesForClassExpression(o)
         (s"$node owl:unionOf/rdf:rest*/rdf:first $operand .", operandTriples, operand)
       }.unzip3
       val filters = operands.toSeq.combinations(2).map { pair =>

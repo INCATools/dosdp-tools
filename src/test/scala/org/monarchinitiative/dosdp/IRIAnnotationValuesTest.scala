@@ -6,9 +6,8 @@ import org.semanticweb.owlapi.model.{OWLAnnotationAssertionAxiom, OWLAnnotationP
 import org.semanticweb.owlapi.vocab.OWLRDFVocabulary
 import zio.test.Assertion._
 import zio.test._
-import zio.logging._
 
-object IRIAnnotationValuesTest extends DefaultRunnableSpec {
+object IRIAnnotationValuesTest extends ZIOSpecDefault {
 
   val term: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000001")
   val item: OWLClass = Class("http://purl.obolibrary.org/obo/ONT_0000002")
@@ -25,10 +24,10 @@ object IRIAnnotationValuesTest extends DefaultRunnableSpec {
   val annotationAxiom: OWLAnnotationAssertionAxiom = term Annotation(isDefinedBy, item.getIRI)
 
   def spec = suite("IRI valued annotation") {
-    testM("Axioms should contain IRI valued annotation") {
+    test("Axioms should contain IRI valued annotation") {
       val axioms1 = Generate.renderPattern(dosdp, OBOPrefixes, List(Map("defined_class" -> "ONT:0000001", "item" -> "ONT:0000002")), None, true, true, None, false, AxiomRestrictionsTest.OboInOwlSource, false, Map.empty)
-      assertM(axioms1)(contains(annotationAxiom))
+      assertZIO(axioms1)(contains(annotationAxiom))
     }
-  }.provideCustomLayer(Logging.consoleErr())
+  }
 
 }
