@@ -59,6 +59,23 @@ object CatalogXmlIRIMapperTest extends ZIOSpecDefault {
           mapped = mapper.getDocumentIRI(IRI.create("http://example.org/imports.owl"))
           expected = IRI.create(ontologyPath.toFile.getCanonicalFile)
         } yield assertTrue(mapped == expected)
+      },
+      test("accepts prefixed catalog uri entries") {
+        for {
+          dir <- ZIO.attempt(Files.createTempDirectory("dosdp-catalog-"))
+          ontologyPath <- ZIO.attempt(Files.createFile(dir.resolve("imports.owl")))
+          catalogPath = dir.resolve("catalog.xml")
+          catalog =
+            """<?xml version="1.0" encoding="UTF-8"?>
+              |<cat:catalog prefer="public" xmlns:cat="urn:oasis:names:tc:entity:xmlns:xml:catalog">
+              |  <cat:uri name="http://example.org/imports.owl" uri="imports.owl"/>
+              |</cat:catalog>
+              |""".stripMargin
+          _ <- ZIO.attempt(Files.write(catalogPath, catalog.getBytes(StandardCharsets.UTF_8)))
+          mapper = new CatalogXmlIRIMapper(catalogPath.toFile)
+          mapped = mapper.getDocumentIRI(IRI.create("http://example.org/imports.owl"))
+          expected = IRI.create(ontologyPath.toFile.getCanonicalFile)
+        } yield assertTrue(mapped == expected)
       }
     )
 
