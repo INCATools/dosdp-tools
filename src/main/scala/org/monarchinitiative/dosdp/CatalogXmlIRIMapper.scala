@@ -58,7 +58,7 @@ private object CatalogXmlIRIMapper {
     try {
       val factory = SAXParserFactory.newInstance()
       factory.setValidating(false)
-      factory.setNamespaceAware(false)
+      factory.setNamespaceAware(true)
       disableExternalXml(factory)
       val saxParser = factory.newSAXParser()
       saxParser.parse(inputStream, new CatalogElementHandler(parentFolder, mappings))
@@ -85,17 +85,23 @@ private object CatalogXmlIRIMapper {
   private final class CatalogElementHandler(parentFolder: Option[File], mappings: java.util.Map[IRI, IRI]) extends DefaultHandler {
 
     override def startElement(uri: String, localName: String, qName: String, attributes: Attributes): Unit = {
-      val elementName = if (qName != null && qName.nonEmpty) qName else localName
-      if (elementName != "uri") return
+      if (elementName(localName, qName) != "uri") return
 
-      val fromString = attributes.getValue("name")
-      val toString = attributes.getValue("uri")
+      val fromString = attributeValue(attributes, "name")
+      val toString = attributeValue(attributes, "uri")
       if ((fromString == null) || (toString == null)) return
 
       mappedIRI(toString).foreach { toIRI =>
         mappings.put(IRI.create(fromString), toIRI)
       }
     }
+
+    private def elementName(localName: String, qName: String): String =
+      if (localName != null && localName.nonEmpty) localName
+      else Option(qName).fold("")(_.split(':').last)
+
+    private def attributeValue(attributes: Attributes, name: String): String =
+      Option(attributes.getValue("", name)).orElse(Option(attributes.getValue(name))).orNull
 
     private def mappedIRI(value: String): Option[IRI] =
       parentFolder.filter(_ => !value.contains(":")) match {
