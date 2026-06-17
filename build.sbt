@@ -36,7 +36,7 @@ val circeYamlVersion = "0.16.1"
 libraryDependencies ++= {
     Seq(
       "dev.zio"                    %% "zio"                    % zioVersion,
-      "com.github.alexarchambault" %% "case-app"               % "2.0.6",
+      "com.github.alexarchambault" %% "case-app"               % "2.1.0",
       "net.sourceforge.owlapi"     %  "owlapi-distribution"    % "4.5.29",
       "org.phenoscape"             %% "scowl"                  % "1.4.1",
       "io.github.liveontologies"   %  "elk-owlapi"             % "0.6.0"
