@@ -28,7 +28,7 @@ buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion, gitC
 buildInfoPackage := "org.monarchinitiative.dosdp.cli"
 
 val zioVersion = "2.1.26"
-val zioLoggingVersion = "2.5.3"
+val zioLoggingVersion = "2.5.4"
 val catsVersion = "2.13.0"
 val circeVersion = "0.14.15"
 val circeYamlVersion = "0.16.1"
